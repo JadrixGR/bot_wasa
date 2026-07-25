@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: whatsapp-qr-render-bot
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ADMIN_KEY
+        sync: false
+      - key: BUSINESS_NAME
+        value: Mi negocio
+      - key: BUSINESS_HOURS
+        value: Lunes a sábado, de 9:00 a. m. a 6:00 p. m.
+      - key: BUSINESS_ADDRESS
+        value: Escribe aquí tu dirección
+      - key: BUSINESS_MAPS_URL
+        value: ""
+      - key: PRICE_TEXT
+        value: Cuéntame qué producto o servicio necesitas, la cantidad y cualquier detalle importante para cotizarte.
+      - key: HUMAN_TEXT
+        value: Perfecto. Un asesor continuará contigo. La respuesta automática quedará pausada durante 30 minutos en esta conversación.
+      - key: SESSION_PATH
+        value: /data/.wwebjs_auth
