@@ -16,61 +16,135 @@ function includesAny(text, terms) {
   return terms.some((term) => text.includes(normalizeText(term)));
 }
 
-function formatPlan(plan) {
+function isGreetingOnly(text) {
   return [
-    `🔥 *${plan.name} — ${plan.price}/${plan.period === "1 mes" ? "mes" : plan.period}*`,
     "",
-    ...plan.includes.map((item) => `• ${item}`),
-    "",
-    "Incluye entrega inmediata, soporte activo y garantía."
+    "hola",
+    "holi",
+    "buenas",
+    "buen dia",
+    "buenos dias",
+    "buenas tardes",
+    "buenas noches",
+    "hola buenas"
+  ].includes(text);
+}
+
+function asksForPrice(text) {
+  return includesAny(text, ["precio", "cuanto", "costo", "cuesta", "vale"]);
+}
+
+function asksForDuration(text) {
+  return includesAny(text, ["duracion", "cuanto dura", "por cuanto tiempo", "meses"]);
+}
+
+function formatPlan(plan, question = "") {
+  const text = normalizeText(question);
+  if (asksForPrice(text)) {
+    return `${plan.name} cuesta *${plan.price}* por ${plan.period}.`;
+  }
+  if (asksForDuration(text)) {
+    return `${plan.name} tiene una duración de *${plan.period}*.`;
+  }
+  return [
+    `*${plan.name} — ${plan.price}/${plan.period === "1 mes" ? "mes" : plan.period}*`,
+    plan.includes.join(" + ")
   ].join("\n");
 }
 
-function formatProduct(product) {
-  return [
-    `✨ *${product.name}*`,
-    `Precio: *${product.price}*`,
-    `Duración: *${product.period}*`,
-    "",
-    product.details,
-    "",
-    "¿Deseas adquirirlo? Escribe *pagar* y te envío los datos."
-  ].join("\n");
+function formatProduct(product, question = "") {
+  const text = normalizeText(question);
+
+  if (asksForPrice(text)) {
+    return `${product.name} cuesta *${product.price}* por ${product.period}.`;
+  }
+  if (asksForDuration(text)) {
+    return `${product.name} dura *${product.period}*.`;
+  }
+  if (includesAny(text, ["garantia"])) {
+    return `${product.name} tiene garantía y soporte durante todo el periodo contratado.`;
+  }
+
+  if (product.id === "chatgpt-pro") {
+    if (includesAny(text, ["celular", "telefono", "movil"])) {
+      return "Para celular te entregamos ChatGPT Plus sin costo adicional; ChatGPT Pro se usa en PC mediante DICloak.";
+    }
+    if (includesAny(text, ["pc", "laptop", "windows", "mac", "linux", "dicloak", "como funciona"])) {
+      return "ChatGPT Pro se usa mediante DICloak en Windows, macOS o Linux. Nosotros creamos tus credenciales de acceso.";
+    }
+    if (includesAny(text, ["compartida", "personal", "chats", "conversaciones"])) {
+      return "ChatGPT Pro es una cuenta original compartida. Otros usuarios pueden ver los chats, por eso no se deben guardar datos privados ni borrar conversaciones.";
+    }
+    return "ChatGPT Pro cuesta *S/45 por un mes*. Se usa en PC mediante DICloak y, para celular, entregamos ChatGPT Plus sin costo adicional.";
+  }
+
+  if (product.id === "claude-pro") {
+    if (includesAny(text, ["celular", "telefono", "laptop", "pc", "donde"])) {
+      return "Claude Pro funciona tanto en celular como en laptop. Se entrega el correo y la contraseña de acceso.";
+    }
+    if (includesAny(text, ["compartida", "personal", "chats", "archivos"])) {
+      return "Claude Pro es una cuenta compartida entre 4 clientes. Los demás pueden ver chats y archivos, y no se deben cambiar los datos ni borrar conversaciones.";
+    }
+    return "Claude Pro cuesta *S/25 por un mes*. Es una cuenta compartida entre 4 clientes y funciona en celular o laptop.";
+  }
+
+  if (product.id === "gemini-pro") {
+    return `Gemini Pro está disponible a *${product.price}*. Incluye soporte y garantía durante el periodo elegido.`;
+  }
+
+  return `${product.name} cuesta *${product.price}* por ${product.period}. Incluye entrega inmediata, soporte y garantía.`;
 }
 
 class BotEngine {
-  constructor({ store, sendText, sendMedia, greetingCooldownHours = 24 }) {
+  constructor({ store, sendText, sendMedia, beginTyping, ai }) {
     this.store = store;
     this.sendText = sendText;
     this.sendMedia = sendMedia;
-    this.greetingCooldownMs = Math.max(1, Number(greetingCooldownHours) || 24) * 3600000;
+    this.beginTyping = beginTyping || (async () => async () => undefined);
+    this.ai = ai;
+  }
+
+  #rememberUserMessage(chatId, conversation, body) {
+    const current = String(body || "").trim();
+    if (!current) return conversation;
+    const recentUserMessages = [
+      ...(Array.isArray(conversation.recentUserMessages)
+        ? conversation.recentUserMessages
+        : []),
+      current.slice(0, 600)
+    ].slice(-4);
+    return this.store.updateConversation(chatId, { recentUserMessages });
+  }
+
+  #setTopic(chatId, patch) {
+    this.store.updateConversation(chatId, {
+      ...patch,
+      lastTopicAt: new Date().toISOString()
+    });
   }
 
   async handleIncoming({ chatId, body, hasMedia = false, mediaType = "", fromName = "" }) {
     const text = normalizeText(body);
-    const conversation = this.store.getConversation(chatId);
+    const originalConversation = this.store.getConversation(chatId);
 
-    if (conversation.paused) return { action: "paused" };
+    if (originalConversation.paused) return { action: "paused" };
 
-    if (hasMedia && conversation.awaitingReceipt) {
+    if (hasMedia && originalConversation.awaitingReceipt) {
       await this.sendText(chatId, this.store.getSettings().receiptReply);
       this.store.updateConversation(chatId, {
         awaitingReceipt: false,
+        paymentCountryRequested: false,
         lastReceiptAt: new Date().toISOString()
       });
-      this.store.addLog("receipt", `Comprobante recibido de ${fromName || chatId}`, { chatId, mediaType });
+      this.store.addLog("receipt", `Comprobante recibido de ${fromName || chatId}`, {
+        chatId,
+        mediaType
+      });
       this.store.save();
       return { action: "receipt" };
     }
 
-    const greetedAt = conversation.greetedAt ? new Date(conversation.greetedAt).getTime() : 0;
-    const shouldGreet = !greetedAt || Date.now() - greetedAt >= this.greetingCooldownMs;
-    const isGreeting = !text || includesAny(text, ["hola", "buenas", "buen dia", "buenos dias", "catalogo", "menú", "menu"]);
-
-    if (shouldGreet) {
-      await this.sendGreeting(chatId);
-      if (isGreeting) return { action: "greeting" };
-    }
+    const conversation = this.#rememberUserMessage(chatId, originalConversation, body);
 
     if (includesAny(text, ["asesor", "humano", "atencion personal", "hablar con una persona"])) {
       await this.sendText(chatId, this.store.getSettings().humanReply);
@@ -79,7 +153,9 @@ class BotEngine {
         pausedAt: new Date().toISOString(),
         pauseReason: "Solicitó un asesor"
       });
-      this.store.addLog("human", `${fromName || chatId} solicitó atención personal`, { chatId });
+      this.store.addLog("human", `${fromName || chatId} solicitó atención personal`, {
+        chatId
+      });
       this.store.save();
       return { action: "human" };
     }
@@ -87,20 +163,27 @@ class BotEngine {
     if (hasMedia) {
       await this.sendText(
         chatId,
-        "✅ Recibí tu archivo. Si es un comprobante, escribe *pago* para registrarlo; si necesitas ayuda, escribe *asesor*."
+        "Recibí el archivo. ¿Es un comprobante de pago o deseas que lo revise un asesor?"
       );
       return { action: "media" };
     }
 
+    if (isGreetingOnly(text)) {
+      await this.sendText(chatId, this.store.getSettings().shortGreeting);
+      return { action: "greeting" };
+    }
+
     if (includesAny(text, ["plan pro", "combo pro"])) {
       const plan = this.store.data.plans.find((item) => item.id === "plan-pro");
-      await this.sendText(chatId, formatPlan(plan));
+      await this.sendText(chatId, formatPlan(plan, body));
+      this.#setTopic(chatId, { lastPlanId: plan.id, lastProductId: null });
       return { action: "plan", id: plan.id };
     }
 
     if (includesAny(text, ["plan plus", "combo plus"])) {
       const plan = this.store.data.plans.find((item) => item.id === "plan-plus");
-      await this.sendText(chatId, formatPlan(plan));
+      await this.sendText(chatId, formatPlan(plan, body));
+      this.#setTopic(chatId, { lastPlanId: plan.id, lastProductId: null });
       return { action: "plan", id: plan.id };
     }
 
@@ -109,17 +192,20 @@ class BotEngine {
       return { action: "plans" };
     }
 
-    if (includesAny(text, ["dicloak", "dicloud", "como ingreso", "como entrar"]) && includesAny(text, ["chatgpt", "pro", "dicloak", "dicloud"])) {
+    if (
+      includesAny(text, ["dicloak", "dicloud", "como ingreso", "como entrar"]) &&
+      includesAny(text, ["chatgpt", "pro", "dicloak", "dicloud"])
+    ) {
       const media = this.store.getMedia("dicloakAudio");
       if (media?.path && fs.existsSync(media.path)) {
         await this.sendMedia(chatId, media.path, { asVoice: true });
-        await this.sendText(chatId, "🎧 Te envié el audio con las instrucciones para ingresar mediante DICloak.");
       } else {
         await this.sendText(
           chatId,
-          "DICloak permite usar la cuenta original de ChatGPT Pro desde Windows, macOS o Linux. JadrixServs crea tus credenciales de acceso. Si usarás celular, te entregamos ChatGPT Plus sin costo adicional."
+          "DICloak permite usar ChatGPT Pro en Windows, macOS o Linux. Nosotros creamos tus credenciales de acceso."
         );
       }
+      this.#setTopic(chatId, { lastProductId: "chatgpt-pro", lastPlanId: null });
       return { action: "dicloak" };
     }
 
@@ -130,49 +216,89 @@ class BotEngine {
           .map((alias) => ({ item, matchLength: normalizeText(alias).length }))
       )
       .sort((left, right) => right.matchLength - left.matchLength)[0]?.item;
+
     if (product) {
-      await this.sendText(chatId, formatProduct(product));
+      await this.sendText(chatId, formatProduct(product, body));
+      this.#setTopic(chatId, { lastProductId: product.id, lastPlanId: null });
       return { action: "product", id: product.id };
     }
 
-    if (includesAny(text, ["pdf", "catalogo", "lista", "precio", "precios", "servicios"])) {
+    if (includesAny(text, ["pdf"])) {
       const media = this.store.getMedia("catalogPdf");
-      if (includesAny(text, ["pdf"]) && media?.path && fs.existsSync(media.path)) {
-        await this.sendMedia(chatId, media.path, { caption: "📄 Catálogo actualizado de JadrixServs" });
+      if (media?.path && fs.existsSync(media.path)) {
+        await this.sendMedia(chatId, media.path, {
+          caption: "Catálogo actualizado de JadrixServs"
+        });
       } else {
         await this.sendText(chatId, this.store.getSettings().greetingMessages[0]);
       }
+      return { action: "catalog-pdf" };
+    }
+
+    if (includesAny(text, ["catalogo", "precios", "lista de precios", "que servicios", "servicios tienen"])) {
+      await this.sendText(chatId, this.store.getSettings().greetingMessages[0]);
       return { action: "catalog" };
     }
 
     if (includesAny(text, ["internacional", "otro pais", "binance", "usdt", "dolares"])) {
       await this.sendText(chatId, this.store.getSettings().internationalPayment);
-      this.store.updateConversation(chatId, { awaitingReceipt: true });
+      this.store.updateConversation(chatId, {
+        awaitingReceipt: true,
+        paymentCountryRequested: false
+      });
       return { action: "international-payment" };
     }
 
-    if (includesAny(text, ["yape", "peru", "pagar", "pago", "comprar", "adquirir"])) {
-      const settings = this.store.getSettings();
-      await this.sendText(
-        chatId,
-        `${settings.peruPayment}\n\n${settings.internationalPayment}\n\nIndícame desde qué país pagarás.`
-      );
-      this.store.updateConversation(chatId, { awaitingReceipt: true });
-      return { action: "payment" };
+    if (
+      includesAny(text, ["yape", "pago en peru", "soy de peru", "desde peru"]) ||
+      text === "peru"
+    ) {
+      await this.sendText(chatId, this.store.getSettings().peruPayment);
+      this.store.updateConversation(chatId, {
+        awaitingReceipt: true,
+        paymentCountryRequested: false
+      });
+      return { action: "peru-payment" };
+    }
+
+    if (conversation.paymentCountryRequested && text) {
+      await this.sendText(chatId, this.store.getSettings().internationalPayment);
+      this.store.updateConversation(chatId, {
+        awaitingReceipt: true,
+        paymentCountryRequested: false
+      });
+      return { action: "international-payment" };
+    }
+
+    if (includesAny(text, ["pagar", "pago", "comprar", "adquirir"])) {
+      await this.sendText(chatId, "Claro. ¿Pagarás desde Perú o desde otro país?");
+      this.store.updateConversation(chatId, {
+        paymentCountryRequested: true,
+        awaitingReceipt: false
+      });
+      return { action: "payment-country" };
     }
 
     if (includesAny(text, ["renovar", "renovacion", "vence", "vencimiento"])) {
       await this.sendText(
         chatId,
-        "✅ Puedes renovar antes de vencer sin perder días. Por ejemplo, si tu servicio vence el 26 y pagas el 23, el nuevo periodo empieza el 26. Escribe *pagar* para recibir los datos."
+        "Puedes renovar antes de vencer sin perder días. Si vence el 26 y pagas el 23, el nuevo periodo empieza el 26."
       );
       return { action: "renewal" };
     }
 
-    if (includesAny(text, ["garantia", "soporte", "problema", "no funciona"])) {
+    if (includesAny(text, ["garantia"])) {
       await this.sendText(
         chatId,
-        "🛟 Todos los servicios incluyen soporte activo y garantía durante el periodo contratado. Cuéntame qué servicio tienes y qué inconveniente aparece; si deseas atención personal, escribe *asesor*."
+        "Todos los servicios tienen garantía y soporte durante el periodo contratado."
+      );
+      return { action: "guarantee" };
+    }
+
+    if (includesAny(text, ["soporte", "problema", "no funciona"])) {
+      await this.sendText(
+        chatId,
+        "Cuéntame qué servicio tienes y qué problema aparece. Si prefieres atención personal, puedo comunicarte con un asesor."
       );
       return { action: "support" };
     }
@@ -180,31 +306,46 @@ class BotEngine {
     if (includesAny(text, ["entrega", "demora", "cuanto tarda", "cuando llega"])) {
       await this.sendText(
         chatId,
-        "⚡ La entrega es inmediata después de verificar el comprobante. Envíalo por este chat y confirmaremos la activación."
+        "La entrega es inmediata después de verificar el comprobante."
       );
       return { action: "delivery" };
     }
 
+    if (this.ai?.getStatus().enabled) {
+      let stopTyping = async () => undefined;
+      try {
+        stopTyping = await this.beginTyping(chatId);
+        const answer = await this.ai.answer({
+          question: body,
+          conversation
+        });
+        if (answer) {
+          await this.sendText(chatId, answer, { typingAlreadyStarted: true });
+          this.store.addLog("ai", `Respuesta de IA enviada a ${fromName || chatId}`, {
+            chatId
+          });
+          this.store.save();
+          return { action: "ai" };
+        }
+      } catch (error) {
+        this.store.addLog("error", `OpenAI no pudo responder: ${error.message}`, {
+          chatId
+        });
+        this.store.save();
+      } finally {
+        await stopTyping().catch(() => undefined);
+      }
+    }
+
     await this.sendText(chatId, this.store.getSettings().fallbackReply);
     return { action: "fallback" };
-  }
-
-  async sendGreeting(chatId) {
-    const messages = this.store.getSettings().greetingMessages;
-    for (const message of messages) {
-      await this.sendText(chatId, message);
-      await new Promise((resolve) => setTimeout(resolve, 550));
-    }
-    this.store.updateConversation(chatId, {
-      greetedAt: new Date().toISOString(),
-      awaitingReceipt: false
-    });
   }
 }
 
 module.exports = {
   BotEngine,
   normalizeText,
+  isGreetingOnly,
   formatPlan,
   formatProduct
 };

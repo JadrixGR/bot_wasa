@@ -18,10 +18,20 @@ services:
         value: /data/media
       - key: BOT_TIMEZONE
         value: America/Lima
-      - key: GREETING_COOLDOWN_HOURS
-        value: "24"
       - key: REMINDER_CHECK_MINUTES
         value: "15"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.6
+      - key: OPENAI_TIMEOUT_MS
+        value: "25000"
+      - key: HUMAN_DELAY_MIN_MS
+        value: "900"
+      - key: HUMAN_DELAY_MAX_MS
+        value: "4200"
+      - key: WHATSAPP_READY_TIMEOUT_MS
+        value: "60000"
     disk:
       name: jadrixservs-data
       mountPath: /data

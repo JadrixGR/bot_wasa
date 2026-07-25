@@ -63,6 +63,7 @@ class JsonStore {
   updateSettings(patch) {
     const allowed = [
       "businessName",
+      "shortGreeting",
       "peruPayment",
       "internationalPayment",
       "receiptReply",

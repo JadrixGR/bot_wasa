@@ -6,6 +6,7 @@ const express = require("express");
 const helmet = require("helmet");
 const cookieSession = require("cookie-session");
 const { JsonStore } = require("./store");
+const { AiService } = require("./ai-service");
 const { WhatsAppService } = require("./whatsapp-service");
 const { ReminderScheduler } = require("./scheduler");
 const { daysBetween, todayInTimeZone } = require("./date-utils");
@@ -22,7 +23,8 @@ fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(mediaDir, { recursive: true });
 
 const store = new JsonStore(dataDir);
-const whatsapp = new WhatsAppService({ store, sessionDir, mediaDir });
+const ai = new AiService({ store });
+const whatsapp = new WhatsAppService({ store, sessionDir, mediaDir, ai });
 const scheduler = new ReminderScheduler({
   store,
   whatsapp,
@@ -67,8 +69,9 @@ function asyncRoute(handler) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: 4,
+    version: "4.1",
     whatsapp: whatsapp.getStatus().state,
+    ai: whatsapp.getAiStatus(),
     time: new Date().toISOString()
   });
 });
@@ -143,6 +146,15 @@ app.post(
   })
 );
 
+app.post(
+  "/api/whatsapp/recover",
+  requireAuth,
+  asyncRoute(async (_req, res) => {
+    const result = await whatsapp.forceReadyProbe();
+    res.json({ ok: true, ...result });
+  })
+);
+
 app.get("/api/clients", requireAuth, (req, res) => {
   res.json(store.listClients({ includeArchived: req.query.archived === "1" }));
 });
@@ -189,13 +201,22 @@ app.get("/api/settings", requireAuth, (_req, res) => {
     settings: store.getSettings(),
     products: store.snapshot().products,
     plans: store.snapshot().plans,
-    media: store.snapshot().media
+    media: store.snapshot().media,
+    ai: whatsapp.getAiStatus()
   });
 });
 
 app.put("/api/settings", requireAuth, (req, res) => {
   res.json(store.updateSettings(req.body));
 });
+
+app.post(
+  "/api/ai/test",
+  requireAuth,
+  asyncRoute(async (_req, res) => {
+    res.json(await ai.testConnection());
+  })
+);
 
 const allowedMedia = {
   dicloakAudio: {

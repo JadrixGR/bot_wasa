@@ -139,6 +139,7 @@
               <p class="muted">Escanea el QR una sola vez. Con un disco persistente, la sesión permanece después de reinicios.</p>
             </div>
             <div class="button-row">
+              <button id="recoverWaButton" class="button primary" type="button">Forzar conexión</button>
               <button id="restartWaButton" class="button secondary" type="button">Reiniciar</button>
               <button id="resetWaButton" class="button danger-ghost" type="button">Cerrar sesión</button>
             </div>
@@ -212,19 +213,31 @@
             <div>
               <p class="eyebrow">CONTENIDO DEL BOT</p>
               <h2>Mensajes y archivos</h2>
-              <p class="muted">El saludo siempre se envía en tres mensajes y conserva el orden solicitado.</p>
+              <p class="muted">El bot envía solamente la respuesta que corresponde a lo que preguntó el cliente.</p>
             </div>
             <button id="saveSettingsButton" class="button primary" type="button">Guardar cambios</button>
           </div>
 
           <div class="two-column settings-grid">
             <article class="panel">
-              <div class="panel-heading"><h3>Saludo inicial</h3><span class="pill blue">3 mensajes</span></div>
-              <label>Mensaje 1 · Catálogo<textarea id="greeting1" rows="12"></textarea></label>
-              <label>Mensaje 2 · Combos<textarea id="greeting2" rows="9"></textarea></label>
-              <label>Mensaje 3 · Entrega y soporte<textarea id="greeting3" rows="8"></textarea></label>
+              <div class="panel-heading"><h3>Respuestas bajo pedido</h3><span class="pill green">1 respuesta</span></div>
+              <label>Saludo corto<textarea id="shortGreeting" rows="3"></textarea><small>Se usa únicamente cuando escriben “hola” o un saludo equivalente.</small></label>
+              <label>Catálogo<textarea id="greeting1" rows="12"></textarea><small>Se envía únicamente cuando piden catálogo, servicios o lista de precios.</small></label>
+              <label>Combos<textarea id="greeting2" rows="9"></textarea><small>Se envía únicamente cuando preguntan por planes o combos.</small></label>
+              <label>Entrega y soporte<textarea id="greeting3" rows="8"></textarea><small>Queda como información entrenada; no se envía automáticamente.</small></label>
             </article>
             <div class="stack">
+              <article class="panel">
+                <div class="panel-heading">
+                  <h3>IA de respaldo</h3>
+                  <span id="aiStatusPill" class="pill neutral">Revisando</span>
+                </div>
+                <p id="aiStatusText" class="muted">Consultando la configuración…</p>
+                <div class="notice">
+                  Configura <code>OPENAI_API_KEY</code> en las variables de entorno de Render. La clave nunca se muestra ni se guarda en el panel.
+                </div>
+                <button id="testAiButton" class="button secondary wide" type="button">Probar conexión con OpenAI</button>
+              </article>
               <article class="panel">
                 <div class="panel-heading"><h3>Pagos</h3></div>
                 <label>Perú<textarea id="peruPayment" rows="6"></textarea></label>

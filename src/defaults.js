@@ -166,6 +166,8 @@ function buildGreetingMessages() {
 
 const defaultSettings = {
   businessName: "JadrixServs",
+  shortGreeting:
+    "¡Hola! 👋 Soy parte del equipo de JadrixServs. ¿En qué servicio estás interesado o qué deseas consultar?",
   peruPayment:
     "🇵🇪 *Pago en Perú*\nYape: *921 444 991*\nTitular: *Jaime Gar.*\n\nDespués de pagar, envía tu comprobante por este chat.",
   internationalPayment:
@@ -175,7 +177,7 @@ const defaultSettings = {
   humanReply:
     "🙋 He avisado que necesitas atención personal. Un asesor de JadrixServs continuará contigo por este chat.",
   fallbackReply:
-    "Cuéntame qué servicio te interesa o escribe *catálogo*, *planes*, *pagos* o *asesor* para ayudarte.",
+    "No tengo ese dato confirmado. Si deseas, puedo comunicarte con un asesor de JadrixServs.",
   reminderTemplate:
     "Hola {nombre} 👋 Te recordamos que tu servicio *{producto}* vence el {fecha}. Puedes renovar anticipadamente sin perder ningún día; el nuevo mes comienza desde tu fecha de vencimiento actual.",
   chargeTemplate:
@@ -185,7 +187,7 @@ const defaultSettings = {
 
 function createInitialData() {
   return {
-    version: 4,
+    version: 4.1,
     settings: structuredClone(defaultSettings),
     products: structuredClone(products),
     plans: structuredClone(plans),

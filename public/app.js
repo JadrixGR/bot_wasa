@@ -91,6 +91,9 @@ function statusPresentation(status) {
     ready: ["Conectado", "green", "WhatsApp está respondiendo automáticamente."],
     qr: ["Escanea el QR", "amber", "Abre WhatsApp en tu celular y vincula este dispositivo."],
     authenticated: ["Autenticando", "blue", "WhatsApp aceptó el QR. Espera unos segundos."],
+    loading: ["Sincronizando", "blue", `WhatsApp está cargando${status.loadingPercent !== null ? ` (${status.loadingPercent}%)` : ""}.`],
+    recovering: ["Recuperando", "amber", status.error || "Completando la conexión automáticamente."],
+    stalled: ["Conexión detenida", "red", status.error || "WhatsApp vinculó la sesión, pero no terminó de cargar."],
     initializing: ["Iniciando", "neutral", "Preparando WhatsApp Web y recuperando la sesión."],
     starting: ["Iniciando", "neutral", "Preparando el servicio."],
     restarting: ["Reiniciando", "neutral", "Cerrando y abriendo WhatsApp Web."],
@@ -115,7 +118,12 @@ function renderWhatsApp(status) {
   $("#heroText").textContent = description;
   $("#waTitle").textContent = status.ready ? `Conectado${status.name ? ` como ${status.name}` : ""}` : label;
   $("#waDescription").textContent = status.error || description;
-  $("#waUpdated").textContent = status.updatedAt ? `Actualizado ${formatRelative(status.updatedAt)}` : "";
+  const diagnosticParts = [
+    status.updatedAt ? `Actualizado ${formatRelative(status.updatedAt)}` : "",
+    status.waState ? `Estado: ${status.waState}` : "",
+    status.webVersion ? `Web: ${status.webVersion}` : ""
+  ].filter(Boolean);
+  $("#waUpdated").textContent = diagnosticParts.join(" · ");
 
   const visual = $("#waVisual");
   if (status.ready) {
@@ -125,7 +133,10 @@ function renderWhatsApp(status) {
   } else if (["error", "auth_failure", "disconnected"].includes(status.state)) {
     visual.innerHTML = `<div class="error-orb">!</div><strong>${escapeHtml(label)}</strong><p>${escapeHtml(status.error || description)}</p>`;
   } else {
-    visual.innerHTML = `<div class="loader-ring"></div><p>${escapeHtml(description)}</p>`;
+    const progress = status.loadingPercent !== null && status.loadingPercent !== undefined
+      ? `<progress class="loading-progress" max="100" value="${Math.max(0, Math.min(100, Number(status.loadingPercent) || 0))}"></progress>`
+      : "";
+    visual.innerHTML = `<div class="loader-ring"></div><p>${escapeHtml(description)}</p>${progress}`;
   }
 
   $("#dashboardWaBody").innerHTML = status.ready
@@ -311,6 +322,7 @@ async function loadSettings() {
   $("#greeting1").value = payload.settings.greetingMessages[0] || "";
   $("#greeting2").value = payload.settings.greetingMessages[1] || "";
   $("#greeting3").value = payload.settings.greetingMessages[2] || "";
+  $("#shortGreeting").value = payload.settings.shortGreeting || "";
   $("#peruPayment").value = payload.settings.peruPayment || "";
   $("#internationalPayment").value = payload.settings.internationalPayment || "";
   $("#reminderTemplate").value = payload.settings.reminderTemplate || "";
@@ -320,6 +332,11 @@ async function loadSettings() {
   $("#fallbackReply").value = payload.settings.fallbackReply || "";
   $("#audioStatus").textContent = payload.media.dicloakAudio?.originalName || "Sin cargar";
   $("#pdfStatus").textContent = payload.media.catalogPdf?.originalName || "Sin cargar";
+  $("#aiStatusPill").textContent = payload.ai?.enabled ? "Activa" : "Sin clave";
+  $("#aiStatusPill").className = `pill ${payload.ai?.enabled ? "green" : "amber"}`;
+  $("#aiStatusText").textContent = payload.ai?.enabled
+    ? `OPENAI_API_KEY está configurada. Modelo: ${payload.ai.model}. Pulsa “Probar conexión con OpenAI” para verificarla.`
+    : "Las respuestas predeterminadas funcionan, pero las preguntas no previstas pasarán a un asesor hasta configurar la clave.";
   $("#productOptions").innerHTML = [...payload.products, ...payload.plans]
     .map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join("");
 }
@@ -329,6 +346,7 @@ async function saveSettings() {
     await api("/api/settings", {
       method: "PUT",
       body: {
+        shortGreeting: $("#shortGreeting").value,
         greetingMessages: [$("#greeting1").value, $("#greeting2").value, $("#greeting3").value],
         peruPayment: $("#peruPayment").value,
         internationalPayment: $("#internationalPayment").value,
@@ -442,6 +460,13 @@ function bindEvents() {
       setTimeout(refreshWhatsAppStatus, 1500);
     } catch (error) { showToast(error.message, true); }
   });
+  $("#recoverWaButton").addEventListener("click", async () => {
+    try {
+      await api("/api/whatsapp/recover", { method: "POST" });
+      showToast("Estamos completando la conexión. Espera unos segundos.");
+      setTimeout(refreshWhatsAppStatus, 1500);
+    } catch (error) { showToast(error.message, true); }
+  });
   $("#resetWaButton").addEventListener("click", async () => {
     if (!confirm("Se cerrará la sesión actual de WhatsApp y tendrás que escanear un QR nuevo. ¿Continuar?")) return;
     try {
@@ -478,6 +503,21 @@ function bindEvents() {
     }
   });
   $("#saveSettingsButton").addEventListener("click", saveSettings);
+  $("#testAiButton").addEventListener("click", async () => {
+    const button = $("#testAiButton");
+    button.disabled = true;
+    button.textContent = "Probando…";
+    try {
+      const result = await api("/api/ai/test", { method: "POST" });
+      showToast(`OpenAI conectado correctamente con ${result.model}.`);
+      await loadSettings();
+    } catch (error) {
+      showToast(error.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Probar conexión con OpenAI";
+    }
+  });
   $("#audioForm").addEventListener("submit", (event) => uploadMedia(event, "dicloakAudio"));
   $("#pdfForm").addEventListener("submit", (event) => uploadMedia(event, "catalogPdf"));
   $("#pausedConversations").addEventListener("click", async (event) => {
