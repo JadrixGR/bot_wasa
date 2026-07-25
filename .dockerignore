@@ -5,3 +5,9 @@ data
 media
 npm-debug.log*
 *.zip
+server.js
+seed-data.js
+ACTUALIZAR-A-V3.txt
+ACTUALIZAR-A-V4.txt
+INSTRUCCIONES-ACTUALIZACION.txt
+INSTRUCCIONES-RAPIDAS.txt

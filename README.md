@@ -1,24 +1,27 @@
-# JadrixServs Bot V4.1
+# JadrixServs Bot V4.2
 
-Bot de WhatsApp Web con panel privado para administrar respuestas, clientes, cobros, vencimientos y recordatorios.
+Bot de WhatsApp con panel privado para administrar respuestas, clientes, cobros, vencimientos y recordatorios.
 
-## Mejoras de esta actualización
+## Corrección del inicio de sesión
 
-- Después de escanear el QR, el panel muestra el porcentaje real de sincronización.
-- Si WhatsApp queda vinculado pero no llega a `ready`, intenta completar la sincronización y reinicia una vez sin borrar la sesión.
-- Botón **Forzar conexión** para recuperar manualmente una carga detenida.
-- Estado técnico visible: porcentaje, estado de WhatsApp Web y versión cargada.
-- Cada mensaje muestra “escribiendo…” y espera brevemente antes de enviarse.
-- Los audios simulan el estado de grabación.
-- Un saludo recibe una sola respuesta corta.
-- El catálogo, los planes y los pagos se envían únicamente cuando el cliente los pide.
-- Las preguntas de precio reciben solamente precio y duración, sin bloques adicionales.
-- `OPENAI_API_KEY` activa una IA de respaldo para preguntas no previstas.
-- La IA usa únicamente la información entrenada de JadrixServs, responde en 1–3 oraciones y no inventa datos.
-- El panel permite probar la conexión con OpenAI sin mostrar ni guardar la clave.
+La V4.2 reemplaza la conexión anterior basada en `whatsapp-web.js` y Chromium por Baileys 7 mediante WebSocket.
+
+- El teléfono y el bot ahora completan el vínculo usando el mismo evento de conexión.
+- Al aceptar el QR, el reinicio requerido por WhatsApp ocurre automáticamente y conserva las credenciales.
+- Si la conexión se interrumpe, se restaura sin pedir otro QR mientras la sesión siga siendo válida.
+- La sesión se guarda en el disco persistente de Render.
+- Ya no se instala ni ejecuta Chromium, por lo que el despliegue consume menos memoria.
+- El panel muestra QR, autenticación, reconexión, conexión completa y errores de sesión.
+- **Forzar conexión** reabre el socket sin borrar la sesión.
+- **Cerrar sesión** elimina las credenciales guardadas y genera un QR completamente nuevo.
 
 También conserva:
 
+- Estado “escribiendo…” y una demora breve antes de cada respuesta.
+- Estado de grabación para los audios.
+- Respuestas breves que contestan solamente lo preguntado.
+- Catálogo y planes únicamente cuando el cliente los solicita.
+- `OPENAI_API_KEY` como respaldo para preguntas no previstas.
 - Catálogo completo de JadrixServs.
 - Plan Pro de S/60 y Plan Plus de S/25.
 - Pagos por Yape y Binance/USDT.
@@ -29,17 +32,29 @@ También conserva:
 - Cobro automático opcional, inicialmente desactivado.
 - Exportación de clientes a CSV.
 
-## Actualizar el repositorio
+## Limpiar los archivos antiguos
 
-Descomprime el ZIP y reemplaza con su contenido todos los archivos del proyecto anterior. En Windows CMD, dentro de la carpeta:
+En la captura aparecen archivos de versiones anteriores mezclados con el proyecto nuevo:
+
+- `server.js`
+- `seed-data.js`
+- `ACTUALIZAR-A-V3.txt`
+- `ACTUALIZAR-A-V4.txt`
+- `INSTRUCCIONES-ACTUALIZACION.txt`
+- `INSTRUCCIONES-RAPIDAS.txt`
+
+La V4.2 no usa ninguno. El proceso correcto siempre inicia `src/server.js`.
+
+Después de copiar el contenido del ZIP nuevo, abre CMD dentro de la carpeta del repositorio y ejecuta:
 
 ```bat
-git add .
-git commit -m "Actualizar JadrixServs a V4.1"
+git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt
+git add -A
+git commit -m "Actualizar JadrixServs a V4.2"
 git push
 ```
 
-Render iniciará un nuevo despliegue si el repositorio tiene Auto-Deploy activado.
+No borres la carpeta `.git`.
 
 ## Variables necesarias en Render
 
@@ -57,25 +72,31 @@ En **Render → tu servicio → Environment**, comprueba estas variables:
 | `OPENAI_TIMEOUT_MS` | `25000` |
 | `HUMAN_DELAY_MIN_MS` | `900` |
 | `HUMAN_DELAY_MAX_MS` | `4200` |
-| `WHATSAPP_READY_TIMEOUT_MS` | `60000` |
+| `WHATSAPP_READY_TIMEOUT_MS` | `45000` |
+| `WHATSAPP_RECONNECT_DELAY_MS` | `3000` |
 
-No escribas la clave de OpenAI dentro de ningún archivo ni la subas a GitHub. Debe existir únicamente como variable secreta de Render.
+No escribas la clave de OpenAI dentro de ningún archivo ni la subas a GitHub.
 
-## Conectar WhatsApp
+## Vincular nuevamente después de actualizar
 
-1. Abre la URL de Render e ingresa al panel.
-2. Entra a **WhatsApp**.
-3. Escanea el QR desde **WhatsApp → Dispositivos vinculados → Vincular dispositivo**.
-4. El panel cambiará a **Sincronizando** y mostrará el porcentaje.
-5. Espera hasta que aparezca **Conectado**.
+La sesión creada por la conexión antigua no se reutiliza. Haz este procedimiento una sola vez:
 
-Si el celular muestra la sesión iniciada pero el panel no conecta:
+1. Espera a que el despliegue V4.2 de Render termine correctamente.
+2. En el celular abre **WhatsApp → Dispositivos vinculados**.
+3. Elimina el dispositivo viejo del bot si todavía aparece.
+4. Abre el panel de JadrixServs y entra a **WhatsApp**.
+5. Pulsa **Cerrar sesión** para limpiar del disco la sesión anterior.
+6. Cuando aparezca el QR nuevo, pulsa **Vincular dispositivo** en el celular y escanéalo.
+7. El panel mostrará **Autenticando** y luego **Conectado**. No pulses Reiniciar mientras completa este paso.
 
-1. Espera un minuto; la recuperación automática se ejecutará.
-2. Pulsa **Forzar conexión**.
-3. Si continúa detenido, pulsa **Cerrar sesión**.
-4. En el celular elimina el dispositivo JadrixServs que haya quedado vinculado.
-5. Escanea el QR nuevo y no cierres el panel hasta que diga **Conectado**.
+Después del QR, WhatsApp puede solicitar internamente un reinicio de la conexión. La V4.2 lo reconoce y lo completa automáticamente.
+
+Si no aparece **Conectado** después de 45 segundos:
+
+1. Pulsa **Forzar conexión** una sola vez.
+2. Espera otros 45 segundos.
+3. Si aparece **Error de sesión**, usa **Cerrar sesión**, elimina el dispositivo del celular y escanea el siguiente QR.
+4. Revisa **Actividad**: allí se guarda el código de desconexión para el diagnóstico.
 
 ## Probar OpenAI
 
@@ -109,20 +130,14 @@ Abre `http://localhost:3000`.
 
 El archivo `render.yaml` usa un servicio Starter y un disco de 1 GB montado en `/data`. Allí se guardan:
 
-- La sesión de WhatsApp.
+- Las credenciales de la sesión de WhatsApp.
 - Los clientes y vencimientos.
 - El audio DICloak y el PDF.
 
 Sin disco persistente, Render perderá la sesión y los datos cuando reinicie o vuelva a desplegar.
 
-## Uso del panel
-
-- **WhatsApp:** QR, progreso, recuperación, reinicio y cierre de sesión.
-- **Clientes y cobros:** compras, renovaciones y recordatorios.
-- **Mensajes y archivos:** saludo corto, respuestas bajo pedido, OpenAI, pagos, audio y PDF.
-- **Atención personal:** reactiva el bot después de que un cliente pidió un asesor.
-- **Actividad:** mensajes, IA, comprobantes, recordatorios y errores.
+La carpeta de autenticación equivale a una credencial privada. No la subas a GitHub, no la compartas y no publiques capturas de su contenido.
 
 ## Importante
 
-Este proyecto usa `whatsapp-web.js`, que automatiza WhatsApp Web y no es la API oficial de Meta. Evita envíos masivos y mensajes no solicitados. WhatsApp puede cambiar su funcionamiento y requerir futuras actualizaciones.
+Este proyecto usa Baileys, que se conecta a WhatsApp Web sin la API oficial de Meta. Evita envíos masivos y mensajes no solicitados. WhatsApp puede cambiar su funcionamiento y requerir futuras actualizaciones.

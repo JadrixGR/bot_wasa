@@ -22,6 +22,12 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function displayWhatsAppId(value) {
+  return String(value || "")
+    .replace(/@(c\.us|s\.whatsapp\.net|lid)$/, "")
+    .split(":")[0];
+}
+
 function showToast(message, error = false) {
   const toast = $("#toast");
   toast.textContent = message;
@@ -92,11 +98,12 @@ function statusPresentation(status) {
     qr: ["Escanea el QR", "amber", "Abre WhatsApp en tu celular y vincula este dispositivo."],
     authenticated: ["Autenticando", "blue", "WhatsApp aceptó el QR. Espera unos segundos."],
     loading: ["Sincronizando", "blue", `WhatsApp está cargando${status.loadingPercent !== null ? ` (${status.loadingPercent}%)` : ""}.`],
+    reconnecting: ["Completando conexión", "blue", status.loadingMessage || "Reabriendo la sesión aceptada."],
     recovering: ["Recuperando", "amber", status.error || "Completando la conexión automáticamente."],
     stalled: ["Conexión detenida", "red", status.error || "WhatsApp vinculó la sesión, pero no terminó de cargar."],
-    initializing: ["Iniciando", "neutral", "Preparando WhatsApp Web y recuperando la sesión."],
+    initializing: ["Iniciando", "neutral", status.loadingMessage || "Preparando la conexión con WhatsApp."],
     starting: ["Iniciando", "neutral", "Preparando el servicio."],
-    restarting: ["Reiniciando", "neutral", "Cerrando y abriendo WhatsApp Web."],
+    restarting: ["Reiniciando", "neutral", "Cerrando y abriendo la conexión."],
     reset: ["Sesión cerrada", "amber", "Preparando un código QR nuevo."],
     disconnected: ["Desconectado", "red", "La sesión se desconectó. Reinicia o vincula nuevamente."],
     auth_failure: ["Error de sesión", "red", "La autenticación falló. Cierra la sesión y escanea un QR nuevo."],
@@ -121,7 +128,7 @@ function renderWhatsApp(status) {
   const diagnosticParts = [
     status.updatedAt ? `Actualizado ${formatRelative(status.updatedAt)}` : "",
     status.waState ? `Estado: ${status.waState}` : "",
-    status.webVersion ? `Web: ${status.webVersion}` : ""
+    status.webVersion ? `Motor: ${status.webVersion}` : ""
   ].filter(Boolean);
   $("#waUpdated").textContent = diagnosticParts.join(" · ");
 
@@ -390,7 +397,7 @@ async function loadConversations() {
   const conversations = await api("/api/conversations");
   $("#pausedConversations").innerHTML = conversations.map((item) => `
     <article class="attention-card">
-      <div><strong>${escapeHtml(item.chatId.replace("@c.us", ""))}</strong><span>${escapeHtml(item.pauseReason || "Solicitó atención personal")} · ${escapeHtml(formatRelative(item.pausedAt || item.updatedAt))}</span></div>
+      <div><strong>${escapeHtml(displayWhatsAppId(item.chatId))}</strong><span>${escapeHtml(item.pauseReason || "Solicitó atención personal")} · ${escapeHtml(formatRelative(item.pausedAt || item.updatedAt))}</span></div>
       <button class="button secondary" data-resume="${escapeHtml(item.chatId)}" type="button">Reactivar bot</button>
     </article>
   `).join("");

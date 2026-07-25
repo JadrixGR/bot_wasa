@@ -48,6 +48,11 @@ class ReminderScheduler {
     setTimeout(() => this.runOnce().catch(() => undefined), 20000).unref();
   }
 
+  stop() {
+    if (this.timer) clearInterval(this.timer);
+    this.timer = null;
+  }
+
   async runOnce() {
     if (this.running || !this.whatsapp.getStatus().ready) {
       return { sent: 0, skipped: true };

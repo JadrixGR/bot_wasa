@@ -1,0 +1,44 @@
+JADRIXSERVS BOT V4.2 - ACTUALIZACIÓN LIMPIA
+
+1. Descomprime JadrixServs-Bot-V4.zip.
+
+2. Copia el CONTENIDO de la carpeta jadrixservs-bot-v4 dentro de la carpeta
+   de tu repositorio. Acepta reemplazar los archivos.
+
+3. No borres la carpeta .git.
+
+4. Elimina estos archivos viejos si todavía aparecen:
+   server.js
+   seed-data.js
+   ACTUALIZAR-A-V3.txt
+   ACTUALIZAR-A-V4.txt
+   INSTRUCCIONES-ACTUALIZACION.txt
+   INSTRUCCIONES-RAPIDAS.txt
+
+5. Abre CMD dentro de la carpeta y ejecuta, una línea por vez:
+
+   git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt
+   git add -A
+   git commit -m "Actualizar JadrixServs a V4.2"
+   git push
+
+6. Espera que el nuevo despliegue de Render finalice.
+
+7. En WhatsApp del celular:
+   Configuración > Dispositivos vinculados
+   Elimina la sesión anterior del bot.
+
+8. En el panel JadrixServs:
+   WhatsApp > Cerrar sesión
+   Espera el QR nuevo y escanéalo.
+
+9. No pulses Reiniciar mientras diga "Autenticando".
+   Debe cambiar automáticamente a "Conectado".
+
+10. Si no conecta después de 45 segundos, pulsa "Forzar conexión" una vez
+    y vuelve a esperar.
+
+IMPORTANTE:
+- Render debe tener un disco persistente montado en /data.
+- OPENAI_API_KEY se configura en Environment de Render, nunca en GitHub.
+- El archivo que inicia el bot es src/server.js.

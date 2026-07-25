@@ -31,7 +31,9 @@ services:
       - key: HUMAN_DELAY_MAX_MS
         value: "4200"
       - key: WHATSAPP_READY_TIMEOUT_MS
-        value: "60000"
+        value: "45000"
+      - key: WHATSAPP_RECONNECT_DELAY_MS
+        value: "3000"
     disk:
       name: jadrixservs-data
       mountPath: /data

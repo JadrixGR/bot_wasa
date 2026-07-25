@@ -69,7 +69,7 @@ function asyncRoute(handler) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.1",
+    version: "4.2",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
     time: new Date().toISOString()
@@ -358,9 +358,19 @@ const server = app.listen(port, "0.0.0.0", () => {
   });
 });
 
-function shutdown() {
-  server.close(() => process.exit(0));
-  setTimeout(() => process.exit(1), 8000).unref();
+let shuttingDown = false;
+
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  scheduler.stop();
+  const forcedExit = setTimeout(() => process.exit(1), 8000);
+  forcedExit.unref();
+  await whatsapp.shutdown().catch(() => undefined);
+  server.close(() => {
+    clearTimeout(forcedExit);
+    process.exit(0);
+  });
 }
 
 process.on("SIGTERM", shutdown);

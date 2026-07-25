@@ -187,7 +187,7 @@ const defaultSettings = {
 
 function createInitialData() {
   return {
-    version: 4.1,
+    version: 4.2,
     settings: structuredClone(defaultSettings),
     products: structuredClone(products),
     plans: structuredClone(plans),
