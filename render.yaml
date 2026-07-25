@@ -1,19 +1,28 @@
 services:
   - type: web
-    name: whatsapp-qr-render-bot
+    name: jadrixservs-bot-v4
     runtime: docker
-    plan: free
+    plan: starter
     healthCheckPath: /health
+    autoDeployTrigger: commit
     envVars:
-      - key: ADMIN_KEY
+      - key: NODE_ENV
+        value: production
+      - key: ADMIN_PASSWORD
         sync: false
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_MODEL
-        value: gpt-5-mini
-      - key: SESSION_PATH
-        value: /data/baileys_auth
+      - key: COOKIE_SECRET
+        generateValue: true
       - key: DATA_DIR
-        value: /data/bot-control
-      - key: WA_LOG_LEVEL
-        value: silent
+        value: /data
+      - key: MEDIA_DIR
+        value: /data/media
+      - key: BOT_TIMEZONE
+        value: America/Lima
+      - key: GREETING_COOLDOWN_HOURS
+        value: "24"
+      - key: REMINDER_CHECK_MINUTES
+        value: "15"
+    disk:
+      name: jadrixservs-data
+      mountPath: /data
+      sizeGB: 1

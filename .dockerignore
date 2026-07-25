@@ -1,8 +1,7 @@
-.git
-.gitignore
 node_modules
-npm-debug.log*
+.git
 .env
-.DS_Store
-baileys_auth
-bot-control
+data
+media
+npm-debug.log*
+*.zip

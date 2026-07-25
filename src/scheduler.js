@@ -1,0 +1,92 @@
+"use strict";
+
+const { daysBetween, todayInTimeZone } = require("./date-utils");
+
+function fillTemplate(template, client) {
+  const replacements = {
+    nombre: client.name,
+    producto: client.product,
+    precio: client.price,
+    fecha: client.expiryDate
+  };
+  return String(template).replace(/\{(nombre|producto|precio|fecha)\}/g, (_, key) => replacements[key] || "");
+}
+
+function reminderActionFor(client, today) {
+  if (client.archived || client.status !== "activo" || !client.expiryDate) return null;
+  const remaining = daysBetween(today, client.expiryDate);
+  if (client.autoReminder && remaining === Number(client.reminderDays || 2)) {
+    const key = `${client.expiryDate}:reminder:${remaining}`;
+    if (client.lastReminderKey !== key) return { type: "reminder", key, remaining };
+  }
+  if (client.autoCharge && remaining === 0) {
+    const key = `${client.expiryDate}:charge`;
+    if (client.lastChargeKey !== key) return { type: "charge", key, remaining };
+  }
+  return null;
+}
+
+class ReminderScheduler {
+  constructor({ store, whatsapp, timeZone = "America/Lima", intervalMinutes = 15 }) {
+    this.store = store;
+    this.whatsapp = whatsapp;
+    this.timeZone = timeZone;
+    this.intervalMs = Math.max(5, Number(intervalMinutes) || 15) * 60000;
+    this.timer = null;
+    this.running = false;
+  }
+
+  start() {
+    if (this.timer) return;
+    this.timer = setInterval(() => {
+      this.runOnce().catch((error) => {
+        this.store.addLog("error", `Error del programador: ${error.message}`);
+        this.store.save();
+      });
+    }, this.intervalMs);
+    this.timer.unref();
+    setTimeout(() => this.runOnce().catch(() => undefined), 20000).unref();
+  }
+
+  async runOnce() {
+    if (this.running || !this.whatsapp.getStatus().ready) {
+      return { sent: 0, skipped: true };
+    }
+    this.running = true;
+    let sent = 0;
+    const errors = [];
+    const today = todayInTimeZone(this.timeZone);
+    const settings = this.store.getSettings();
+
+    try {
+      for (const client of this.store.listClients()) {
+        const action = reminderActionFor(client, today);
+        if (!action) continue;
+        try {
+          const template =
+            action.type === "reminder" ? settings.reminderTemplate : settings.chargeTemplate;
+          await this.whatsapp.sendText(client.whatsapp, fillTemplate(template, client));
+          this.store.updateClient(client.id, {
+            ...(action.type === "reminder"
+              ? { lastReminderKey: action.key }
+              : { lastChargeKey: action.key })
+          });
+          this.store.addLog(
+            "reminder",
+            `${action.type === "reminder" ? "Recordatorio" : "Cobro"} enviado a ${client.name}`,
+            { clientId: client.id }
+          );
+          this.store.save();
+          sent += 1;
+        } catch (error) {
+          errors.push({ clientId: client.id, message: error.message });
+        }
+      }
+    } finally {
+      this.running = false;
+    }
+    return { sent, errors, skipped: false };
+  }
+}
+
+module.exports = { ReminderScheduler, reminderActionFor, fillTemplate };

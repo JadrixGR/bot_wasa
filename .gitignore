@@ -1,6 +1,13 @@
 node_modules/
 .env
-baileys_auth/
-bot-control/
+data/*
+!data/.gitkeep
+media/*
+!media/.gitkeep
+.wwebjs_auth/
+.wwebjs_cache/
 npm-debug.log*
-.DS_Store
+*.zip
+integration.*/
+visual.*/
+test-runtime/
