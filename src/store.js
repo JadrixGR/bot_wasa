@@ -24,15 +24,31 @@ class JsonStore {
     try {
       const parsed = JSON.parse(fs.readFileSync(this.filePath, "utf8"));
       const initial = createInitialData();
-      return {
+      const isPreTrainingVersion = Number(parsed.version || 0) < 4.3;
+      const migrated = {
         ...initial,
         ...parsed,
-        settings: { ...defaultSettings, ...(parsed.settings || {}) },
+        version: initial.version,
+        settings: {
+          ...defaultSettings,
+          ...(parsed.settings || {}),
+          ...(isPreTrainingVersion
+            ? {
+                welcomeTriggers: defaultSettings.welcomeTriggers,
+                greetingMessages: structuredClone(defaultSettings.greetingMessages)
+              }
+            : {})
+        },
         media: { ...initial.media, ...(parsed.media || {}) },
+        knowledgeBase: Array.isArray(parsed.knowledgeBase)
+          ? parsed.knowledgeBase
+          : initial.knowledgeBase,
         clients: Array.isArray(parsed.clients) ? parsed.clients : [],
         logs: Array.isArray(parsed.logs) ? parsed.logs : [],
         conversations: parsed.conversations || {}
       };
+      if (isPreTrainingVersion) this.#write(migrated);
+      return migrated;
     } catch (error) {
       const backup = `${this.filePath}.corrupt-${Date.now()}`;
       fs.copyFileSync(this.filePath, backup);
@@ -64,6 +80,7 @@ class JsonStore {
     const allowed = [
       "businessName",
       "shortGreeting",
+      "welcomeTriggers",
       "peruPayment",
       "internationalPayment",
       "receiptReply",
@@ -87,6 +104,52 @@ class JsonStore {
     }
     this.save();
     return this.getSettings();
+  }
+
+  getKnowledgeBase() {
+    return structuredClone(this.data.knowledgeBase || []);
+  }
+
+  updateKnowledgeBase(entries) {
+    if (!Array.isArray(entries)) {
+      throw new Error("El entrenamiento debe ser una lista de respuestas.");
+    }
+    if (entries.length > 200) {
+      throw new Error("El entrenamiento admite hasta 200 respuestas.");
+    }
+
+    this.data.knowledgeBase = entries.map((entry) => {
+      const title = String(entry?.title || "").trim().slice(0, 120);
+      const answer = String(entry?.answer || "").trim().slice(0, 3000);
+      const rawTriggers = Array.isArray(entry?.triggers)
+        ? entry.triggers
+        : String(entry?.triggers || "").split(",");
+      const triggers = [...new Set(
+        rawTriggers
+          .map((trigger) => String(trigger || "").trim().slice(0, 160))
+          .filter(Boolean)
+      )].slice(0, 20);
+
+      if (!title) throw new Error("Cada respuesta entrenada necesita un nombre.");
+      if (!triggers.length) {
+        throw new Error(`Agrega al menos una frase de activación para “${title}”.`);
+      }
+      if (!answer) throw new Error(`Agrega la respuesta para “${title}”.`);
+
+      return {
+        id: String(entry?.id || crypto.randomUUID()),
+        title,
+        triggers,
+        answer,
+        enabled: entry?.enabled !== false
+      };
+    });
+    this.addLog(
+      "training",
+      `Entrenamiento actualizado: ${this.data.knowledgeBase.length} respuestas`
+    );
+    this.save();
+    return this.getKnowledgeBase();
   }
 
   listClients({ includeArchived = false } = {}) {

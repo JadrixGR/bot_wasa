@@ -12,6 +12,12 @@ function buildKnowledge(data) {
     (plan) =>
       `- ${plan.name}: ${plan.price} por ${plan.period}; incluye ${plan.includes.join(", ")}.`
   );
+  const trainedLines = (data.knowledgeBase || [])
+    .filter((entry) => entry.enabled !== false)
+    .map(
+      (entry) =>
+        `- ${entry.title}: ${entry.answer} Frases relacionadas: ${(entry.triggers || []).join("; ")}.`
+    );
 
   return [
     "NEGOCIO: JadrixServs.",
@@ -21,6 +27,9 @@ function buildKnowledge(data) {
     "",
     "PLANES:",
     ...planLines,
+    "",
+    "RESPUESTAS ENTRENADAS:",
+    ...trainedLines,
     "",
     "PAGOS CONFIRMADOS:",
     `- Perú: ${data.settings.peruPayment.replace(/\n+/g, " ")}`,
@@ -33,6 +42,95 @@ function buildKnowledge(data) {
     "- Nunca confirmes que un pago fue aprobado: solo indica que el comprobante será revisado.",
     "- No solicites contraseñas, códigos de verificación ni datos bancarios del cliente."
   ].join("\n");
+}
+
+function classifyOpenAIError(error) {
+  const status = Number(error?.status || error?.response?.status || 0) || 400;
+  const providerCode = String(
+    error?.code ||
+      error?.error?.code ||
+      error?.response?.data?.error?.code ||
+      ""
+  );
+  const rawMessage = String(error?.message || error || "");
+  const normalized = `${providerCode} ${rawMessage}`.toLowerCase();
+
+  if (
+    status === 429 &&
+    (providerCode === "insufficient_quota" ||
+      normalized.includes("current quota") ||
+      normalized.includes("billing details") ||
+      normalized.includes("insufficient_quota"))
+  ) {
+    return {
+      code: "quota",
+      status: 429,
+      message:
+        "La clave de OpenAI está configurada, pero la cuenta de API no tiene saldo o alcanzó su límite de gasto. Agrega créditos en la facturación de platform.openai.com y vuelve a probar. Mientras tanto, el bot seguirá usando sus respuestas entrenadas."
+    };
+  }
+  if (status === 429) {
+    return {
+      code: "rate_limit",
+      status: 429,
+      message:
+        "OpenAI recibió demasiadas solicitudes en poco tiempo. Espera un momento y vuelve a probar; las respuestas entrenadas siguen funcionando."
+    };
+  }
+  if (status === 401 || normalized.includes("incorrect api key")) {
+    return {
+      code: "invalid_key",
+      status: 401,
+      message:
+        "OPENAI_API_KEY no es válida. Crea una clave nueva en platform.openai.com, reemplázala en Render y vuelve a desplegar."
+    };
+  }
+  if (status === 403) {
+    return {
+      code: "forbidden",
+      status: 403,
+      message:
+        "La cuenta o el proyecto de OpenAI no tiene permiso para usar la API. Revisa el proyecto, la organización y sus límites."
+    };
+  }
+  if (
+    status === 404 ||
+    normalized.includes("model_not_found") ||
+    normalized.includes("does not exist")
+  ) {
+    return {
+      code: "model",
+      status: 400,
+      message:
+        "El modelo configurado no está disponible para esta cuenta. Revisa OPENAI_MODEL en Render."
+    };
+  }
+  if (
+    normalized.includes("timeout") ||
+    normalized.includes("timed out") ||
+    normalized.includes("connection")
+  ) {
+    return {
+      code: "connection",
+      status: 503,
+      message:
+        "No se pudo comunicar con OpenAI en este momento. Vuelve a probar; el bot seguirá usando sus respuestas entrenadas."
+    };
+  }
+  return {
+    code: "openai_error",
+    status: status >= 400 && status < 600 ? status : 400,
+    message:
+      "OpenAI no pudo completar la prueba. Revisa la clave, el saldo y el modelo configurado. Las respuestas entrenadas siguen funcionando."
+  };
+}
+
+function friendlyOpenAIError(error) {
+  const info = classifyOpenAIError(error);
+  const friendly = new Error(info.message);
+  friendly.code = info.code;
+  friendly.status = info.status;
+  return friendly;
 }
 
 function compactAnswer(text, maxLength = 700) {
@@ -54,7 +152,7 @@ class AiService {
   constructor({
     store,
     apiKey = process.env.OPENAI_API_KEY,
-    model = process.env.OPENAI_MODEL || "gpt-5.6",
+    model = process.env.OPENAI_MODEL || "gpt-5.6-luna",
     timeoutMs = process.env.OPENAI_TIMEOUT_MS || 25000,
     client
   }) {
@@ -63,6 +161,7 @@ class AiService {
     this.apiKeyConfigured = Boolean(apiKey || client);
     this.lastSuccessAt = null;
     this.lastError = null;
+    this.lastErrorType = null;
     this.client =
       client ||
       (apiKey
@@ -79,7 +178,11 @@ class AiService {
       enabled: Boolean(this.client),
       model: this.model,
       lastSuccessAt: this.lastSuccessAt,
-      lastError: this.lastError
+      lastError: this.lastError,
+      lastErrorType: this.lastErrorType,
+      health: !this.client
+        ? "missing_key"
+        : this.lastErrorType || (this.lastSuccessAt ? "ready" : "configured")
     };
   }
 
@@ -105,7 +208,7 @@ class AiService {
       const response = await this.client.responses.create({
         model: this.model,
         store: false,
-        max_output_tokens: 800,
+        max_output_tokens: 300,
         instructions: [
           "Eres un vendedor y agente de soporte humano de JadrixServs que conversa por WhatsApp en español natural de Perú.",
           "Responde únicamente la pregunta actual. No agregues catálogo, planes, formas de pago, promociones ni llamadas a comprar si no fueron solicitadas.",
@@ -139,22 +242,30 @@ class AiService {
       });
       this.lastSuccessAt = new Date().toISOString();
       this.lastError = null;
+      this.lastErrorType = null;
       return compactAnswer(response.output_text);
     } catch (error) {
-      this.lastError = String(error?.message || error).slice(0, 300);
-      throw error;
+      const friendly = friendlyOpenAIError(error);
+      this.lastError = friendly.message;
+      this.lastErrorType = friendly.code;
+      throw friendly;
     }
   }
 
   async testConnection() {
     if (!this.client) {
-      throw new Error("OPENAI_API_KEY no está configurada.");
+      const error = new Error(
+        "OPENAI_API_KEY no está configurada en las variables de Render."
+      );
+      error.code = "missing_key";
+      error.status = 400;
+      throw error;
     }
     try {
       const response = await this.client.responses.create({
         model: this.model,
         store: false,
-        max_output_tokens: 100,
+        max_output_tokens: 60,
         instructions: "Responde solamente con la palabra OK.",
         input: "Prueba de conexión."
       });
@@ -163,16 +274,25 @@ class AiService {
       }
       this.lastSuccessAt = new Date().toISOString();
       this.lastError = null;
+      this.lastErrorType = null;
       return {
         ok: true,
         model: this.model,
         testedAt: this.lastSuccessAt
       };
     } catch (error) {
-      this.lastError = String(error?.message || error).slice(0, 300);
-      throw error;
+      const friendly = friendlyOpenAIError(error);
+      this.lastError = friendly.message;
+      this.lastErrorType = friendly.code;
+      throw friendly;
     }
   }
 }
 
-module.exports = { AiService, buildKnowledge, compactAnswer };
+module.exports = {
+  AiService,
+  buildKnowledge,
+  compactAnswer,
+  classifyOpenAIError,
+  friendlyOpenAIError
+};

@@ -1,143 +1,169 @@
-# JadrixServs Bot V4.2
+# JadrixServs Bot V4.3
 
-Bot de WhatsApp con panel privado para administrar respuestas, clientes, cobros, vencimientos y recordatorios.
+Bot de WhatsApp con panel privado para administrar respuestas, entrenamiento, clientes, cobros, vencimientos y recordatorios.
 
-## Corrección del inicio de sesión
+## Qué corrige la V4.3
 
-La V4.2 reemplaza la conexión anterior basada en `whatsapp-web.js` y Chromium por Baileys 7 mediante WebSocket.
+### Inicio de sesión de WhatsApp
 
-- El teléfono y el bot ahora completan el vínculo usando el mismo evento de conexión.
-- Al aceptar el QR, el reinicio requerido por WhatsApp ocurre automáticamente y conserva las credenciales.
-- Si la conexión se interrumpe, se restaura sin pedir otro QR mientras la sesión siga siendo válida.
-- La sesión se guarda en el disco persistente de Render.
-- Ya no se instala ni ejecuta Chromium, por lo que el despliegue consume menos memoria.
-- El panel muestra QR, autenticación, reconexión, conexión completa y errores de sesión.
-- **Forzar conexión** reabre el socket sin borrar la sesión.
-- **Cerrar sesión** elimina las credenciales guardadas y genera un QR completamente nuevo.
+La conexión usa Baileys 7 por WebSocket, sin Chromium.
 
-También conserva:
+- Guarda la sesión en el disco persistente de Render.
+- Cuando WhatsApp acepta el QR y solicita un reinicio interno, lo completa automáticamente.
+- Reintenta una conexión vinculada sin borrar sus credenciales.
+- El panel distingue QR, autenticación, reconexión y conexión completa.
+- **Forzar conexión** reabre la sesión guardada.
+- **Cerrar sesión** elimina las credenciales y genera un QR totalmente nuevo.
 
-- Estado “escribiendo…” y una demora breve antes de cada respuesta.
-- Estado de grabación para los audios.
-- Respuestas breves que contestan solamente lo preguntado.
-- Catálogo y planes únicamente cuando el cliente los solicita.
-- `OPENAI_API_KEY` como respaldo para preguntas no previstas.
-- Catálogo completo de JadrixServs.
-- Plan Pro de S/60 y Plan Plus de S/25.
-- Pagos por Yape y Binance/USDT.
-- Audio DICloak y catálogo PDF configurables.
-- Registro de clientes, compras y vencimientos.
-- Renovación anticipada sin perder días.
-- Recordatorios 1 o 2 días antes.
-- Cobro automático opcional, inicialmente desactivado.
-- Exportación de clientes a CSV.
+### Super Combo IA 2026
 
-## Limpiar los archivos antiguos
+La frase:
 
-En la captura aparecen archivos de versiones anteriores mezclados con el proyecto nuevo:
+```text
+¿Cuál es el precio del Super Combo IA 2026?
+```
 
-- `server.js`
-- `seed-data.js`
-- `ACTUALIZAR-A-V3.txt`
-- `ACTUALIZAR-A-V4.txt`
-- `INSTRUCCIONES-ACTUALIZACION.txt`
-- `INSTRUCCIONES-RAPIDAS.txt`
+envía exactamente tres mensajes separados y en este orden:
 
-La V4.2 no usa ninguno. El proceso correcto siempre inicia `src/server.js`.
+1. Catálogo de JadrixServs.
+2. Combos especiales.
+3. Entrega, soporte y llamada final.
 
-Después de copiar el contenido del ZIP nuevo, abre CMD dentro de la carpeta del repositorio y ejecuta:
+Cada mensaje muestra “escribiendo…”, espera un tiempo proporcional a su longitud y recién después se envía. Las frases que activan esta secuencia y el contenido de los tres mensajes se editan desde **Mensajes y archivos**.
+
+Un “hola” normal recibe solamente el saludo corto. Las demás consultas reciben únicamente la información solicitada, no los tres bloques completos.
+
+### Entrenamiento local
+
+El panel ahora incluye **Entrenamiento local**:
+
+- Puedes crear hasta 200 respuestas.
+- Cada respuesta admite hasta 20 formas distintas de hacer la pregunta.
+- Se puede activar, desactivar, editar o eliminar cada respuesta.
+- Funciona aunque `OPENAI_API_KEY` no esté configurada o no tenga saldo.
+- La V4.3 incluye respuestas sobre productos, privacidad, cuentas compartidas, dispositivos, DICloak, entrega, garantía, renovación, pagos, comprobantes, combos y streaming.
+
+Los productos y planes también siguen entrenados directamente en el motor, con sus precios y condiciones.
+
+### OpenAI como respaldo
+
+OpenAI se consulta solamente cuando no coincide una respuesta local, un producto, un plan, un pago u otra regla confirmada.
+
+- Usa la Responses API.
+- El modelo recibe los productos, planes y respuestas editables.
+- La instrucción exige contestar únicamente la pregunta actual en una a tres oraciones.
+- No agrega catálogo, pagos ni promociones que no fueron solicitados.
+- No inventa información: si falta un dato, deriva a un asesor.
+- La respuesta máxima está limitada para controlar costo y evitar bloques largos.
+- El modelo predeterminado es `gpt-5.6-luna`, apropiado para respuestas breves y de menor costo.
+
+## Qué significa el error 429 de la captura
+
+El mensaje `You exceeded your current quota` significa que la cuenta de la API no tiene créditos disponibles o alcanzó el límite de gasto. No significa que falte el código del bot.
+
+ChatGPT Plus y la API de OpenAI tienen facturación separada. Para habilitar el respaldo:
+
+1. Entra a la [facturación de la plataforma de OpenAI](https://platform.openai.com/settings/organization/billing/overview).
+2. Agrega un método de pago y créditos de API.
+3. Revisa que el proyecto u organización tenga un límite de gasto mayor que cero.
+4. En Render configura `OPENAI_API_KEY` y `OPENAI_MODEL=gpt-5.6-luna`.
+5. Despliega y usa **Mensajes y archivos → Probar conexión con OpenAI**.
+
+La V4.3 traduce errores de cuota, clave, permisos, modelo y conexión a mensajes claros dentro del panel. Nunca envía el error 429 al cliente; usa el entrenamiento local o la respuesta para derivar a un asesor.
+
+## Actualizar el repositorio
+
+Antes de limpiar archivos antiguos, guarda una copia fuera del repositorio de `server.js` y `seed-data.js` si allí tenías respuestas personalizadas. El bot nuevo no ejecuta esos archivos; el proceso correcto inicia `src/server.js`.
+
+1. Descomprime `JadrixServs-Bot-V4.zip`.
+2. Copia el contenido de la carpeta `jadrixservs-bot-v4` dentro de tu repositorio.
+3. Acepta reemplazar archivos y no borres `.git`.
+4. Abre CMD dentro de la carpeta y ejecuta:
 
 ```bat
 git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt
 git add -A
-git commit -m "Actualizar JadrixServs a V4.2"
+git commit -m "Actualizar JadrixServs a V4.3"
 git push
 ```
 
-No borres la carpeta `.git`.
+El archivo persistente `/data/jadrixservs-v4.json` conserva clientes, vencimientos, conversaciones y ajustes. Al leer datos V4.2, la aplicación instala automáticamente el disparador del Super Combo y el entrenamiento local V4.3.
 
-## Variables necesarias en Render
+## Variables de Render
 
-En **Render → tu servicio → Environment**, comprueba estas variables:
+En **Render → tu servicio → Environment**:
 
 | Variable | Valor |
 | --- | --- |
-| `ADMIN_PASSWORD` | Tu contraseña para entrar al panel. |
+| `ADMIN_PASSWORD` | Contraseña segura para el panel. |
 | `COOKIE_SECRET` | Texto largo y secreto. |
 | `DATA_DIR` | `/data` |
 | `MEDIA_DIR` | `/data/media` |
 | `BOT_TIMEZONE` | `America/Lima` |
-| `OPENAI_API_KEY` | Tu clave de la plataforma de OpenAI. |
-| `OPENAI_MODEL` | `gpt-5.6` |
+| `OPENAI_API_KEY` | Clave de la plataforma de OpenAI. |
+| `OPENAI_MODEL` | `gpt-5.6-luna` |
 | `OPENAI_TIMEOUT_MS` | `25000` |
 | `HUMAN_DELAY_MIN_MS` | `900` |
 | `HUMAN_DELAY_MAX_MS` | `4200` |
 | `WHATSAPP_READY_TIMEOUT_MS` | `45000` |
 | `WHATSAPP_RECONNECT_DELAY_MS` | `3000` |
 
-No escribas la clave de OpenAI dentro de ningún archivo ni la subas a GitHub.
+No escribas claves dentro del código ni las subas a GitHub.
 
-## Vincular nuevamente después de actualizar
+## Vincular WhatsApp después de actualizar
 
-La sesión creada por la conexión antigua no se reutiliza. Haz este procedimiento una sola vez:
+La sesión del sistema antiguo no es compatible con Baileys. Haz esto una sola vez:
 
-1. Espera a que el despliegue V4.2 de Render termine correctamente.
+1. Espera a que Render termine el despliegue V4.3.
 2. En el celular abre **WhatsApp → Dispositivos vinculados**.
-3. Elimina el dispositivo viejo del bot si todavía aparece.
-4. Abre el panel de JadrixServs y entra a **WhatsApp**.
-5. Pulsa **Cerrar sesión** para limpiar del disco la sesión anterior.
-6. Cuando aparezca el QR nuevo, pulsa **Vincular dispositivo** en el celular y escanéalo.
-7. El panel mostrará **Autenticando** y luego **Conectado**. No pulses Reiniciar mientras completa este paso.
+3. Elimina el dispositivo viejo del bot.
+4. En el panel abre **WhatsApp** y pulsa **Cerrar sesión**.
+5. Espera el QR nuevo y escanéalo.
+6. No pulses Reiniciar mientras diga **Autenticando**.
+7. El panel debe cambiar a **Conectado** automáticamente.
 
-Después del QR, WhatsApp puede solicitar internamente un reinicio de la conexión. La V4.2 lo reconoce y lo completa automáticamente.
-
-Si no aparece **Conectado** después de 45 segundos:
+Si no conecta después de 45 segundos:
 
 1. Pulsa **Forzar conexión** una sola vez.
 2. Espera otros 45 segundos.
-3. Si aparece **Error de sesión**, usa **Cerrar sesión**, elimina el dispositivo del celular y escanea el siguiente QR.
-4. Revisa **Actividad**: allí se guarda el código de desconexión para el diagnóstico.
+3. Si aparece **Error de sesión**, pulsa **Cerrar sesión**, elimina el dispositivo del celular y escanea el QR nuevo.
+4. Revisa **Actividad** para ver el código de desconexión.
 
-## Probar OpenAI
+## Probar respuestas
 
-1. Agrega `OPENAI_API_KEY` en las variables de Render.
-2. Guarda los cambios y ejecuta un nuevo deploy.
-3. Abre **Mensajes y archivos → IA de respaldo**.
-4. Pulsa **Probar conexión con OpenAI**.
+Pruebas recomendadas desde otro número:
 
-Las respuestas predeterminadas se usan primero. OpenAI se consulta solamente cuando la pregunta no coincide con esas reglas.
+```text
+¿Cuál es el precio del Super Combo IA 2026?
+¿Cuánto cuesta Claude Pro?
+¿Cuál es mejor, ChatGPT o Gemini?
+¿Puedo renovar antes?
+¿Cómo puedo pagar?
+```
 
-## Probarlo en una computadora
+La primera debe producir tres mensajes. Cada una de las demás debe producir una sola respuesta relacionada con la pregunta.
 
-Necesitas Node.js 20 o superior:
+## Ejecutar en una computadora
+
+Requiere Node.js 20 o superior:
 
 ```bash
 npm install
-```
-
-En Windows CMD:
-
-```bat
-set ADMIN_PASSWORD=TuClaveSegura
-set COOKIE_SECRET=UnTextoLargoYSecreto
-set OPENAI_API_KEY=TuClaveDeOpenAI
+npm test
 npm start
 ```
 
 Abre `http://localhost:3000`.
 
-## Disco persistente
+## Disco persistente y seguridad
 
-El archivo `render.yaml` usa un servicio Starter y un disco de 1 GB montado en `/data`. Allí se guardan:
+`render.yaml` configura un servicio Starter con un disco de 1 GB montado en `/data`. Allí se guardan:
 
-- Las credenciales de la sesión de WhatsApp.
-- Los clientes y vencimientos.
-- El audio DICloak y el PDF.
+- Credenciales de WhatsApp.
+- Entrenamiento editable.
+- Clientes y vencimientos.
+- Audio DICloak y catálogo PDF.
 
-Sin disco persistente, Render perderá la sesión y los datos cuando reinicie o vuelva a desplegar.
+La carpeta de autenticación equivale a una credencial privada. No la subas a GitHub ni la compartas.
 
-La carpeta de autenticación equivale a una credencial privada. No la subas a GitHub, no la compartas y no publiques capturas de su contenido.
-
-## Importante
-
-Este proyecto usa Baileys, que se conecta a WhatsApp Web sin la API oficial de Meta. Evita envíos masivos y mensajes no solicitados. WhatsApp puede cambiar su funcionamiento y requerir futuras actualizaciones.
+Este proyecto usa Baileys y no la API oficial de Meta. Evita envíos masivos y mensajes no solicitados.

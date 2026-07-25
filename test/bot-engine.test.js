@@ -13,6 +13,7 @@ function makeHarness(conversation = {}, ai = null) {
     getConversation: () => ({ ...conversation }),
     updateConversation: (_chatId, patch) => Object.assign(conversation, patch),
     getSettings: () => structuredClone(data.settings),
+    getKnowledgeBase: () => structuredClone(data.knowledgeBase),
     getMedia: (kind) => data.media[kind],
     addLog: () => undefined,
     save: () => undefined
@@ -44,6 +45,22 @@ test("un saludo recibe una sola respuesta corta, sin catálogo", async () => {
   assert.equal(sent.length, 1);
   assert.doesNotMatch(sent[0].text, /Claude Pro/);
   assert.doesNotMatch(sent[0].text, /Plan Pro/);
+});
+
+test("la consulta del Super Combo IA 2026 envía exactamente los tres mensajes separados", async () => {
+  const { engine, sent } = makeHarness();
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@c.us",
+    body: "¿Cuál es el precio del Super Combo IA 2026?"
+  });
+  const texts = sent.filter((item) => item.type === "text");
+  assert.equal(result.action, "welcome-sequence");
+  assert.equal(result.messages, 3);
+  assert.equal(texts.length, 3);
+  assert.ok(texts[0].text.startsWith("🚀 JADRIXSERVS 🚀"));
+  assert.ok(texts[1].text.startsWith("💼 COMBOS ESPECIALES - Todo en 1"));
+  assert.ok(texts[2].text.startsWith("✅ `Entrega inmediata`"));
+  assert.ok(texts[2].text.endsWith("JadrixServs 💪"));
 });
 
 test("responde con todos los detalles de ChatGPT Pro", async () => {
@@ -80,8 +97,57 @@ test("distingue ChatGPT Plus Personal de ChatGPT Plus", async () => {
 test("explica que la renovación anticipada no pierde días", async () => {
   const { engine, sent } = makeHarness();
   const result = await engine.handleIncoming({ chatId: "51900000000@c.us", body: "¿Puedo renovar antes?" });
-  assert.equal(result.action, "renewal");
-  assert.match(sent[0].text, /vence el 26 y pagas el 23/);
+  assert.equal(result.action, "trained");
+  assert.match(sent[0].text, /sin perder días/i);
+  assert.match(sent[0].text, /fecha de vencimiento actual/i);
+});
+
+test("usa el entrenamiento local sin llamar a OpenAI", async () => {
+  let aiCalls = 0;
+  const fakeAi = {
+    getStatus: () => ({ enabled: true, model: "test" }),
+    answer: async () => {
+      aiCalls += 1;
+      return "No debería usarse.";
+    }
+  };
+  const { engine, sent } = makeHarness({}, fakeAi);
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@c.us",
+    body: "¿Cuál es mejor ChatGPT o Gemini?"
+  });
+  assert.equal(result.action, "trained");
+  assert.equal(aiCalls, 0);
+  assert.equal(sent.filter((item) => item.type === "text").length, 1);
+  assert.match(sent[0].text, /uso general te recomiendo ChatGPT/i);
+});
+
+test("una pregunta por combo personalizado recibe solo la respuesta entrenada", async () => {
+  const { engine, sent } = makeHarness();
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@c.us",
+    body: "¿Puedo armar mi combo personalizado?"
+  });
+  assert.equal(result.action, "trained");
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].text, /indícame qué servicios/i);
+  assert.doesNotMatch(sent[0].text, /Plan Pro/i);
+});
+
+test("recuerda el producto para responder una pregunta corta de seguimiento", async () => {
+  const conversation = {};
+  const { engine, sent } = makeHarness(conversation);
+  await engine.handleIncoming({
+    chatId: "51900000000@c.us",
+    body: "Quiero Claude Pro"
+  });
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@c.us",
+    body: "¿Funciona en celular?"
+  });
+  assert.equal(result.action, "product-followup");
+  assert.equal(result.id, "claude-pro");
+  assert.match(sent.at(-1).text, /celular.*laptop/i);
 });
 
 test("al pedir asesor pausa las respuestas automáticas", async () => {
@@ -141,4 +207,24 @@ test("usa OpenAI solo como respaldo para una pregunta no prevista", async () => 
   assert.equal(sent.filter((item) => item.type === "text").length, 1);
   assert.match(sent.find((item) => item.type === "text").text, /respuesta breve/);
   assert.equal(sent[0].type, "typing");
+});
+
+test("si OpenAI no tiene saldo, responde con el fallback local y no expone el error 429", async () => {
+  const fakeAi = {
+    getStatus: () => ({ enabled: true, model: "test" }),
+    answer: async () => {
+      const error = new Error("La cuenta de API no tiene saldo.");
+      error.code = "quota";
+      throw error;
+    }
+  };
+  const { engine, sent } = makeHarness({}, fakeAi);
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@c.us",
+    body: "¿Tienen una promoción para estudiantes?"
+  });
+  assert.equal(result.action, "fallback");
+  const reply = sent.filter((item) => item.type === "text").at(-1).text;
+  assert.doesNotMatch(reply, /429|quota|billing/i);
+  assert.match(reply, /asesor de JadrixServs/i);
 });

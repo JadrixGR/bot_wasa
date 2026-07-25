@@ -38,6 +38,48 @@ function asksForDuration(text) {
   return includesAny(text, ["duracion", "cuanto dura", "por cuanto tiempo", "meses"]);
 }
 
+function matchesWelcomeSequence(text, settings = {}) {
+  const triggers = String(settings.welcomeTriggers || "")
+    .split(/\r?\n|,/)
+    .map(normalizeText)
+    .filter(Boolean);
+  return triggers.some((trigger) => text === trigger || text.includes(trigger));
+}
+
+function scoreKnowledgeTrigger(text, trigger) {
+  const normalizedTrigger = normalizeText(trigger);
+  if (!normalizedTrigger) return 0;
+  if (text === normalizedTrigger) return 10000 + normalizedTrigger.length;
+  if (text.includes(normalizedTrigger)) return 5000 + normalizedTrigger.length;
+
+  const ignored = new Set([
+    "que", "cual", "como", "cuando", "donde", "el", "la", "los", "las",
+    "un", "una", "de", "del", "en", "por", "para", "me", "mi", "es"
+  ]);
+  const triggerTokens = normalizedTrigger
+    .split(" ")
+    .filter((token) => token.length >= 2 && !ignored.has(token));
+  if (triggerTokens.length < 2) return 0;
+  const textTokens = new Set(text.split(" "));
+  const overlap = triggerTokens.filter((token) => textTokens.has(token)).length;
+  return overlap / triggerTokens.length >= 0.75 ? 1000 + overlap : 0;
+}
+
+function findKnowledgeMatch(text, entries = []) {
+  return entries
+    .filter((entry) => entry?.enabled !== false && entry?.answer)
+    .map((entry) => ({
+      entry,
+      score: (Array.isArray(entry.triggers) ? entry.triggers : [])
+        .reduce(
+          (best, trigger) => Math.max(best, scoreKnowledgeTrigger(text, trigger)),
+          0
+        )
+    }))
+    .filter((match) => match.score > 0)
+    .sort((left, right) => right.score - left.score)[0]?.entry || null;
+}
+
 function formatPlan(plan, question = "") {
   const text = normalizeText(question);
   if (asksForPrice(text)) {
@@ -145,6 +187,7 @@ class BotEngine {
     }
 
     const conversation = this.#rememberUserMessage(chatId, originalConversation, body);
+    const settings = this.store.getSettings();
 
     if (includesAny(text, ["asesor", "humano", "atencion personal", "hablar con una persona"])) {
       await this.sendText(chatId, this.store.getSettings().humanReply);
@@ -168,8 +211,19 @@ class BotEngine {
       return { action: "media" };
     }
 
+    if (matchesWelcomeSequence(text, settings)) {
+      const messages = settings.greetingMessages.slice(0, 3);
+      for (const message of messages) {
+        await this.sendText(chatId, message);
+      }
+      this.store.updateConversation(chatId, {
+        welcomeSequenceSentAt: new Date().toISOString()
+      });
+      return { action: "welcome-sequence", messages: messages.length };
+    }
+
     if (isGreetingOnly(text)) {
-      await this.sendText(chatId, this.store.getSettings().shortGreeting);
+      await this.sendText(chatId, settings.shortGreeting);
       return { action: "greeting" };
     }
 
@@ -187,7 +241,7 @@ class BotEngine {
       return { action: "plan", id: plan.id };
     }
 
-    if (includesAny(text, ["planes", "combos", "combo personalizado"])) {
+    if (includesAny(text, ["planes", "combos"])) {
       await this.sendText(chatId, this.store.getSettings().greetingMessages[1]);
       return { action: "plans" };
     }
@@ -209,6 +263,20 @@ class BotEngine {
       return { action: "dicloak" };
     }
 
+    const trainedAnswer = findKnowledgeMatch(
+      text,
+      this.store.getKnowledgeBase?.() || this.store.data.knowledgeBase || []
+    );
+    if (trainedAnswer) {
+      await this.sendText(chatId, trainedAnswer.answer);
+      this.store.addLog("training", `Respuesta entrenada: ${trainedAnswer.title}`, {
+        chatId,
+        knowledgeId: trainedAnswer.id
+      });
+      this.store.save();
+      return { action: "trained", id: trainedAnswer.id };
+    }
+
     const product = this.store.data.products
       .flatMap((item) =>
         item.aliases
@@ -221,6 +289,45 @@ class BotEngine {
       await this.sendText(chatId, formatProduct(product, body));
       this.#setTopic(chatId, { lastProductId: product.id, lastPlanId: null });
       return { action: "product", id: product.id };
+    }
+
+    const asksTopicFollowup = includesAny(text, [
+      "precio",
+      "cuanto",
+      "cuesta",
+      "duracion",
+      "cuanto dura",
+      "celular",
+      "telefono",
+      "pc",
+      "laptop",
+      "windows",
+      "mac",
+      "linux",
+      "compartida",
+      "personal",
+      "chats",
+      "archivos",
+      "garantia",
+      "como funciona"
+    ]);
+    if (asksTopicFollowup && conversation.lastProductId) {
+      const lastProduct = this.store.data.products.find(
+        (item) => item.id === conversation.lastProductId
+      );
+      if (lastProduct) {
+        await this.sendText(chatId, formatProduct(lastProduct, body));
+        return { action: "product-followup", id: lastProduct.id };
+      }
+    }
+    if (asksTopicFollowup && conversation.lastPlanId) {
+      const lastPlan = this.store.data.plans.find(
+        (item) => item.id === conversation.lastPlanId
+      );
+      if (lastPlan) {
+        await this.sendText(chatId, formatPlan(lastPlan, body));
+        return { action: "plan-followup", id: lastPlan.id };
+      }
     }
 
     if (includesAny(text, ["pdf"])) {
@@ -346,6 +453,8 @@ module.exports = {
   BotEngine,
   normalizeText,
   isGreetingOnly,
+  matchesWelcomeSequence,
+  findKnowledgeMatch,
   formatPlan,
   formatProduct
 };

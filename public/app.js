@@ -5,7 +5,9 @@ const state = {
   settings: null,
   products: [],
   plans: [],
+  knowledgeBase: [],
   media: {},
+  ai: null,
   activeSection: "dashboard",
   poller: null
 };
@@ -50,11 +52,24 @@ async function api(url, options = {}) {
   const response = await fetch(url, request);
   const contentType = response.headers.get("content-type") || "";
   const payload = contentType.includes("application/json") ? await response.json() : await response.text();
-  if (response.status === 401 && url !== "/api/auth/login") {
+  if (
+    response.status === 401 &&
+    url !== "/api/auth/login" &&
+    !(typeof payload === "object" && payload?.code)
+  ) {
     showLogin();
     throw new Error("La sesión terminó. Vuelve a ingresar.");
   }
-  if (!response.ok) throw new Error(payload.error || payload || "No se pudo completar la operación.");
+  if (!response.ok) {
+    const error = new Error(
+      (typeof payload === "object" && payload?.error) ||
+        (typeof payload === "string" && payload) ||
+        "No se pudo completar la operación."
+    );
+    error.code = typeof payload === "object" ? payload?.code : undefined;
+    error.status = response.status;
+    throw error;
+  }
   return payload;
 }
 
@@ -320,12 +335,124 @@ async function saveRenewal(event) {
   }
 }
 
+function renderAiStatus(ai = {}) {
+  const presentations = {
+    missing_key: [
+      "Sin clave",
+      "amber",
+      "Configura OPENAI_API_KEY en Render. El entrenamiento local seguirá respondiendo sin la API."
+    ],
+    quota: [
+      "Sin saldo",
+      "red",
+      "La clave está configurada, pero la cuenta de API no tiene saldo o alcanzó su límite de gasto. Agrega créditos y vuelve a probar."
+    ],
+    rate_limit: [
+      "Límite temporal",
+      "amber",
+      "OpenAI recibió demasiadas solicitudes. Espera un momento y vuelve a probar."
+    ],
+    invalid_key: [
+      "Clave inválida",
+      "red",
+      "OPENAI_API_KEY no es válida. Reemplázala en Render por una clave de la plataforma de OpenAI."
+    ],
+    forbidden: [
+      "Sin permiso",
+      "red",
+      "El proyecto de OpenAI no tiene permiso para usar la API. Revisa la organización y sus límites."
+    ],
+    model: [
+      "Modelo no disponible",
+      "red",
+      "Revisa OPENAI_MODEL en Render. Para esta versión se recomienda gpt-5.6-luna."
+    ],
+    connection: [
+      "Sin conexión",
+      "amber",
+      "No se pudo comunicar con OpenAI. El entrenamiento local continúa funcionando."
+    ],
+    openai_error: [
+      "Error de API",
+      "red",
+      "OpenAI no pudo completar la prueba. Revisa la clave, el saldo y el modelo."
+    ],
+    ready: [
+      "Conectada",
+      "green",
+      `OpenAI respondió correctamente${ai.model ? ` con ${ai.model}` : ""}. Se usará solo para preguntas sin respuesta local.`
+    ],
+    configured: [
+      "Configurada",
+      "blue",
+      `La clave está configurada${ai.model ? ` con ${ai.model}` : ""}. Pulsa “Probar conexión con OpenAI” para comprobar saldo y acceso.`
+    ]
+  };
+  const health = ai.health || (ai.enabled ? "configured" : "missing_key");
+  const [label, tone, defaultText] =
+    presentations[health] || presentations.openai_error;
+  $("#aiStatusPill").textContent = label;
+  $("#aiStatusPill").className = `pill ${tone}`;
+  $("#aiStatusText").textContent = ai.lastError || defaultText;
+}
+
+function renderKnowledgeBase() {
+  const entries = state.knowledgeBase || [];
+  const active = entries.filter((entry) => entry.enabled !== false).length;
+  $("#knowledgeCount").textContent = `${active} activa${active === 1 ? "" : "s"}`;
+  $("#knowledgeList").innerHTML = entries.length
+    ? entries.map((entry, index) => `
+      <article class="knowledge-card" data-knowledge-index="${index}">
+        <div class="knowledge-card-heading">
+          <span class="knowledge-number">${index + 1}</span>
+          <label class="knowledge-enabled">
+            <input class="knowledge-enabled-input" type="checkbox" ${entry.enabled !== false ? "checked" : ""}>
+            Activa
+          </label>
+          <button class="text-button knowledge-remove" data-remove-knowledge="${index}" type="button">Eliminar</button>
+        </div>
+        <div class="knowledge-fields">
+          <label>
+            Tema
+            <input class="knowledge-title" maxlength="120" value="${escapeHtml(entry.title || "")}" placeholder="Ej.: Garantía de los servicios">
+          </label>
+          <label>
+            Preguntas o frases de activación
+            <textarea class="knowledge-triggers" rows="4" placeholder="Una frase por línea">${escapeHtml((entry.triggers || []).join("\n"))}</textarea>
+            <small>Usa una frase por línea. Puedes agregar hasta 20 variantes.</small>
+          </label>
+          <label>
+            Respuesta exacta
+            <textarea class="knowledge-answer" rows="5" maxlength="3000" placeholder="Respuesta breve que recibirá el cliente">${escapeHtml(entry.answer || "")}</textarea>
+          </label>
+        </div>
+      </article>
+    `).join("")
+    : `<div class="empty-state compact"><strong>No hay respuestas entrenadas.</strong><span>Agrega la primera para responder sin depender de OpenAI.</span></div>`;
+}
+
+function collectKnowledgeBase() {
+  return $$(".knowledge-card", $("#knowledgeList")).map((card, index) => ({
+    id: state.knowledgeBase[index]?.id || "",
+    title: $(".knowledge-title", card).value,
+    triggers: $(".knowledge-triggers", card).value
+      .split(/\r?\n|,/)
+      .map((trigger) => trigger.trim())
+      .filter(Boolean),
+    answer: $(".knowledge-answer", card).value,
+    enabled: $(".knowledge-enabled-input", card).checked
+  }));
+}
+
 async function loadSettings() {
   const payload = await api("/api/settings");
   state.settings = payload.settings;
   state.products = payload.products;
   state.plans = payload.plans;
+  state.knowledgeBase = payload.knowledgeBase || [];
   state.media = payload.media;
+  state.ai = payload.ai || null;
+  $("#welcomeTriggers").value = payload.settings.welcomeTriggers || "";
   $("#greeting1").value = payload.settings.greetingMessages[0] || "";
   $("#greeting2").value = payload.settings.greetingMessages[1] || "";
   $("#greeting3").value = payload.settings.greetingMessages[2] || "";
@@ -339,21 +466,19 @@ async function loadSettings() {
   $("#fallbackReply").value = payload.settings.fallbackReply || "";
   $("#audioStatus").textContent = payload.media.dicloakAudio?.originalName || "Sin cargar";
   $("#pdfStatus").textContent = payload.media.catalogPdf?.originalName || "Sin cargar";
-  $("#aiStatusPill").textContent = payload.ai?.enabled ? "Activa" : "Sin clave";
-  $("#aiStatusPill").className = `pill ${payload.ai?.enabled ? "green" : "amber"}`;
-  $("#aiStatusText").textContent = payload.ai?.enabled
-    ? `OPENAI_API_KEY está configurada. Modelo: ${payload.ai.model}. Pulsa “Probar conexión con OpenAI” para verificarla.`
-    : "Las respuestas predeterminadas funcionan, pero las preguntas no previstas pasarán a un asesor hasta configurar la clave.";
+  renderAiStatus(payload.ai);
+  renderKnowledgeBase();
   $("#productOptions").innerHTML = [...payload.products, ...payload.plans]
     .map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join("");
 }
 
 async function saveSettings() {
   try {
-    await api("/api/settings", {
+    const payload = await api("/api/settings", {
       method: "PUT",
       body: {
         shortGreeting: $("#shortGreeting").value,
+        welcomeTriggers: $("#welcomeTriggers").value,
         greetingMessages: [$("#greeting1").value, $("#greeting2").value, $("#greeting3").value],
         peruPayment: $("#peruPayment").value,
         internationalPayment: $("#internationalPayment").value,
@@ -361,10 +486,14 @@ async function saveSettings() {
         chargeTemplate: $("#chargeTemplate").value,
         receiptReply: $("#receiptReply").value,
         humanReply: $("#humanReply").value,
-        fallbackReply: $("#fallbackReply").value
+        fallbackReply: $("#fallbackReply").value,
+        knowledgeBase: collectKnowledgeBase()
       }
     });
-    showToast("Mensajes guardados.");
+    state.settings = payload.settings;
+    state.knowledgeBase = payload.knowledgeBase || [];
+    renderKnowledgeBase();
+    showToast("Mensajes y entrenamiento guardados.");
   } catch (error) {
     showToast(error.message, true);
   }
@@ -414,6 +543,9 @@ function logLabel(type) {
     human: "Atención personal",
     client: "Cliente",
     media: "Archivo",
+    training: "Entrenamiento",
+    ai: "Respuesta de IA",
+    security: "Seguridad",
     error: "Error"
   }[type] || type;
 }
@@ -510,6 +642,34 @@ function bindEvents() {
     }
   });
   $("#saveSettingsButton").addEventListener("click", saveSettings);
+  $("#addKnowledgeButton").addEventListener("click", () => {
+    state.knowledgeBase = [
+      ...collectKnowledgeBase(),
+      {
+        id: "",
+        title: "",
+        triggers: [],
+        answer: "",
+        enabled: true
+      }
+    ];
+    renderKnowledgeBase();
+    const lastCard = $(".knowledge-card:last-child", $("#knowledgeList"));
+    $(".knowledge-title", lastCard)?.focus();
+  });
+  $("#knowledgeList").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-remove-knowledge]");
+    if (!button) return;
+    const entries = collectKnowledgeBase();
+    entries.splice(Number(button.dataset.removeKnowledge), 1);
+    state.knowledgeBase = entries;
+    renderKnowledgeBase();
+  });
+  $("#knowledgeList").addEventListener("change", (event) => {
+    if (!event.target.matches(".knowledge-enabled-input")) return;
+    const active = $$(".knowledge-enabled-input:checked", $("#knowledgeList")).length;
+    $("#knowledgeCount").textContent = `${active} activa${active === 1 ? "" : "s"}`;
+  });
   $("#testAiButton").addEventListener("click", async () => {
     const button = $("#testAiButton");
     button.disabled = true;
@@ -519,6 +679,12 @@ function bindEvents() {
       showToast(`OpenAI conectado correctamente con ${result.model}.`);
       await loadSettings();
     } catch (error) {
+      renderAiStatus({
+        enabled: true,
+        model: state.ai?.model,
+        health: error.code || "openai_error",
+        lastError: error.message
+      });
       showToast(error.message, true);
     } finally {
       button.disabled = false;

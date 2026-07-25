@@ -69,7 +69,7 @@ function asyncRoute(handler) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.2",
+    version: "4.3",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
     time: new Date().toISOString()
@@ -201,13 +201,26 @@ app.get("/api/settings", requireAuth, (_req, res) => {
     settings: store.getSettings(),
     products: store.snapshot().products,
     plans: store.snapshot().plans,
+    knowledgeBase: store.getKnowledgeBase(),
     media: store.snapshot().media,
     ai: whatsapp.getAiStatus()
   });
 });
 
 app.put("/api/settings", requireAuth, (req, res) => {
-  res.json(store.updateSettings(req.body));
+  const previous = store.snapshot();
+  try {
+    const settings = store.updateSettings(req.body);
+    const knowledgeBase =
+      req.body.knowledgeBase === undefined
+        ? store.getKnowledgeBase()
+        : store.updateKnowledgeBase(req.body.knowledgeBase);
+    res.json({ settings, knowledgeBase });
+  } catch (error) {
+    store.data = previous;
+    store.save();
+    throw error;
+  }
 });
 
 app.post(
@@ -344,11 +357,14 @@ app.use((error, _req, res, _next) => {
   const status = error.status || (error.message?.includes("no encontrado") ? 404 : 400);
   store.addLog("error", error.message || "Error desconocido");
   store.save();
-  res.status(status).json({ error: error.message || "Ocurrió un error." });
+  res.status(status).json({
+    error: error.message || "Ocurrió un error.",
+    ...(error.code ? { code: error.code } : {})
+  });
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V4.3 disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
   }

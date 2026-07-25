@@ -129,6 +129,200 @@ const plans = [
   }
 ];
 
+const knowledgeBase = [
+  {
+    id: "chatgpt-vs-gemini",
+    title: "Elegir entre ChatGPT y Gemini",
+    triggers: [
+      "chatgpt o gemini",
+      "cual es mejor chatgpt o gemini",
+      "cual me recomiendas chatgpt o gemini",
+      "que ia recomiendas",
+      "ia para videos"
+    ],
+    answer:
+      "Para uso general te recomiendo ChatGPT. Si tu prioridad es crear videos, te conviene Gemini.",
+    enabled: true
+  },
+  {
+    id: "privacy-personal",
+    title: "Privacidad y cuentas personales",
+    triggers: [
+      "necesito privacidad",
+      "mis chats son privados",
+      "otros pueden ver mis chats",
+      "cuenta privada",
+      "informacion privada"
+    ],
+    answer:
+      "Si necesitas privacidad, te recomiendo una cuenta personal. En las cuentas compartidas otros usuarios pueden ver los chats y archivos.",
+    enabled: true
+  },
+  {
+    id: "shared-account-rules",
+    title: "Reglas de cuentas compartidas",
+    triggers: [
+      "puedo borrar los chats",
+      "puedo borrar conversaciones",
+      "puedo cambiar la contraseña",
+      "puedo cambiar los datos",
+      "reglas de cuenta compartida"
+    ],
+    answer:
+      "En las cuentas compartidas no se deben cambiar los datos de acceso ni borrar chats o conversaciones.",
+    enabled: true
+  },
+  {
+    id: "chatgpt-pro-devices",
+    title: "ChatGPT Pro en PC y celular",
+    triggers: [
+      "chatgpt pro funciona en celular",
+      "chatgpt pro en celular",
+      "chatgpt pro en laptop",
+      "chatgpt pro en pc",
+      "en que dispositivos funciona chatgpt pro"
+    ],
+    answer:
+      "ChatGPT Pro se usa en PC mediante DICloak. Para celular te entregamos ChatGPT Plus sin costo adicional.",
+    enabled: true
+  },
+  {
+    id: "dicloak-access",
+    title: "Acceso mediante DICloak",
+    triggers: [
+      "que es dicloak",
+      "como funciona dicloak",
+      "como ingreso a dicloak",
+      "como entro a chatgpt pro",
+      "como recibo chatgpt pro"
+    ],
+    answer:
+      "DICloak permite usar ChatGPT Pro en Windows, macOS o Linux. JadrixServs crea tus credenciales de acceso.",
+    enabled: true
+  },
+  {
+    id: "claude-shared",
+    title: "Funcionamiento de Claude Pro",
+    triggers: [
+      "claude es compartido",
+      "cuantas personas usan claude",
+      "claude funciona en celular",
+      "claude funciona en laptop",
+      "como recibo claude"
+    ],
+    answer:
+      "Claude Pro es una cuenta compartida entre 4 clientes. Funciona en celular o laptop y se entrega el correo y la contraseña.",
+    enabled: true
+  },
+  {
+    id: "immediate-delivery",
+    title: "Tiempo de entrega",
+    triggers: [
+      "la entrega es inmediata",
+      "cuanto demora la entrega",
+      "cuanto tarda en llegar",
+      "cuando recibo mi cuenta",
+      "cuando me entregan"
+    ],
+    answer: "La entrega es inmediata después de verificar el comprobante.",
+    enabled: true
+  },
+  {
+    id: "support-guarantee",
+    title: "Soporte y garantía",
+    triggers: [
+      "tiene garantia",
+      "incluye garantia",
+      "tienen soporte",
+      "incluye soporte",
+      "que pasa si no funciona"
+    ],
+    answer:
+      "Todos los servicios incluyen soporte activo y garantía durante el periodo contratado.",
+    enabled: true
+  },
+  {
+    id: "early-renewal",
+    title: "Renovación anticipada",
+    triggers: [
+      "puedo renovar antes",
+      "pierdo dias si renuevo antes",
+      "como funciona la renovacion",
+      "renovacion anticipada",
+      "cuando empieza mi renovacion"
+    ],
+    answer:
+      "Puedes renovar antes sin perder días. El nuevo periodo comienza desde la fecha de vencimiento actual, no desde la fecha del pago.",
+    enabled: true
+  },
+  {
+    id: "payment-peru",
+    title: "Pago desde Perú",
+    triggers: [
+      "como pago desde peru",
+      "pago por yape",
+      "numero de yape",
+      "datos de yape"
+    ],
+    answer:
+      "Puedes pagar por Yape al 921 444 991, a nombre de Jaime Gar. Después envía el comprobante por este chat.",
+    enabled: true
+  },
+  {
+    id: "payment-international",
+    title: "Pago desde otro país",
+    triggers: [
+      "como pago desde otro pais",
+      "pago internacional",
+      "pago por binance",
+      "binance id",
+      "pago en usdt"
+    ],
+    answer:
+      "Desde otro país puedes pagar por Binance al ID 1205380212 en USDT. El precio se convierte de soles a dólares, se agrega 3% y el total se redondea hacia arriba.",
+    enabled: true
+  },
+  {
+    id: "payment-receipt",
+    title: "Envío del comprobante",
+    triggers: [
+      "donde envio el comprobante",
+      "ya pague",
+      "te envio el comprobante",
+      "como confirmo mi pago"
+    ],
+    answer:
+      "Envía el comprobante por este chat. Lo revisaremos antes de confirmar la activación.",
+    enabled: true
+  },
+  {
+    id: "custom-combo",
+    title: "Combo personalizado",
+    triggers: [
+      "puedo armar mi combo",
+      "combo personalizado",
+      "quiero otro combo",
+      "puedo elegir los productos"
+    ],
+    answer:
+      "Sí, podemos armar un combo personalizado. Indícame qué servicios quieres incluir.",
+    enabled: true
+  },
+  {
+    id: "streaming-profile",
+    title: "Servicios de streaming",
+    triggers: [
+      "netflix es perfil",
+      "hbo es perfil",
+      "crunchyroll es perfil",
+      "los streaming son perfiles"
+    ],
+    answer:
+      "Netflix, HBO y Crunchyroll se entregan como perfiles por un mes, con soporte y garantía durante el periodo contratado.",
+    enabled: true
+  }
+];
+
 function buildGreetingMessages() {
   const catalogLines = products.map(
     (product) => `• *${product.name}* — ${product.price}${product.period === "1 mes" ? "/mes" : ""}`
@@ -136,15 +330,16 @@ function buildGreetingMessages() {
 
   return [
     [
-      "👋 ¡Hola! Bienvenido(a) a *JadrixServs*.",
+      "🚀 JADRIXSERVS 🚀",
+      "👋 ¡Hola! Bienvenido(a).",
       "",
-      "🚀 *CATÁLOGO DISPONIBLE*",
+      "📋 *CATÁLOGO DISPONIBLE*",
       ...catalogLines,
       "",
       "Escríbeme el nombre del servicio que te interesa y te doy todos los detalles."
     ].join("\n"),
     [
-      "🔥 *COMBOS ESPECIALES*",
+      "💼 COMBOS ESPECIALES - Todo en 1",
       "",
       "⭐ *Plan Pro — S/60/mes*",
       "ChatGPT Pro + Gemini 3 Ultra + Perplexity Pro + Freepik Premium + CapCut Pro + más de 1000 cursos de IA + SuperGrok + SuperGrok Heavy.",
@@ -153,13 +348,13 @@ function buildGreetingMessages() {
       "ChatGPT Plus + Perplexity Pro + CapCut Pro + más de 1000 cursos de IA."
     ].join("\n"),
     [
-      "⚡ Entrega inmediata",
+      "✅ `Entrega inmediata`",
       "🛟 Soporte activo",
       "✅ Renovación garantizada",
       "🎁 También armamos tu combo personalizado.",
       "",
       "¿Qué servicio deseas adquirir?",
-      "*JadrixServs*"
+      "JadrixServs 💪"
     ].join("\n")
   ];
 }
@@ -168,6 +363,8 @@ const defaultSettings = {
   businessName: "JadrixServs",
   shortGreeting:
     "¡Hola! 👋 Soy parte del equipo de JadrixServs. ¿En qué servicio estás interesado o qué deseas consultar?",
+  welcomeTriggers:
+    "¿Cuál es el precio del Super Combo IA 2026?\nSuper Combo IA 2026\nPrecio del Super Combo IA 2026",
   peruPayment:
     "🇵🇪 *Pago en Perú*\nYape: *921 444 991*\nTitular: *Jaime Gar.*\n\nDespués de pagar, envía tu comprobante por este chat.",
   internationalPayment:
@@ -187,10 +384,11 @@ const defaultSettings = {
 
 function createInitialData() {
   return {
-    version: 4.2,
+    version: 4.3,
     settings: structuredClone(defaultSettings),
     products: structuredClone(products),
     plans: structuredClone(plans),
+    knowledgeBase: structuredClone(knowledgeBase),
     clients: [],
     conversations: {},
     logs: [],
@@ -204,6 +402,7 @@ function createInitialData() {
 module.exports = {
   products,
   plans,
+  knowledgeBase,
   defaultSettings,
   buildGreetingMessages,
   createInitialData

@@ -682,13 +682,15 @@ class WhatsAppService {
     }
   }
 
-  async sendText(chatId, text) {
+  async sendText(chatId, text, { typingAlreadyStarted = false } = {}) {
     if (!this.status.ready || !this.socket) {
       throw new Error("WhatsApp todavía no está conectado.");
     }
     const socket = this.socket;
     const target = normalizeWhatsAppId(chatId);
-    const stopTyping = await this.beginTyping(target);
+    const stopTyping = typingAlreadyStarted
+      ? async () => undefined
+      : await this.beginTyping(target);
     await this.sleepFn(calculateHumanDelay(text));
     await stopTyping();
     const result = await socket.sendMessage(target, { text: String(text) });

@@ -2,7 +2,13 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { products, plans, buildGreetingMessages } = require("../src/defaults");
+const {
+  products,
+  plans,
+  knowledgeBase,
+  defaultSettings,
+  buildGreetingMessages
+} = require("../src/defaults");
 
 test("el catálogo conserva los 12 productos y precios entrenados", () => {
   assert.deepEqual(
@@ -36,10 +42,37 @@ test("los combos contienen el alcance solicitado", () => {
 test("el saludo siempre tiene exactamente tres mensajes en el orden correcto", () => {
   const messages = buildGreetingMessages();
   assert.equal(messages.length, 3);
+  assert.ok(messages[0].startsWith("🚀 JADRIXSERVS 🚀"));
   assert.match(messages[0], /Claude Pro/);
   assert.match(messages[0], /Crunchyroll/);
+  assert.ok(messages[1].startsWith("💼 COMBOS ESPECIALES - Todo en 1"));
   assert.match(messages[1], /Plan Pro/);
   assert.match(messages[1], /Plan Plus/);
-  assert.match(messages[2], /Entrega inmediata/);
-  assert.match(messages[2], /JadrixServs/);
+  assert.ok(messages[2].startsWith("✅ `Entrega inmediata`"));
+  assert.ok(messages[2].endsWith("JadrixServs 💪"));
+});
+
+test("el Super Combo IA 2026 activa la secuencia inicial", () => {
+  assert.match(
+    defaultSettings.welcomeTriggers,
+    /¿Cuál es el precio del Super Combo IA 2026\?/
+  );
+});
+
+test("incluye respuestas locales para consultas frecuentes aun sin OpenAI", () => {
+  assert.ok(knowledgeBase.length >= 14);
+  assert.ok(
+    knowledgeBase.some(
+      (entry) =>
+        entry.id === "early-renewal" &&
+        /sin perder días/i.test(entry.answer)
+    )
+  );
+  assert.ok(
+    knowledgeBase.some(
+      (entry) =>
+        entry.id === "payment-peru" &&
+        /921 444 991/.test(entry.answer)
+    )
+  );
 });

@@ -270,3 +270,32 @@ test("envía escribiendo, pausa y luego un solo mensaje", async () => {
   assert.equal(socket.calls.sent.length, 1);
   assert.deepEqual(socket.calls.sent[0].content, { text: "Respuesta breve." });
 });
+
+test("tres respuestas consecutivas simulan escritura y se envían por separado", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake, {
+    sessionDir: path.join(testRuntimeDir, "sequence-session"),
+    mediaDir: path.join(testRuntimeDir, "sequence-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  await service.sendText("999888777", "Mensaje 1");
+  await service.sendText("999888777", "Mensaje 2");
+  await service.sendText("999888777", "Mensaje 3");
+
+  assert.deepEqual(
+    socket.calls.sent.map((item) => item.content.text),
+    ["Mensaje 1", "Mensaje 2", "Mensaje 3"]
+  );
+  assert.equal(
+    socket.calls.presence.filter((item) => item.type === "composing").length,
+    3
+  );
+  assert.equal(
+    socket.calls.presence.filter((item) => item.type === "paused").length,
+    3
+  );
+});

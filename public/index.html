@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0b1020">
-    <title>JadrixServs · Bot V4</title>
+    <title>JadrixServs · Bot V4.3</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
   </head>
@@ -36,7 +36,7 @@
           <div class="brand-mark small">J</div>
           <div>
             <strong>JadrixServs</strong>
-            <span>Bot V4</span>
+            <span>Bot V4.3</span>
           </div>
         </div>
         <nav aria-label="Secciones del panel">
@@ -220,11 +220,16 @@
 
           <div class="two-column settings-grid">
             <article class="panel">
-              <div class="panel-heading"><h3>Respuestas bajo pedido</h3><span class="pill green">1 respuesta</span></div>
+              <div class="panel-heading"><h3>Secuencia inicial</h3><span class="pill blue">3 mensajes</span></div>
+              <label>
+                Frases que envían los 3 mensajes
+                <textarea id="welcomeTriggers" rows="4"></textarea>
+                <small>Una frase por línea. “¿Cuál es el precio del Super Combo IA 2026?” ya está configurada.</small>
+              </label>
               <label>Saludo corto<textarea id="shortGreeting" rows="3"></textarea><small>Se usa únicamente cuando escriben “hola” o un saludo equivalente.</small></label>
-              <label>Catálogo<textarea id="greeting1" rows="12"></textarea><small>Se envía únicamente cuando piden catálogo, servicios o lista de precios.</small></label>
-              <label>Combos<textarea id="greeting2" rows="9"></textarea><small>Se envía únicamente cuando preguntan por planes o combos.</small></label>
-              <label>Entrega y soporte<textarea id="greeting3" rows="8"></textarea><small>Queda como información entrenada; no se envía automáticamente.</small></label>
+              <label>Mensaje 1 · Catálogo<textarea id="greeting1" rows="12"></textarea><small>Primer mensaje de la secuencia; también se usa si piden únicamente el catálogo.</small></label>
+              <label>Mensaje 2 · Combos<textarea id="greeting2" rows="9"></textarea><small>Segundo mensaje de la secuencia; también se usa si preguntan únicamente por los combos.</small></label>
+              <label>Mensaje 3 · Entrega y soporte<textarea id="greeting3" rows="8"></textarea><small>Tercer y último mensaje de la secuencia inicial.</small></label>
             </article>
             <div class="stack">
               <article class="panel">
@@ -234,8 +239,9 @@
                 </div>
                 <p id="aiStatusText" class="muted">Consultando la configuración…</p>
                 <div class="notice">
-                  Configura <code>OPENAI_API_KEY</code> en las variables de entorno de Render. La clave nunca se muestra ni se guarda en el panel.
+                  Configura <code>OPENAI_API_KEY</code> en Render. ChatGPT Plus y la API se facturan por separado; la clave necesita saldo de API. La clave nunca se muestra ni se guarda en el panel.
                 </div>
+                <a class="button secondary wide billing-link" href="https://platform.openai.com/settings/organization/billing/overview" target="_blank" rel="noreferrer">Abrir facturación de la API</a>
                 <button id="testAiButton" class="button secondary wide" type="button">Probar conexión con OpenAI</button>
               </article>
               <article class="panel">
@@ -258,6 +264,21 @@
               </article>
             </div>
           </div>
+
+          <article class="panel training-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">RESPUESTAS GUARDADAS</p>
+                <h3>Entrenamiento local</h3>
+              </div>
+              <span id="knowledgeCount" class="pill green">0 activas</span>
+            </div>
+            <p class="muted training-copy">
+              Estas respuestas funcionan incluso si OpenAI no tiene saldo. Escribe varias formas reales en que tus clientes hacen la misma pregunta; el bot contestará únicamente con la respuesta correspondiente.
+            </p>
+            <div id="knowledgeList" class="knowledge-list"></div>
+            <button id="addKnowledgeButton" class="button secondary" type="button">+ Agregar respuesta entrenada</button>
+          </article>
 
           <article class="panel">
             <div class="panel-heading"><h3>Recordatorios y respuestas</h3></div>
