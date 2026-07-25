@@ -1,5 +1,6 @@
 node_modules/
 .env
 baileys_auth/
+bot-control/
 npm-debug.log*
 .DS_Store

@@ -1,44 +1,93 @@
-# Bot de WhatsApp con QR para Render — versión 2
+# Bot WhatsApp QR + Panel + IA — versión 3
 
-Esta versión reemplaza `whatsapp-web.js` y Chromium por **Baileys**. El cambio evita el bloqueo donde el teléfono muestra el dispositivo vinculado, pero el servidor nunca recibe el evento `ready`.
+Esta versión agrega un centro de control en la misma URL de Render.
 
-## Actualizar un repositorio existente
+## Funciones
 
-Reemplaza todos los archivos del proyecto anterior por los de esta carpeta, manteniendo solamente tu carpeta `.git` local.
+- Conexión por QR con Baileys.
+- Estado, QR, reinicio y cierre de sesión.
+- Activar o pausar respuestas.
+- Editar nombre, horario, dirección y mensajes.
+- Registrar productos, precios, stock, descripción y palabras clave.
+- Importar muchos productos pegando una lista.
+- Crear comandos y respuestas rápidas.
+- Cargar PDF con catálogo, políticas o preguntas frecuentes.
+- Pegar información directamente.
+- Responder con OpenAI usando productos, FAQs y PDF como conocimiento.
+- Probar respuestas desde el panel.
+- Descargar y restaurar respaldo JSON.
 
-Desde PowerShell, dentro de la carpeta del proyecto:
+## Importante: no es entrenamiento tradicional
+
+El PDF y los productos forman una base de conocimiento. Cuando llega una pregunta, el bot busca la información relevante y se la entrega a la IA. Esto permite actualizarlo desde el panel sin reentrenar un modelo.
+
+## Actualizar tu repositorio actual
+
+1. Extrae este ZIP.
+2. Copia todos los archivos dentro de tu carpeta actual del repositorio.
+3. Reemplaza los archivos existentes, pero no borres la carpeta oculta `.git`.
+4. Ejecuta:
 
 ```powershell
 git add .
-git commit -m "Cambiar conexion a Baileys"
+git commit -m "Agregar panel de productos PDF e IA"
 git push
 ```
 
-Render detectará el cambio y hará un nuevo despliegue automático.
+Render iniciará un despliegue automático.
 
-## Después del despliegue
+## Configurar la IA
 
-1. Espera a que Render muestre `Live`.
-2. Abre la URL `.onrender.com`.
-3. Entra con tu `ADMIN_KEY`.
-4. Pulsa **Cerrar sesión y nuevo QR** si no aparece un QR limpio.
-5. En el teléfono, elimina antes el dispositivo antiguo que quedó vinculado sin funcionar.
-6. Escanea el QR nuevo.
-7. El panel debe cambiar a **conectado**.
+En Render abre:
 
-## Variables de Render
+`whatsapp-qr-render-bot → Environment`
 
-- `ADMIN_KEY`: contraseña del panel.
-- `BUSINESS_NAME`: nombre del negocio.
-- `BUSINESS_HOURS`: horario.
-- `BUSINESS_ADDRESS`: dirección.
-- `BUSINESS_MAPS_URL`: enlace opcional de Maps.
-- `PRICE_TEXT`: respuesta de precios.
-- `HUMAN_TEXT`: respuesta de asesor.
-- `SESSION_PATH`: `/data/baileys_auth`.
-- `WA_LOG_LEVEL`: `silent`.
-- `WA_VERSION`: opcional; no la configures salvo que sea necesario diagnosticar una actualización de WhatsApp.
+Agrega:
 
-## Avisos
+```text
+OPENAI_API_KEY = tu_clave_secreta
+OPENAI_MODEL = gpt-5.6-luna
+```
 
-Esta integración no es oficial. Utiliza un número secundario, no envíes spam ni mensajes masivos. En Render gratuito, los datos locales se pueden borrar cuando el servicio se suspende o redespliega, por lo que puede pedir un QR nuevamente.
+La clave se configura únicamente en Render. No la escribas en GitHub ni en el panel del navegador.
+
+Después pulsa `Save and deploy`.
+
+La API de OpenAI se cobra por separado de ChatGPT Plus.
+
+## Uso del panel
+
+Entra a tu URL de Render y usa la ADMIN_KEY.
+
+### Productos
+
+Puedes registrar cada producto individualmente o importar líneas con este formato:
+
+```text
+Nombre | Precio | Stock | Descripción | palabras clave
+Laptop Pro | S/ 2500 | 5 unidades | Laptop para oficina | laptop, computadora
+```
+
+### Respuestas rápidas
+
+Agrega palabras separadas por comas:
+
+```text
+delivery, envío, envios, hacen entregas
+```
+
+y escribe la respuesta correspondiente.
+
+### PDF
+
+Carga un PDF con texto seleccionable. Los PDF escaneados como imagen no se pueden leer sin OCR.
+
+### Modos
+
+- `Híbrido`: respuestas rápidas cuando existe una coincidencia clara; IA para las demás preguntas.
+- `IA`: usa IA para casi todo, salvo la derivación a asesor.
+- `Solo reglas`: no consume la API de IA.
+
+## Persistencia
+
+Render gratuito usa almacenamiento temporal. Guarda respaldos JSON frecuentemente. Para conservar permanentemente la sesión y la configuración necesitas un disco persistente o una base de datos externa.

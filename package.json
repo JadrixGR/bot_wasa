@@ -1,20 +1,23 @@
 {
   "name": "whatsapp-qr-render-bot",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "Bot experimental de WhatsApp con QR, Baileys, panel web y respuestas basicas para Render.",
+  "description": "Bot de WhatsApp con QR, panel web, productos, PDFs, respuestas y OpenAI.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "7.0.0-rc13",
     "express": "5.1.0",
+    "multer": "2.2.0",
+    "openai": "6.49.0",
+    "pdf-parse": "2.4.5",
     "pino": "9.7.0",
     "qrcode": "1.5.4"
   }

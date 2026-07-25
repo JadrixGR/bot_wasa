@@ -1,0 +1,17 @@
+ACTUALIZACIÓN A VERSIÓN 3
+
+1. Extrae este ZIP.
+2. Copia todo dentro de tu carpeta Git actual whatsapp-qr-render-bot.
+3. Acepta reemplazar los archivos.
+4. No borres la carpeta oculta .git.
+5. En PowerShell:
+
+git add .
+git commit -m "Agregar panel de productos PDF e IA"
+git push
+
+6. En Render agrega la variable OPENAI_API_KEY.
+7. Espera el despliegue.
+8. Abre la misma URL de Render.
+9. Entra con ADMIN_KEY.
+10. Configura Negocio e IA, Productos, Respuestas rápidas y PDF.

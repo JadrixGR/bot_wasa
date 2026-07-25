@@ -1,7 +1,8 @@
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 
 ENV NODE_ENV=production \
     SESSION_PATH=/data/baileys_auth \
+    DATA_DIR=/data/bot-control \
     PORT=10000
 
 WORKDIR /app
@@ -12,7 +13,7 @@ RUN npm install --omit=dev \
 
 COPY . .
 
-RUN mkdir -p /data/baileys_auth \
+RUN mkdir -p /data/baileys_auth /data/bot-control \
     && chown -R node:node /app /data
 
 USER node
