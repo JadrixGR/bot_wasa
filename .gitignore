@@ -1,5 +1,5 @@
 node_modules/
-.wwebjs_auth/
-.wwebjs_cache/
 .env
+baileys_auth/
 npm-debug.log*
+.DS_Store

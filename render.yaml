@@ -20,4 +20,6 @@ services:
       - key: HUMAN_TEXT
         value: Perfecto. Un asesor continuará contigo. La respuesta automática quedará pausada durante 30 minutos en esta conversación.
       - key: SESSION_PATH
-        value: /data/.wwebjs_auth
+        value: /data/baileys_auth
+      - key: WA_LOG_LEVEL
+        value: silent

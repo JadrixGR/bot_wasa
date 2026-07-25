@@ -1,18 +1,8 @@
 FROM node:20-bookworm-slim
 
 ENV NODE_ENV=production \
-    PUPPETEER_SKIP_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
-    SESSION_PATH=/data/.wwebjs_auth \
+    SESSION_PATH=/data/baileys_auth \
     PORT=10000
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        chromium \
-        ca-certificates \
-        fonts-liberation \
-        fonts-noto-color-emoji \
-    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -22,7 +12,7 @@ RUN npm install --omit=dev \
 
 COPY . .
 
-RUN mkdir -p /data \
+RUN mkdir -p /data/baileys_auth \
     && chown -R node:node /app /data
 
 USER node

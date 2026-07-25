@@ -1,16 +1,27 @@
 'use strict';
 
-const express = require('express');
-const QRCode = require('qrcode');
-const fs = require('fs/promises');
-const path = require('path');
-const { Client, LocalAuth } = require('whatsapp-web.js');
+import express from 'express';
+import QRCode from 'qrcode';
+import pino from 'pino';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import makeWASocket, {
+  Browsers,
+  DisconnectReason,
+  fetchLatestBaileysVersion,
+  makeCacheableSignalKeyStore,
+  useMultiFileAuthState,
+} from '@whiskeysockets/baileys';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT || 10000);
 const ADMIN_KEY = String(process.env.ADMIN_KEY || '').trim();
-const SESSION_PATH = process.env.SESSION_PATH || '/data/.wwebjs_auth';
-const CHROME_PATH = process.env.PUPPETEER_EXECUTABLE_PATH || '/usr/bin/chromium';
+const SESSION_PATH = process.env.SESSION_PATH || '/data/baileys_auth';
+const WA_VERSION = String(process.env.WA_VERSION || '').trim();
 
 const settings = {
   businessName: process.env.BUSINESS_NAME || 'Mi negocio',
@@ -26,8 +37,9 @@ const settings = {
 };
 
 const runtime = {
+  engine: 'Baileys',
   status: 'iniciando',
-  detail: 'Preparando el navegador...',
+  detail: 'Preparando la conexión...',
   qrDataUrl: null,
   connectedNumber: null,
   botEnabled: true,
@@ -35,6 +47,7 @@ const runtime = {
   lastEventAt: new Date().toISOString(),
   messagesReceived: 0,
   repliesSent: 0,
+  waVersion: null,
 };
 
 const recentEvents = [];
@@ -42,16 +55,16 @@ const processedMessages = new Set();
 const processedOrder = [];
 const humanModeUntil = new Map();
 const lastReplyAt = new Map();
-let client = null;
-let startingClient = false;
+const waLogger = pino({ level: process.env.WA_LOG_LEVEL || 'silent' });
+
+let socket = null;
+let startingSocket = false;
 let reconnectTimer = null;
+let generation = 0;
+let shuttingDown = false;
 
 function addEvent(type, text) {
-  const item = {
-    type,
-    text,
-    at: new Date().toISOString(),
-  };
+  const item = { type, text, at: new Date().toISOString() };
   recentEvents.unshift(item);
   recentEvents.splice(30);
   runtime.lastEventAt = item.at;
@@ -64,8 +77,8 @@ function setStatus(status, detail) {
   runtime.lastEventAt = new Date().toISOString();
 }
 
-function maskPhone(chatId) {
-  const digits = String(chatId || '').replace(/\D/g, '');
+function maskPhone(value) {
+  const digits = String(value || '').split('@')[0].replace(/\D/g, '');
   if (digits.length <= 4) return digits || 'desconocido';
   return `${digits.slice(0, 3)}***${digits.slice(-3)}`;
 }
@@ -88,10 +101,7 @@ function isAdmin(req) {
 
 function requireAdmin(req, res, next) {
   if (!ADMIN_KEY) {
-    return res.status(503).json({
-      ok: false,
-      error: 'Falta configurar ADMIN_KEY en Render.',
-    });
+    return res.status(503).json({ ok: false, error: 'Falta configurar ADMIN_KEY en Render.' });
   }
   if (!isAdmin(req)) {
     return res.status(401).json({ ok: false, error: 'Clave incorrecta.' });
@@ -122,10 +132,7 @@ function buildReply(rawText) {
     );
   }
 
-  if (
-    text === '1' ||
-    /\b(precio|precios|cotizacion|cotizar|costo|costos|cuanto cuesta)\b/.test(text)
-  ) {
+  if (text === '1' || /\b(precio|precios|cotizacion|cotizar|costo|costos|cuanto cuesta)\b/.test(text)) {
     return settings.priceText;
   }
 
@@ -155,165 +162,254 @@ function buildReply(rawText) {
   );
 }
 
-function createClient() {
-  return new Client({
-    authStrategy: new LocalAuth({
-      clientId: 'render-bot',
-      dataPath: SESSION_PATH,
-    }),
-    puppeteer: {
-      headless: true,
-      executablePath: CHROME_PATH,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-first-run',
-        '--no-default-browser-check',
-        '--disable-extensions',
-      ],
-    },
-  });
+function unwrapMessage(content) {
+  let current = content;
+  for (let index = 0; index < 5 && current; index += 1) {
+    if (current.ephemeralMessage?.message) current = current.ephemeralMessage.message;
+    else if (current.viewOnceMessage?.message) current = current.viewOnceMessage.message;
+    else if (current.viewOnceMessageV2?.message) current = current.viewOnceMessageV2.message;
+    else if (current.viewOnceMessageV2Extension?.message) current = current.viewOnceMessageV2Extension.message;
+    else if (current.documentWithCaptionMessage?.message) current = current.documentWithCaptionMessage.message;
+    else break;
+  }
+  return current || {};
 }
 
-function attachClientEvents(instance) {
-  instance.on('qr', async (qr) => {
-    try {
-      runtime.qrDataUrl = await QRCode.toDataURL(qr, {
-        width: 360,
-        margin: 2,
-        errorCorrectionLevel: 'M',
-      });
-      runtime.connectedNumber = null;
-      setStatus('esperando_qr', 'Escanea el código QR desde WhatsApp en tu teléfono.');
-      addEvent('qr', 'Se generó un nuevo código QR.');
-    } catch (error) {
-      setStatus('error', 'No se pudo convertir el QR en imagen.');
-      addEvent('error', `Error creando QR: ${error.message}`);
-    }
-  });
-
-  instance.on('authenticated', () => {
-    runtime.qrDataUrl = null;
-    setStatus('autenticado', 'QR aceptado. WhatsApp está terminando de sincronizar.');
-    addEvent('auth', 'WhatsApp aceptó el código QR.');
-  });
-
-  instance.on('ready', () => {
-    runtime.qrDataUrl = null;
-    runtime.connectedNumber = instance.info?.wid?.user || null;
-    setStatus('conectado', 'Bot conectado y listo para responder.');
-    addEvent('ready', `Bot conectado${runtime.connectedNumber ? ` al número ${maskPhone(runtime.connectedNumber)}` : ''}.`);
-  });
-
-  instance.on('auth_failure', (message) => {
-    runtime.qrDataUrl = null;
-    setStatus('error_autenticacion', 'La sesión no pudo restaurarse. Genera un QR nuevo.');
-    addEvent('error', `Fallo de autenticación: ${message}`);
-  });
-
-  instance.on('disconnected', (reason) => {
-    runtime.qrDataUrl = null;
-    runtime.connectedNumber = null;
-    setStatus('desconectado', `WhatsApp se desconectó: ${reason}`);
-    addEvent('disconnect', `WhatsApp desconectado: ${reason}`);
-    scheduleReconnect();
-  });
-
-  instance.on('message', async (message) => {
-    try {
-      if (!runtime.botEnabled || message.fromMe) return;
-      if (!message.from || message.from === 'status@broadcast') return;
-      if (message.from.endsWith('@g.us') || message.from.endsWith('@broadcast')) return;
-
-      const messageId = message.id?._serialized || String(message.id || '');
-      if (!rememberMessage(messageId)) return;
-
-      // Evita contestar mensajes antiguos después de una resincronización.
-      const messageAgeMs = Date.now() - Number(message.timestamp || 0) * 1000;
-      if (messageAgeMs > 5 * 60 * 1000) return;
-
-      runtime.messagesReceived += 1;
-      const sender = message.from;
-      const now = Date.now();
-      const humanUntil = humanModeUntil.get(sender) || 0;
-
-      if (humanUntil > now) {
-        addEvent('human', `Mensaje recibido de ${maskPhone(sender)}; atención humana activa.`);
-        return;
-      }
-
-      if (message.type !== 'chat') {
-        await message.reply('Por ahora puedo responder mensajes de texto. Escríbeme tu consulta o “menú”.');
-        runtime.repliesSent += 1;
-        addEvent('reply', `Se pidió texto a ${maskPhone(sender)}.`);
-        return;
-      }
-
-      // Pequeño límite para evitar respuestas repetidas por mensajes enviados muy rápido.
-      const previousReply = lastReplyAt.get(sender) || 0;
-      if (now - previousReply < 1500) return;
-      lastReplyAt.set(sender, now);
-
-      const text = String(message.body || '');
-      const normalized = normalizeText(text);
-      const reply = buildReply(text);
-
-      if (normalized === '4' || /\b(asesor|humano|persona|vendedor|agente)\b/.test(normalized)) {
-        humanModeUntil.set(sender, now + 30 * 60 * 1000);
-      }
-
-      await message.reply(reply);
-      runtime.repliesSent += 1;
-      addEvent('reply', `Respuesta automática enviada a ${maskPhone(sender)}.`);
-    } catch (error) {
-      addEvent('error', `Error procesando un mensaje: ${error.message}`);
-    }
-  });
+function extractText(messageContent) {
+  const content = unwrapMessage(messageContent);
+  return String(
+    content.conversation ||
+      content.extendedTextMessage?.text ||
+      content.imageMessage?.caption ||
+      content.videoMessage?.caption ||
+      content.documentMessage?.caption ||
+      content.buttonsResponseMessage?.selectedButtonId ||
+      content.listResponseMessage?.singleSelectReply?.selectedRowId ||
+      content.templateButtonReplyMessage?.selectedId ||
+      '',
+  );
 }
 
-async function startClient() {
-  if (startingClient) return;
-  startingClient = true;
-  clearTimeout(reconnectTimer);
-  reconnectTimer = null;
+function timestampToMs(value) {
+  if (!value) return Date.now();
+  if (typeof value === 'bigint') return Number(value) * 1000;
+  if (typeof value === 'number') return value * 1000;
+  if (typeof value.toNumber === 'function') return value.toNumber() * 1000;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric * 1000 : Date.now();
+}
+
+function getDisconnectCode(lastDisconnect) {
+  const error = lastDisconnect?.error;
+  return (
+    error?.output?.statusCode ||
+    error?.data?.statusCode ||
+    error?.statusCode ||
+    error?.cause?.output?.statusCode ||
+    null
+  );
+}
+
+async function resolveWaVersion() {
+  if (WA_VERSION) {
+    const parsed = WA_VERSION.split('.').map((item) => Number(item));
+    if (parsed.length === 3 && parsed.every(Number.isFinite)) {
+      addEvent('version', `Usando versión configurada de WhatsApp: ${parsed.join('.')}.`);
+      return parsed;
+    }
+    addEvent('warning', 'WA_VERSION no tiene el formato correcto; se usará la versión automática.');
+  }
 
   try {
-    setStatus('iniciando', 'Abriendo WhatsApp Web...');
-    runtime.qrDataUrl = null;
-
-    if (client) {
-      try {
-        await client.destroy();
-      } catch (_) {
-        // Ignorado: el navegador anterior podría estar cerrado.
-      }
-    }
-
-    client = createClient();
-    attachClientEvents(client);
-    await client.initialize();
+    const result = await fetchLatestBaileysVersion();
+    addEvent('version', `Versión de WhatsApp detectada: ${result.version.join('.')}.`);
+    return result.version;
   } catch (error) {
-    setStatus('error', 'No se pudo iniciar el navegador de WhatsApp.');
-    addEvent('error', `No se pudo iniciar WhatsApp: ${error.message}`);
-    scheduleReconnect();
-  } finally {
-    startingClient = false;
+    addEvent('warning', `No se pudo consultar la versión más reciente: ${error.message}. Se usará la predeterminada.`);
+    return null;
   }
 }
 
-function scheduleReconnect() {
-  if (reconnectTimer) return;
+function scheduleReconnect(delayMs = 5000) {
+  if (shuttingDown || reconnectTimer) return;
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
-    startClient().catch((error) => addEvent('error', error.message));
-  }, 15000);
+    startSocket().catch((error) => addEvent('error', `Reconexión fallida: ${error.message}`));
+  }, delayMs);
+}
+
+async function handleIncomingMessage(currentSocket, message) {
+  try {
+    const remoteJid = message.key?.remoteJid || '';
+    if (!runtime.botEnabled || message.key?.fromMe) return;
+    if (!remoteJid || remoteJid === 'status@broadcast') return;
+    if (remoteJid.endsWith('@g.us') || remoteJid.endsWith('@broadcast') || remoteJid.endsWith('@newsletter')) return;
+
+    const messageId = message.key?.id || '';
+    if (!rememberMessage(messageId)) return;
+
+    const messageAgeMs = Date.now() - timestampToMs(message.messageTimestamp);
+    if (messageAgeMs > 5 * 60 * 1000) return;
+
+    const text = extractText(message.message);
+    runtime.messagesReceived += 1;
+    const now = Date.now();
+    const humanUntil = humanModeUntil.get(remoteJid) || 0;
+
+    if (humanUntil > now) {
+      addEvent('human', `Mensaje recibido de ${maskPhone(remoteJid)}; atención humana activa.`);
+      return;
+    }
+
+    const previousReply = lastReplyAt.get(remoteJid) || 0;
+    if (now - previousReply < 1500) return;
+    lastReplyAt.set(remoteJid, now);
+
+    if (!text) {
+      await currentSocket.sendMessage(remoteJid, {
+        text: 'Por ahora puedo responder mensajes de texto. Escríbeme tu consulta o “menú”.',
+      });
+      runtime.repliesSent += 1;
+      addEvent('reply', `Se pidió texto a ${maskPhone(remoteJid)}.`);
+      return;
+    }
+
+    const normalized = normalizeText(text);
+    if (normalized === '4' || /\b(asesor|humano|persona|vendedor|agente)\b/.test(normalized)) {
+      humanModeUntil.set(remoteJid, now + 30 * 60 * 1000);
+    }
+
+    await currentSocket.sendMessage(remoteJid, { text: buildReply(text) });
+    runtime.repliesSent += 1;
+    addEvent('reply', `Respuesta automática enviada a ${maskPhone(remoteJid)}.`);
+  } catch (error) {
+    addEvent('error', `Error procesando un mensaje: ${error.message}`);
+  }
+}
+
+async function startSocket() {
+  if (startingSocket || shuttingDown) return;
+  startingSocket = true;
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+
+  const myGeneration = ++generation;
+
+  try {
+    setStatus('iniciando', 'Abriendo la conexión de WhatsApp...');
+    runtime.qrDataUrl = null;
+
+    await fs.mkdir(SESSION_PATH, { recursive: true });
+    const { state, saveCreds } = await useMultiFileAuthState(SESSION_PATH);
+    const version = await resolveWaVersion();
+
+    const currentSocket = makeWASocket({
+      ...(version ? { version } : {}),
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, waLogger),
+      },
+      logger: waLogger,
+      browser: Browsers.ubuntu('Render Bot'),
+      printQRInTerminal: false,
+      syncFullHistory: false,
+      markOnlineOnConnect: false,
+      generateHighQualityLinkPreview: false,
+    });
+
+    socket = currentSocket;
+    runtime.waVersion = version ? version.join('.') : 'predeterminada';
+
+    currentSocket.ev.on('creds.update', saveCreds);
+
+    currentSocket.ev.on('connection.update', async (update) => {
+      if (myGeneration !== generation || shuttingDown) return;
+
+      const { connection, lastDisconnect, qr } = update;
+
+      if (qr) {
+        try {
+          runtime.qrDataUrl = await QRCode.toDataURL(qr, {
+            width: 360,
+            margin: 2,
+            errorCorrectionLevel: 'M',
+          });
+          runtime.connectedNumber = null;
+          setStatus('esperando_qr', 'Escanea el QR desde WhatsApp → Dispositivos vinculados.');
+          addEvent('qr', 'Se generó un nuevo código QR.');
+        } catch (error) {
+          setStatus('error', 'No se pudo convertir el QR en imagen.');
+          addEvent('error', `Error creando QR: ${error.message}`);
+        }
+      } else if (connection === 'connecting') {
+        setStatus('conectando', 'WhatsApp está verificando y sincronizando la sesión...');
+      }
+
+      if (connection === 'open') {
+        runtime.qrDataUrl = null;
+        runtime.connectedNumber = currentSocket.user?.id?.split(':')[0] || currentSocket.user?.id || null;
+        setStatus('conectado', 'Bot conectado y listo para responder.');
+        addEvent(
+          'ready',
+          `Bot conectado${runtime.connectedNumber ? ` al número ${maskPhone(runtime.connectedNumber)}` : ''}.`,
+        );
+      }
+
+      if (connection === 'close') {
+        const code = getDisconnectCode(lastDisconnect);
+        const loggedOut = code === DisconnectReason.loggedOut;
+        runtime.qrDataUrl = null;
+        runtime.connectedNumber = null;
+        socket = null;
+
+        if (loggedOut) {
+          setStatus('sesion_cerrada', 'La sesión fue cerrada. Preparando un QR nuevo...');
+          addEvent('disconnect', 'WhatsApp cerró la sesión; se eliminarán las credenciales locales.');
+          await removeSession();
+          scheduleReconnect(1500);
+        } else {
+          setStatus('reconectando', `Conexión cerrada${code ? ` (código ${code})` : ''}. Reconectando...`);
+          addEvent('disconnect', `Conexión cerrada${code ? ` con código ${code}` : ''}.`);
+          scheduleReconnect(4000);
+        }
+      }
+    });
+
+    currentSocket.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (myGeneration !== generation || type !== 'notify') return;
+      for (const message of messages || []) {
+        await handleIncomingMessage(currentSocket, message);
+      }
+    });
+  } catch (error) {
+    if (myGeneration === generation) {
+      socket = null;
+      setStatus('error', 'No se pudo iniciar la conexión de WhatsApp.');
+      addEvent('error', `No se pudo iniciar WhatsApp: ${error.stack || error.message}`);
+      scheduleReconnect(8000);
+    }
+  } finally {
+    startingSocket = false;
+  }
+}
+
+async function stopCurrentSocket(reason = 'Reinicio manual') {
+  generation += 1;
+  const oldSocket = socket;
+  socket = null;
+  if (oldSocket) {
+    try {
+      oldSocket.end(new Error(reason));
+    } catch (_) {
+      // La conexión anterior podría estar cerrada.
+    }
+  }
 }
 
 async function removeSession() {
   try {
     await fs.rm(SESSION_PATH, { recursive: true, force: true });
+    await fs.mkdir(SESSION_PATH, { recursive: true });
     addEvent('session', 'Se borró la sesión local.');
   } catch (error) {
     addEvent('error', `No se pudo borrar la sesión: ${error.message}`);
@@ -325,7 +421,7 @@ app.use(express.json({ limit: '50kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, status: runtime.status });
+  res.json({ ok: true, status: runtime.status, engine: runtime.engine });
 });
 
 app.post('/api/login', requireAdmin, (_req, res) => {
@@ -339,7 +435,7 @@ app.get('/api/status', requireAdmin, (_req, res) => {
     runtime,
     events: recentEvents,
     warnings: [
-      'Esta conexión usa WhatsApp Web y no es una API oficial.',
+      'Esta conexión usa un cliente no oficial de WhatsApp.',
       'En Render gratis la sesión puede perderse al reiniciar o redesplegar.',
     ],
   });
@@ -351,31 +447,41 @@ app.post('/api/toggle', requireAdmin, (req, res) => {
   res.json({ ok: true, enabled: runtime.botEnabled });
 });
 
-app.post('/api/restart', requireAdmin, async (_req, res) => {
+app.post('/api/restart', requireAdmin, (_req, res) => {
   res.json({ ok: true, message: 'Reinicio solicitado.' });
-  setImmediate(() => startClient().catch((error) => addEvent('error', error.message)));
+  setImmediate(async () => {
+    try {
+      await stopCurrentSocket();
+      setStatus('reiniciando', 'Reabriendo la conexión sin borrar la sesión...');
+      await startSocket();
+    } catch (error) {
+      addEvent('error', `Error reiniciando: ${error.message}`);
+      scheduleReconnect();
+    }
+  });
 });
 
-app.post('/api/logout', requireAdmin, async (_req, res) => {
+app.post('/api/logout', requireAdmin, (_req, res) => {
   res.json({ ok: true, message: 'Sesión eliminada. Aparecerá un QR nuevo.' });
   setImmediate(async () => {
     try {
-      if (client) {
+      generation += 1;
+      const oldSocket = socket;
+      socket = null;
+      if (oldSocket) {
         try {
-          await client.logout();
+          await oldSocket.logout();
         } catch (_) {
-          // Continuamos borrando los datos locales.
-        }
-        try {
-          await client.destroy();
-        } catch (_) {
-          // Ignorado.
+          try {
+            oldSocket.end(new Error('Cerrar sesión'));
+          } catch (_) {
+            // Ignorado.
+          }
         }
       }
-      client = null;
       await removeSession();
       setStatus('reiniciando', 'Preparando un nuevo código QR...');
-      await startClient();
+      await startSocket();
     } catch (error) {
       addEvent('error', `Error cerrando sesión: ${error.message}`);
       scheduleReconnect();
@@ -384,17 +490,15 @@ app.post('/api/logout', requireAdmin, async (_req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  addEvent('server', `Panel iniciado en el puerto ${PORT}.`);
-  startClient().catch((error) => addEvent('error', error.message));
+  addEvent('server', `Panel iniciado en el puerto ${PORT}. Motor: Baileys.`);
+  startSocket().catch((error) => addEvent('error', error.message));
 });
 
 async function shutdown(signal) {
+  shuttingDown = true;
+  clearTimeout(reconnectTimer);
   addEvent('server', `Cerrando por ${signal}.`);
-  try {
-    if (client) await client.destroy();
-  } catch (_) {
-    // Ignorado durante apagado.
-  }
+  await stopCurrentSocket(`Apagado por ${signal}`);
   process.exit(0);
 }
 
@@ -404,5 +508,5 @@ process.on('unhandledRejection', (reason) => {
   addEvent('error', `Promesa no controlada: ${String(reason)}`);
 });
 process.on('uncaughtException', (error) => {
-  addEvent('error', `Excepción no controlada: ${error.message}`);
+  addEvent('error', `Excepción no controlada: ${error.stack || error.message}`);
 });
