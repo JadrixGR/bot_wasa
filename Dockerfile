@@ -6,18 +6,10 @@ ENV NODE_ENV=production \
     PORT=10000
 
 WORKDIR /app
-
 COPY package.json ./
-RUN npm install --omit=dev \
-    && npm cache clean --force
-
+RUN npm install --omit=dev && npm cache clean --force
 COPY . .
-
-RUN mkdir -p /data/baileys_auth /data/bot-control \
-    && chown -R node:node /app /data
-
+RUN mkdir -p /data/baileys_auth /data/bot-control/audios && chown -R node:node /app /data
 USER node
-
 EXPOSE 10000
-
 CMD ["npm", "start"]

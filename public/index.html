@@ -1,671 +1,175 @@
-<div id="login" class="login-shell">
-  <div class="login-card">
-    <div class="brand">Bot WhatsApp IA</div>
-    <h1>Panel de administración</h1>
-    <p>Ingresa la clave ADMIN_KEY configurada en Render.</p>
-    <input id="loginKey" type="password" placeholder="Clave del panel" autocomplete="current-password">
-    <button id="loginBtn" class="primary">Entrar</button>
-    <div id="loginError" class="error"></div>
-  </div>
-</div>
-
-<div id="app" class="app hidden">
-  <header>
-    <div>
-      <div class="brand">Bot WhatsApp IA</div>
-      <div id="topStatus" class="muted">Cargando…</div>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JadrixServs Bot v4</title>
+  <style>
+    :root{color-scheme:dark;--bg:#090d12;--panel:#121923;--panel2:#0e141c;--border:#293544;--text:#edf3f8;--muted:#9cabb9;--accent:#32c46f;--accent2:#1e8e4c;--danger:#e35f65;--warn:#e5b94e;--info:#61b9e8}*{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;background:var(--bg);color:var(--text)}button,input,textarea,select{font:inherit}button{border:1px solid var(--border);background:#202a36;color:var(--text);border-radius:10px;padding:10px 14px;cursor:pointer}button:hover{filter:brightness(1.12)}button.primary{background:var(--accent);border-color:var(--accent);color:#06120a;font-weight:750}button.danger{border-color:#6f363a;color:#ffb2b5;background:#2a171a}button.small{padding:6px 10px;font-size:13px}input,textarea,select{width:100%;background:#0a1017;border:1px solid var(--border);border-radius:9px;color:var(--text);padding:10px;margin-top:6px}textarea{resize:vertical}label{display:block;margin:12px 0;color:#dce6ee}.check{display:flex;gap:9px;align-items:center}.check input{width:auto;margin:0}.hidden{display:none!important}.muted{color:var(--muted)}.error{color:#ff9b9f}.success{color:#86e4a9}.brand{font-weight:850;letter-spacing:.02em;color:var(--accent)}.login{min-height:100vh;display:grid;place-items:center;padding:20px}.login-card{width:min(430px,100%);background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:28px}.login-card h1{margin:10px 0;font-size:25px}.login-card button{width:100%;margin-top:12px}header{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 20px;background:rgba(9,13,18,.96);border-bottom:1px solid var(--border);backdrop-filter:blur(12px)}.header-actions,.actions{display:flex;gap:8px;flex-wrap:wrap}.layout{display:grid;grid-template-columns:235px minmax(0,1fr);min-height:calc(100vh - 68px)}nav{background:var(--panel2);border-right:1px solid var(--border);padding:16px 11px}.nav-btn{display:block;width:100%;text-align:left;margin-bottom:7px;background:transparent}.nav-btn.active{background:var(--accent);border-color:var(--accent);color:#06120a;font-weight:750}main{width:100%;max-width:1320px;padding:22px}.tab{display:none}.tab.active{display:block}.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px}.panel h2,.panel h3{margin:0 0 12px}.grid{display:grid;gap:16px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 15px}.wide{grid-column:1/-1}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:18px}.metric{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px}.metric span{display:block;color:var(--muted);font-size:13px}.metric strong{display:block;font-size:21px;margin-top:5px;overflow-wrap:anywhere}.qr{min-height:310px;background:#fff;border-radius:12px;display:grid;place-items:center;padding:12px;margin:12px 0}.qr img{max-width:100%;width:330px}.placeholder{color:#45515e;text-align:center;max-width:310px}.events{max-height:450px;overflow:auto}.event{padding:9px 0;border-bottom:1px solid var(--border)}.event small{display:block;color:var(--muted);margin-top:3px}.callout{border:1px solid #685426;background:#28220e;color:#f2d785;border-radius:10px;padding:12px;margin:12px 0}.info{border-color:#28586e;background:#102631;color:#a9def6}.cards{display:grid;gap:10px}.item{background:#0e151d;border:1px solid var(--border);border-radius:11px;padding:13px}.item-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}.item h3{margin:0 0 6px}.item p{white-space:pre-wrap;margin:7px 0}.badges{display:flex;gap:5px;flex-wrap:wrap}.badge{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:3px 8px;font-size:12px;color:var(--muted)}.badge.ok{border-color:#286442;color:#8ce7ad}.badge.off{border-color:#67383b;color:#ffabad}.section-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}.search-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;margin-bottom:12px}.table-wrap{overflow:auto}.table{width:100%;border-collapse:collapse;min-width:900px}.table th,.table td{text-align:left;padding:10px;border-bottom:1px solid var(--border);vertical-align:top}.table th{color:var(--muted);font-size:13px}.status-active{color:#80dfa3}.status-expiring{color:#f0ca68}.status-expired{color:#ff969a}.status-paused{color:#a8b4c0}.chat{background:#11251a;border:1px solid #28633f;border-radius:12px;padding:16px;white-space:pre-wrap;line-height:1.48;margin-top:13px}.toast{position:fixed;right:18px;bottom:18px;max-width:380px;background:#23303d;border:1px solid var(--border);border-radius:10px;padding:13px 16px;z-index:30}.code{background:#090f15;border:1px solid var(--border);border-radius:9px;padding:10px;display:block;white-space:pre-wrap;overflow-wrap:anywhere}.split-label{display:flex;justify-content:space-between;align-items:center;gap:8px}hr{border:0;border-top:1px solid var(--border);margin:20px 0}@media(max-width:980px){.layout{grid-template-columns:1fr}nav{border-right:0;border-bottom:1px solid var(--border);display:flex;overflow:auto;gap:7px;padding:10px}.nav-btn{width:auto;flex:0 0 auto;margin:0}.grid.two,.grid.three,.form-grid,.metrics{grid-template-columns:1fr}.wide{grid-column:auto}main{padding:14px}header{padding:12px 14px}.metric strong{font-size:18px}}@media(max-width:560px){.header-actions button{padding:8px 9px}.item-head{display:block}.item-head .actions{margin-top:10px}.search-row{grid-template-columns:1fr}.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  </style>
+</head>
+<body>
+  <section id="login" class="login">
+    <div class="login-card">
+      <div class="brand">JadrixServs Bot v4</div>
+      <h1>Panel de administración</h1>
+      <p class="muted">Ingresa la clave <strong>ADMIN_KEY</strong> configurada en Render.</p>
+      <input id="loginKey" type="password" autocomplete="current-password" placeholder="Clave del panel">
+      <button id="loginBtn" class="primary">Entrar</button>
+      <div id="loginError" class="error"></div>
     </div>
-    <div class="header-actions">
-      <button id="refreshBtn">Actualizar</button>
-      <button id="logoutPanelBtn">Salir del panel</button>
+  </section>
+
+  <div id="app" class="hidden">
+    <header>
+      <div><div class="brand">JadrixServs Bot v4</div><div id="topStatus" class="muted">Cargando…</div></div>
+      <div class="header-actions"><button id="refreshBtn">Actualizar</button><button id="panelLogoutBtn">Salir</button></div>
+    </header>
+    <div class="layout">
+      <nav>
+        <button class="nav-btn active" data-tab="overview">Estado y QR</button>
+        <button class="nav-btn" data-tab="catalog">Catálogo inicial</button>
+        <button class="nav-btn" data-tab="ai">IA y negocio</button>
+        <button class="nav-btn" data-tab="products">Productos</button>
+        <button class="nav-btn" data-tab="faqs">Respuestas</button>
+        <button class="nav-btn" data-tab="knowledge">PDF e información</button>
+        <button class="nav-btn" data-tab="audios">Audios</button>
+        <button class="nav-btn" data-tab="customers">Clientes y cobros</button>
+        <button class="nav-btn" data-tab="payments">Historial</button>
+        <button class="nav-btn" data-tab="test">Probar bot</button>
+        <button class="nav-btn" data-tab="backup">Respaldo</button>
+      </nav>
+      <main>
+        <section id="tab-overview" class="tab active">
+          <div class="metrics">
+            <div class="metric"><span>WhatsApp</span><strong id="statusValue">—</strong></div>
+            <div class="metric"><span>Bot</span><strong id="botValue">—</strong></div>
+            <div class="metric"><span>Mensajes</span><strong id="messagesValue">0</strong></div>
+            <div class="metric"><span>Clientes</span><strong id="customersValue">0</strong></div>
+            <div class="metric"><span>Por vencer</span><strong id="expiringValue">0</strong></div>
+          </div>
+          <div class="grid two">
+            <div class="panel">
+              <h2>Conexión de WhatsApp</h2><p id="statusDetail" class="muted"></p>
+              <div id="qrWrap" class="qr"><div class="placeholder">El código QR aparecerá aquí cuando sea necesario.</div></div>
+              <div class="actions"><button id="toggleBotBtn" class="primary">Pausar bot</button><button id="restartBtn">Reiniciar conexión</button><button id="waLogoutBtn" class="danger">Cerrar sesión WhatsApp</button></div>
+            </div>
+            <div class="panel"><h2>Actividad reciente</h2><div id="events" class="events"></div></div>
+          </div>
+          <div id="persistenceWarning" class="callout"></div>
+        </section>
+
+        <section id="tab-catalog" class="tab">
+          <div class="panel">
+            <h2>Los 3 mensajes iniciales</h2>
+            <p class="muted">Se envían al primer saludo o cuando el cliente pide catálogo. Puedes corregirlos desde aquí.</p>
+            <label class="check"><input id="welcomeEnabled" type="checkbox"> Activar catálogo automático</label>
+            <div class="form-grid"><label>Volver a mostrar después de días<input id="welcomeRepeatDays" type="number" min="0" max="365"></label><label>Pausa entre mensajes (milisegundos)<input id="welcomeDelayMs" type="number" min="250" max="5000"></label></div>
+            <label>Mensaje 1<textarea id="welcome1" rows="21"></textarea></label>
+            <label>Mensaje 2<textarea id="welcome2" rows="17"></textarea></label>
+            <label>Mensaje 3<textarea id="welcome3" rows="8"></textarea></label>
+            <button id="saveCatalogBtn" class="primary">Guardar catálogo</button>
+          </div>
+        </section>
+
+        <section id="tab-ai" class="tab">
+          <div class="panel"><h2>Datos generales</h2><div class="form-grid"><label>Nombre del negocio<input id="businessName"></label><label>Horario de soporte<input id="supportHours"></label><label class="wide">Grupo de clientes<input id="customerGroupUrl"></label></div></div>
+          <div class="panel">
+            <h2>Motor de IA</h2><div id="aiKeyStatus" class="callout info"></div>
+            <div class="form-grid"><label class="check wide"><input id="aiEnabled" type="checkbox"> Activar IA</label><label>Modo<select id="answerMode"><option value="hybrid">Híbrido: reglas y luego IA</option><option value="ai">IA para casi todo</option><option value="rules">Solo reglas, sin costo de IA</option></select></label><label>Modelo<input id="aiModel" placeholder="gpt-5-mini"></label><label>Razonamiento<select id="reasoningEffort"><option value="none">Ninguno</option><option value="low">Bajo</option><option value="medium">Medio</option><option value="high">Alto</option></select></label><label>Máximo de tokens<input id="maxOutputTokens" type="number" min="100" max="1500"></label><label>Minutos de atención humana<input id="humanPauseMinutes" type="number" min="1" max="1440"></label></div>
+            <label>Instrucciones de la IA<textarea id="systemPrompt" rows="14"></textarea></label>
+            <label>Respuesta cuando no sabe<textarea id="fallbackText" rows="4"></textarea></label>
+            <label>Mensaje al pedir asesor<textarea id="humanText" rows="4"></textarea></label>
+            <button id="saveAiBtn" class="primary">Guardar IA y negocio</button>
+          </div>
+          <div class="panel"><h2>Pagos y conversión internacional</h2><div class="form-grid"><label>Yape<input id="yapeNumber"></label><label>Titular Yape<input id="yapeHolder"></label><label>ID Binance<input id="binanceId"></label><label>1 PEN equivale a USD<input id="penToUsdRate" type="number" step="0.0001"></label><label>Recargo internacional (%)<input id="internationalSurchargePct" type="number" step="0.1"></label><label>Probar precio en soles<input id="quotePen" type="number" min="0"></label></div><div class="actions"><button id="savePaymentConfigBtn">Guardar pagos</button><button id="quoteBtn">Calcular USDT</button></div><div id="quoteResult" class="chat hidden"></div></div>
+        </section>
+
+        <section id="tab-products" class="tab">
+          <div class="grid two">
+            <div class="panel"><h2 id="productFormTitle">Agregar producto</h2><input id="productId" type="hidden"><label>Nombre<input id="productName"></label><div class="form-grid"><label>Categoría<input id="productCategory"></label><label>Precio en soles<input id="productPrice" type="number" min="0" step="0.01"></label><label>Duración<input id="productDurationValue" type="number" min="1"></label><label>Unidad<select id="productDurationUnit"><option value="days">Días</option><option value="months">Meses</option><option value="years">Años</option></select></label></div><label>Palabras clave<textarea id="productTags" rows="3"></textarea></label><label>Información completa para responder<textarea id="productKnowledge" rows="10"></textarea></label><label class="check"><input id="productActive" type="checkbox"> Disponible</label><label class="check"><input id="productSoldSeparately" type="checkbox"> Se vende por separado</label><label class="check"><input id="productDicloak" type="checkbox"> Usa DICloak</label><div class="actions"><button id="saveProductBtn" class="primary">Guardar producto</button><button id="clearProductBtn">Limpiar</button></div></div>
+            <div class="panel"><h2>Importar varios</h2><p class="muted">Formato por línea:</p><span class="code">Nombre | Precio | activo/inactivo | Información | palabras clave</span><textarea id="bulkProducts" rows="14"></textarea><button id="bulkProductsBtn">Importar lista</button></div>
+          </div>
+          <div class="panel"><div class="section-head"><h2>Productos entrenados</h2><span id="productCount"></span></div><div class="search-row"><input id="productSearch" placeholder="Buscar producto"><button id="showActiveOnlyBtn">Solo disponibles</button></div><div id="productList" class="cards"></div></div>
+        </section>
+
+        <section id="tab-faqs" class="tab">
+          <div class="grid two"><div class="panel"><h2 id="faqFormTitle">Agregar respuesta</h2><input id="faqId" type="hidden"><label>Título<input id="faqTitle"></label><label>Palabras o preguntas que la activan<textarea id="faqTriggers" rows="4"></textarea></label><label>Respuesta<textarea id="faqAnswer" rows="9"></textarea></label><label class="check"><input id="faqActive" type="checkbox"> Activa</label><label class="check"><input id="faqAudioSuggested" type="checkbox"> Puede acompañarse con audio</label><div class="actions"><button id="saveFaqBtn" class="primary">Guardar respuesta</button><button id="clearFaqBtn">Limpiar</button></div></div><div class="panel"><h2>Reglas ya aprendidas</h2><p>Incluye DICloak, privacidad, soporte, Yape, Binance, renovaciones y recomendaciones.</p><p class="muted">La IA también usa estas respuestas como conocimiento.</p></div></div><div class="panel"><div class="section-head"><h2>Respuestas registradas</h2><span id="faqCount"></span></div><div id="faqList" class="cards"></div></div>
+        </section>
+
+        <section id="tab-knowledge" class="tab">
+          <div class="grid two"><div class="panel"><h2>Cargar PDF</h2><p class="muted">Debe contener texto seleccionable; los escaneos como imagen necesitan OCR.</p><label>Título<input id="pdfTitle"></label><label>Archivo PDF<input id="pdfFile" type="file" accept="application/pdf"></label><button id="uploadPdfBtn" class="primary">Importar PDF</button><div id="pdfMessage"></div></div><div class="panel"><h2>Pegar información</h2><label>Título<input id="knowledgeTitle"></label><label>Texto<textarea id="knowledgeText" rows="12"></textarea></label><button id="saveKnowledgeBtn">Guardar información</button></div></div><div class="panel"><h2>Documentos importados</h2><div id="documentList" class="cards"></div></div>
+        </section>
+
+        <section id="tab-audios" class="tab">
+          <div class="grid two"><div class="panel"><h2>Subir audio explicativo</h2><p class="muted">Ejemplo: audio sobre DICloak. MP3, OGG, M4A, WAV o WEBM.</p><label>Título<input id="audioTitle"></label><label>Palabras que lo activan<textarea id="audioTriggers" rows="3" placeholder="dicloak, cómo ingreso, audio explicativo"></textarea></label><label>Productos relacionados (seed keys separados por coma)<input id="audioProductKeys" placeholder="chatgpt-pro, perplexity-pro, plan-pro"></label><label>Archivo<input id="audioFile" type="file" accept="audio/*"></label><label class="check"><input id="audioPtt" type="checkbox" checked> Enviar como nota de voz</label><button id="uploadAudioBtn" class="primary">Subir audio</button><div id="audioMessage"></div></div><div class="panel"><h2>Probar envío</h2><label>Número con código de país<input id="audioTestPhone" placeholder="51999999999"></label><p class="muted">Después de subir un audio, usa el botón “Probar” de su tarjeta.</p><label>Horas antes de repetir el mismo audio<input id="audioCooldownHours" type="number" min="0" max="720"></label><button id="saveAudioConfigBtn">Guardar límite</button></div></div><div class="panel"><h2>Audios registrados</h2><div id="audioList" class="cards"></div></div>
+        </section>
+
+        <section id="tab-customers" class="tab">
+          <div class="panel">
+            <div class="section-head"><h2>Automatización de cobros</h2><span id="billingState"></span></div>
+            <div class="form-grid"><label class="check"><input id="billingAutomationEnabled" type="checkbox"> Activar recordatorios automáticos</label><label>Días antes<select id="defaultReminderLeadDays"><option value="1">1 día antes</option><option value="2">2 días antes</option></select></label><label>Hora de envío (0–23)<input id="reminderHour" type="number" min="0" max="23"></label><label>Zona horaria<input id="timezone" value="America/Lima"></label></div><label>Plantilla<textarea id="reminderTemplate" rows="10"></textarea></label><div class="actions"><button id="saveBillingConfigBtn" class="primary">Guardar automatización</button><button id="checkBillingBtn">Revisar cobros ahora</button></div>
+          </div>
+          <div class="grid two"><div class="panel"><h2 id="customerFormTitle">Registrar compra</h2><input id="customerId" type="hidden"><label>Nombre<input id="customerName"></label><label>WhatsApp con código de país<input id="customerPhone" placeholder="51999999999"></label><label>País<input id="customerCountry" value="Perú"></label><label>Producto<select id="customerProduct"></select></label><div class="form-grid"><label>Precio S/<input id="customerPrice" type="number" min="0" step="0.01"></label><label>Método<select id="customerPaymentMethod"><option value="yape">Yape</option><option value="binance">Binance</option><option value="other">Otro</option></select></label><label>Fecha de activación<input id="customerActivation" type="date"></label><label>Fecha de vencimiento<input id="customerExpiry" type="date"></label><label>Duración<input id="customerDurationValue" type="number" min="1"></label><label>Unidad<select id="customerDurationUnit"><option value="days">Días</option><option value="months">Meses</option><option value="years">Años</option></select></label><label>Recordar<select id="customerReminderDays"><option value="1">1 día antes</option><option value="2">2 días antes</option></select></label><label>Estado<select id="customerStatus"><option value="active">Activo</option><option value="expiring">Por vencer</option><option value="expired">Vencido</option><option value="paused">Pausado</option></select></label></div><label class="check"><input id="customerReminderEnabled" type="checkbox" checked> Recordatorio activo para este cliente</label><label>Notas<textarea id="customerNotes" rows="4"></textarea></label><div class="actions"><button id="saveCustomerBtn" class="primary">Guardar compra</button><button id="clearCustomerBtn">Limpiar</button></div></div><div class="panel"><h2>Regla de renovación</h2><p>Si el cliente paga antes del vencimiento, el nuevo periodo empieza cuando termina el actual y no pierde días.</p><p>Si ya venció y paga después, el nuevo periodo empieza desde la fecha del nuevo pago.</p><div class="callout">Los recordatorios automáticos solo se envían cuando WhatsApp está conectado y la automatización está activada manualmente.</div></div></div>
+          <div class="panel"><div class="section-head"><h2>Clientes registrados</h2><span id="customerCount"></span></div><div class="search-row"><input id="customerSearch" placeholder="Buscar por cliente, teléfono o producto"><button id="customerFilterBtn">Todos</button></div><div id="customerTable" class="table-wrap"></div></div>
+        </section>
+
+        <section id="tab-payments" class="tab"><div class="panel"><h2>Historial de compras, renovaciones y avisos</h2><div id="paymentTable" class="table-wrap"></div></div></section>
+
+        <section id="tab-test" class="tab"><div class="panel"><h2>Simulador de cliente</h2><p class="muted">Prueba la respuesta antes de activar la IA.</p><textarea id="testMessage" rows="6" placeholder="Ej.: Quiero ChatGPT para documentos privados, ¿qué me recomienda?"></textarea><button id="testBtn" class="primary">Probar respuesta</button><div id="testResult" class="chat hidden"></div></div></section>
+
+        <section id="tab-backup" class="tab"><div class="panel"><h2>Respaldo completo</h2><p>Incluye configuración, productos, respuestas, clientes e información importada. Los archivos de audio deben conservarse también en el disco de Render.</p><button id="exportBtn" class="primary">Descargar respaldo JSON</button><hr><label>Restaurar archivo JSON<input id="backupFile" type="file" accept="application/json"></label><button id="importBtn">Restaurar respaldo</button><div class="callout">En Render gratuito, descarga respaldos frecuentemente. Para operación real usa un disco persistente o una base de datos.</div></div></section>
+      </main>
     </div>
-  </header>
-
-  <div class="layout">
-    <nav>
-      <button class="nav-btn active" data-tab="overview">Estado y QR</button>
-      <button class="nav-btn" data-tab="business">Negocio e IA</button>
-      <button class="nav-btn" data-tab="products">Productos</button>
-      <button class="nav-btn" data-tab="faqs">Respuestas rápidas</button>
-      <button class="nav-btn" data-tab="knowledge">PDF e información</button>
-      <button class="nav-btn" data-tab="test">Probar bot</button>
-      <button class="nav-btn" data-tab="backup">Respaldo</button>
-    </nav>
-
-    <main>
-      <section id="tab-overview" class="tab active">
-        <div class="metrics">
-          <div class="metric"><span>WhatsApp</span><strong id="statusValue">—</strong></div>
-          <div class="metric"><span>Bot</span><strong id="botValue">—</strong></div>
-          <div class="metric"><span>Mensajes</span><strong id="messagesValue">0</strong></div>
-          <div class="metric"><span>Respuestas IA</span><strong id="aiRepliesValue">0</strong></div>
-        </div>
-        <div class="grid two">
-          <div class="panel">
-            <h2>Conexión</h2>
-            <p id="statusDetail" class="muted"></p>
-            <div id="qrWrap" class="qr-wrap">
-              <div class="placeholder">El QR aparecerá aquí cuando sea necesario.</div>
-            </div>
-            <div class="actions">
-              <button id="toggleBotBtn" class="primary">Pausar bot</button>
-              <button id="restartBtn">Reiniciar conexión</button>
-              <button id="waLogoutBtn" class="danger">Cerrar sesión WhatsApp</button>
-            </div>
-          </div>
-          <div class="panel">
-            <h2>Actividad reciente</h2>
-            <div id="events" class="events"></div>
-          </div>
-        </div>
-        <div id="persistenceWarning" class="warning"></div>
-      </section>
-
-      <section id="tab-business" class="tab">
-        <div class="panel">
-          <h2>Datos del negocio</h2>
-          <div class="form-grid">
-            <label>Nombre del negocio<input id="businessName"></label>
-            <label>Horario<input id="hours"></label>
-            <label class="wide">Dirección<input id="address"></label>
-            <label class="wide">Enlace de Google Maps<input id="mapsUrl"></label>
-          </div>
-        </div>
-
-        <div class="panel">
-          <h2>Motor de respuestas</h2>
-          <div id="aiKeyStatus" class="info"></div>
-          <div class="form-grid">
-            <label class="check wide"><input id="aiEnabled" type="checkbox"> Activar respuestas con IA</label>
-            <label>Modo
-              <select id="answerMode">
-                <option value="hybrid">Híbrido: reglas primero, IA después</option>
-                <option value="ai">IA para casi todo</option>
-                <option value="rules">Solo respuestas programadas</option>
-              </select>
-            </label>
-            <label>Modelo
-              <select id="aiModel">
-                <option value="gpt-5.6-luna">GPT-5.6 Luna — menor costo</option>
-                <option value="gpt-5.6-terra">GPT-5.6 Terra — equilibrio</option>
-                <option value="gpt-5.6">GPT-5.6 Sol — más potente</option>
-              </select>
-            </label>
-            <label>Razonamiento
-              <select id="reasoningEffort">
-                <option value="none">Ninguno</option>
-                <option value="low">Bajo</option>
-                <option value="medium">Medio</option>
-                <option value="high">Alto</option>
-              </select>
-            </label>
-            <label>Máximo de tokens<input id="maxOutputTokens" type="number" min="100" max="1200"></label>
-            <label>Minutos en modo humano<input id="humanPauseMinutes" type="number" min="1" max="1440"></label>
-          </div>
-          <label>Instrucciones principales de la IA
-            <textarea id="systemPrompt" rows="7"></textarea>
-          </label>
-          <label>Mensaje de bienvenida
-            <textarea id="menuText" rows="5"></textarea>
-          </label>
-          <label>Respuesta cuando no sabe
-            <textarea id="fallbackText" rows="4"></textarea>
-          </label>
-          <label>Mensaje al pedir asesor
-            <textarea id="humanText" rows="4"></textarea>
-          </label>
-          <p class="muted">Variables permitidas: {negocio}, {horario}, {direccion}, {mapa}.</p>
-          <button id="saveConfigBtn" class="primary">Guardar configuración</button>
-          <span id="configMessage"></span>
-        </div>
-      </section>
-
-      <section id="tab-products" class="tab">
-        <div class="grid two">
-          <div class="panel">
-            <h2 id="productFormTitle">Agregar producto</h2>
-            <input id="productId" type="hidden">
-            <label>Nombre<input id="productName"></label>
-            <label>Precio<input id="productPrice" placeholder="Ej.: S/ 49.90"></label>
-            <label>Stock o disponibilidad<input id="productStock" placeholder="Ej.: Disponible / 12 unidades"></label>
-            <label>Descripción<textarea id="productDescription" rows="5"></textarea></label>
-            <label>Palabras clave<textarea id="productTags" rows="2" placeholder="Ej.: laptop, computadora, oficina"></textarea></label>
-            <label class="check"><input id="productActive" type="checkbox" checked> Producto activo</label>
-            <div class="actions">
-              <button id="saveProductBtn" class="primary">Guardar producto</button>
-              <button id="cancelProductBtn">Limpiar</button>
-            </div>
-          </div>
-          <div class="panel">
-            <h2>Importación rápida</h2>
-            <p class="muted">Una línea por producto con este formato:</p>
-            <code>Nombre | Precio | Stock | Descripción | palabras clave</code>
-            <textarea id="bulkProducts" rows="9" placeholder="Producto A | S/ 20 | Disponible | Descripción | etiqueta1, etiqueta2"></textarea>
-            <button id="bulkProductsBtn">Importar lista</button>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="section-head"><h2>Productos registrados</h2><span id="productCount"></span></div>
-          <div id="productList" class="cards"></div>
-        </div>
-      </section>
-
-      <section id="tab-faqs" class="tab">
-        <div class="grid two">
-          <div class="panel">
-            <h2 id="faqFormTitle">Agregar respuesta</h2>
-            <input id="faqId" type="hidden">
-            <label>Título<input id="faqTitle" placeholder="Ej.: Envíos"></label>
-            <label>Comandos o palabras que la activan
-              <textarea id="faqTriggers" rows="3" placeholder="envío, envios, delivery, cuánto demora"></textarea>
-            </label>
-            <label>Respuesta<textarea id="faqAnswer" rows="7"></textarea></label>
-            <label class="check"><input id="faqActive" type="checkbox" checked> Respuesta activa</label>
-            <div class="actions">
-              <button id="saveFaqBtn" class="primary">Guardar respuesta</button>
-              <button id="cancelFaqBtn">Limpiar</button>
-            </div>
-          </div>
-          <div class="panel">
-            <h2>Cómo usarlo</h2>
-            <p>Estas respuestas son rápidas y no consumen IA cuando el bot reconoce claramente una palabra o comando.</p>
-            <p>Ejemplo de activadores:</p>
-            <code>delivery, envío, envios, hacen entregas</code>
-            <p>La IA también recibirá estas respuestas como parte de su conocimiento.</p>
-          </div>
-        </div>
-        <div class="panel">
-          <div class="section-head"><h2>Respuestas registradas</h2><span id="faqCount"></span></div>
-          <div id="faqList" class="cards"></div>
-        </div>
-      </section>
-
-      <section id="tab-knowledge" class="tab">
-        <div class="grid two">
-          <div class="panel">
-            <h2>Cargar PDF</h2>
-            <p class="muted">El bot extrae el texto y lo usa para responder. El PDF debe contener texto seleccionable.</p>
-            <label>Título del documento<input id="pdfTitle" placeholder="Ej.: Catálogo julio"></label>
-            <label>Archivo PDF<input id="pdfFile" type="file" accept="application/pdf"></label>
-            <button id="uploadPdfBtn" class="primary">Importar PDF</button>
-            <div id="pdfMessage"></div>
-          </div>
-          <div class="panel">
-            <h2>Pegar información</h2>
-            <label>Título<input id="knowledgeTitle" placeholder="Ej.: Políticas de envío"></label>
-            <label>Texto<textarea id="knowledgeText" rows="10"></textarea></label>
-            <button id="saveKnowledgeBtn">Guardar información</button>
-          </div>
-        </div>
-        <div class="panel">
-          <h2>Documentos e información importada</h2>
-          <div id="documentList" class="cards"></div>
-        </div>
-      </section>
-
-      <section id="tab-test" class="tab">
-        <div class="panel">
-          <h2>Simulador de cliente</h2>
-          <p class="muted">Prueba qué contestaría el bot antes de activarlo con tus clientes.</p>
-          <textarea id="testMessage" rows="5" placeholder="Ej.: ¿Tienen el producto X y cuánto cuesta?"></textarea>
-          <button id="testBtn" class="primary">Probar respuesta</button>
-          <div id="testResult" class="chat-result hidden"></div>
-        </div>
-      </section>
-
-      <section id="tab-backup" class="tab">
-        <div class="panel">
-          <h2>Respaldo de configuración</h2>
-          <p>Descarga una copia de productos, respuestas, configuración y conocimiento importado.</p>
-          <button id="exportBtn" class="primary">Descargar respaldo JSON</button>
-          <hr>
-          <label>Restaurar respaldo<input id="backupFile" type="file" accept="application/json"></label>
-          <button id="importBtn">Restaurar archivo</button>
-          <div class="warning">En Render gratis, haz respaldos con frecuencia porque el almacenamiento puede borrarse al reiniciar o redesplegar.</div>
-        </div>
-      </section>
-    </main>
+    <div id="toast" class="toast hidden"></div>
   </div>
 
-  <div id="toast" class="toast hidden"></div>
-</div>
+  <script>
+    const $=id=>document.getElementById(id);let key=sessionStorage.getItem('jadrixAdminKey')||'';let state={status:null,config:null,products:[],faqs:[],documents:[],audios:[],customers:[],payments:[]};let activeOnly=false,customerFilter='all',poll=null;
+    const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+    function toast(msg){$('toast').textContent=msg;$('toast').classList.remove('hidden');clearTimeout(toast.t);toast.t=setTimeout(()=>$('toast').classList.add('hidden'),3500)}
+    async function api(url,opt={}){const headers={'x-admin-key':key,...(opt.headers||{})};if(opt.body&&!(opt.body instanceof FormData)&&typeof opt.body!=='string'){headers['content-type']='application/json';opt.body=JSON.stringify(opt.body)}const r=await fetch(url,{...opt,headers});const ct=r.headers.get('content-type')||'';const body=ct.includes('application/json')?await r.json():await r.text();if(!r.ok)throw new Error(body.error||body||`Error ${r.status}`);return body}
+    async function run(fn){try{return await fn()}catch(e){toast(e.message);throw e}}
+    async function login(){key=$('loginKey').value.trim();try{await api('/api/login',{method:'POST'});sessionStorage.setItem('jadrixAdminKey',key);$('login').classList.add('hidden');$('app').classList.remove('hidden');await loadAll();poll=setInterval(loadStatus,5000)}catch(e){$('loginError').textContent=e.message}}
+    function tab(name){document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('.tab').forEach(s=>s.classList.toggle('active',s.id===`tab-${name}`))}
+    async function loadAll(){await Promise.all([loadStatus(),loadConfig(),loadProducts(),loadFaqs(),loadDocuments(),loadAudios(),loadCustomers()])}
+    async function loadStatus(){const d=await api('/api/status');state.status=d;const r=d.runtime;$('topStatus').textContent=`${r.status}: ${r.detail}`;$('statusValue').textContent=r.status;$('botValue').textContent=r.botEnabled?'Activo':'Pausado';$('messagesValue').textContent=r.messagesReceived;$('customersValue').textContent=d.counts.customers;$('expiringValue').textContent=d.counts.expiring;$('statusDetail').textContent=r.detail;$('toggleBotBtn').textContent=r.botEnabled?'Pausar bot':'Activar bot';$('persistenceWarning').textContent=d.persistenceWarning;$('aiKeyStatus').textContent=d.aiKeyConfigured?'OPENAI_API_KEY está configurada en Render.':'Falta OPENAI_API_KEY en Render; el bot funcionará con reglas y productos.';$('qrWrap').innerHTML=r.qrDataUrl?`<img src="${r.qrDataUrl}" alt="QR de WhatsApp">`:`<div class="placeholder">${r.status==='conectado'?'WhatsApp está conectado.':'Esperando QR o conexión activa.'}</div>`;$('events').innerHTML=(d.events||[]).map(e=>`<div class="event"><strong>${esc(e.type)}</strong>: ${esc(e.text)}<small>${new Date(e.at).toLocaleString()}</small></div>`).join('')||'<p class="muted">Sin eventos.</p>'}
+    async function loadConfig(){const d=await api('/api/config');state.config=d.config;const c=d.config;['businessName','supportHours','customerGroupUrl','answerMode','aiModel','reasoningEffort','maxOutputTokens','humanPauseMinutes','systemPrompt','fallbackText','humanText','yapeNumber','yapeHolder','binanceId','penToUsdRate','internationalSurchargePct','audioCooldownHours','defaultReminderLeadDays','reminderHour','timezone','reminderTemplate'].forEach(id=>{if($(id))$(id).value=c[id]??''});['aiEnabled','welcomeEnabled','billingAutomationEnabled'].forEach(id=>$(id).checked=!!c[id]);$('welcomeRepeatDays').value=c.welcomeRepeatDays;$('welcomeDelayMs').value=c.welcomeDelayMs;[1,2,3].forEach((n,i)=>$(`welcome${n}`).value=c.welcomeMessages?.[i]||'');$('billingState').textContent=c.billingAutomationEnabled?'ACTIVADA':'DESACTIVADA'}
+    function configBody(){return{...state.config,businessName:$('businessName').value,supportHours:$('supportHours').value,customerGroupUrl:$('customerGroupUrl').value,aiEnabled:$('aiEnabled').checked,answerMode:$('answerMode').value,aiModel:$('aiModel').value,reasoningEffort:$('reasoningEffort').value,maxOutputTokens:Number($('maxOutputTokens').value),humanPauseMinutes:Number($('humanPauseMinutes').value),systemPrompt:$('systemPrompt').value,fallbackText:$('fallbackText').value,humanText:$('humanText').value,welcomeEnabled:$('welcomeEnabled').checked,welcomeRepeatDays:Number($('welcomeRepeatDays').value),welcomeDelayMs:Number($('welcomeDelayMs').value),welcomeMessages:[$('welcome1').value,$('welcome2').value,$('welcome3').value],yapeNumber:$('yapeNumber').value,yapeHolder:$('yapeHolder').value,binanceId:$('binanceId').value,penToUsdRate:Number($('penToUsdRate').value),internationalSurchargePct:Number($('internationalSurchargePct').value),audioCooldownHours:Number($('audioCooldownHours').value),billingAutomationEnabled:$('billingAutomationEnabled').checked,defaultReminderLeadDays:Number($('defaultReminderLeadDays').value),reminderHour:Number($('reminderHour').value),timezone:$('timezone').value,reminderTemplate:$('reminderTemplate').value}}
+    async function saveConfig(){const d=await api('/api/config',{method:'PUT',body:configBody()});state.config=d.config;toast('Configuración guardada');await loadConfig()}
+    async function loadProducts(){const d=await api('/api/products');state.products=d.products;renderProducts();fillProductSelect()}
+    function renderProducts(){const q=($('productSearch').value||'').toLowerCase();const list=state.products.filter(p=>(!activeOnly||p.active)&&(`${p.name} ${p.tags} ${p.category}`.toLowerCase().includes(q)));$('productCount').textContent=`${list.length} mostrados / ${state.products.length}`;$('productList').innerHTML=list.map(p=>`<div class="item"><div class="item-head"><div><h3>${esc(p.name)}</h3><div class="badges"><span class="badge ${p.active?'ok':'off'}">${p.active?'Disponible':'No disponible'}</span><span class="badge">S/${Number(p.pricePen).toFixed(2)}</span><span class="badge">${esc(p.category)}</span>${p.dicloak?'<span class="badge">DICloak</span>':''}</div><p>${esc(p.knowledge)}</p><small class="muted">${esc(p.tags)}</small></div><div class="actions"><button class="small" data-pe="${p.id}">Editar</button><button class="small danger" data-pd="${p.id}">Eliminar</button></div></div></div>`).join('')||'<p class="muted">Sin resultados.</p>'}
+    function fillProductSelect(){const current=$('customerProduct').value;$('customerProduct').innerHTML='<option value="">Selecciona un producto</option>'+state.products.filter(p=>p.soldSeparately!==false).map(p=>`<option value="${p.id}">${esc(p.name)} — S/${p.pricePen}</option>`).join('');$('customerProduct').value=current}
+    function clearProduct(){['productId','productName','productCategory','productPrice','productTags','productKnowledge'].forEach(id=>$(id).value='');$('productDurationValue').value=1;$('productDurationUnit').value='months';$('productActive').checked=true;$('productSoldSeparately').checked=true;$('productDicloak').checked=false;$('productFormTitle').textContent='Agregar producto'}
+    function editProduct(id){const p=state.products.find(x=>x.id===id);if(!p)return;$('productId').value=p.id;$('productName').value=p.name;$('productCategory').value=p.category;$('productPrice').value=p.pricePen;$('productDurationValue').value=p.durationValue;$('productDurationUnit').value=p.durationUnit;$('productTags').value=p.tags;$('productKnowledge').value=p.knowledge;$('productActive').checked=p.active;$('productSoldSeparately').checked=p.soldSeparately!==false;$('productDicloak').checked=p.dicloak;$('productFormTitle').textContent='Editar producto';scrollTo({top:0,behavior:'smooth'})}
+    async function saveProduct(){const id=$('productId').value;const body={name:$('productName').value,category:$('productCategory').value,pricePen:Number($('productPrice').value),durationValue:Number($('productDurationValue').value),durationUnit:$('productDurationUnit').value,tags:$('productTags').value,knowledge:$('productKnowledge').value,active:$('productActive').checked,soldSeparately:$('productSoldSeparately').checked,dicloak:$('productDicloak').checked};await api(id?`/api/products/${id}`:'/api/products',{method:id?'PUT':'POST',body});clearProduct();await loadProducts();toast('Producto guardado')}
+    async function loadFaqs(){const d=await api('/api/faqs');state.faqs=d.faqs;$('faqCount').textContent=`${d.faqs.length} respuestas`;$('faqList').innerHTML=d.faqs.map(f=>`<div class="item"><div class="item-head"><div><h3>${esc(f.title)}</h3><div class="badges"><span class="badge ${f.active?'ok':'off'}">${f.active?'Activa':'Inactiva'}</span>${f.audioSuggested?'<span class="badge">Audio sugerido</span>':''}</div><p><strong>Activa con:</strong> ${esc(f.triggers)}</p><p>${esc(f.answer)}</p></div><div class="actions"><button class="small" data-fe="${f.id}">Editar</button><button class="small danger" data-fd="${f.id}">Eliminar</button></div></div></div>`).join('')}
+    function clearFaq(){['faqId','faqTitle','faqTriggers','faqAnswer'].forEach(id=>$(id).value='');$('faqActive').checked=true;$('faqAudioSuggested').checked=false;$('faqFormTitle').textContent='Agregar respuesta'}
+    function editFaq(id){const f=state.faqs.find(x=>x.id===id);if(!f)return;$('faqId').value=f.id;$('faqTitle').value=f.title;$('faqTriggers').value=f.triggers;$('faqAnswer').value=f.answer;$('faqActive').checked=f.active;$('faqAudioSuggested').checked=f.audioSuggested;$('faqFormTitle').textContent='Editar respuesta';scrollTo({top:0,behavior:'smooth'})}
+    async function saveFaq(){const id=$('faqId').value;await api(id?`/api/faqs/${id}`:'/api/faqs',{method:id?'PUT':'POST',body:{title:$('faqTitle').value,triggers:$('faqTriggers').value,answer:$('faqAnswer').value,active:$('faqActive').checked,audioSuggested:$('faqAudioSuggested').checked}});clearFaq();await loadFaqs();toast('Respuesta guardada')}
+    async function loadDocuments(){const d=await api('/api/documents');state.documents=d.documents;$('documentList').innerHTML=d.documents.map(x=>`<div class="item"><div class="item-head"><div><h3>${esc(x.title)}</h3><div class="badges"><span class="badge">${esc(x.type)}</span><span class="badge">${x.chunks} fragmentos</span></div><p class="muted">${Number(x.characters||0).toLocaleString()} caracteres · ${new Date(x.createdAt).toLocaleString()}</p></div><button class="small danger" data-dd="${x.id}">Eliminar</button></div></div>`).join('')||'<p class="muted">Sin documentos.</p>'}
+    async function loadAudios(){const d=await api('/api/audios');state.audios=d.audios;$('audioList').innerHTML=d.audios.map(a=>`<div class="item"><div class="item-head"><div><h3>${esc(a.title)}</h3><div class="badges"><span class="badge ${a.active?'ok':'off'}">${a.active?'Activo':'Inactivo'}</span><span class="badge">${a.ptt?'Nota de voz':'Audio'}</span></div><p><strong>Activa con:</strong> ${esc(a.triggers)}</p><small class="muted">Productos: ${esc((a.productSeedKeys||[]).join(', ')||'cualquiera')}</small></div><div class="actions"><button class="small" data-at="${a.id}">Probar</button><button class="small" data-aa="${a.id}">${a.active?'Pausar':'Activar'}</button><button class="small danger" data-ad="${a.id}">Eliminar</button></div></div></div>`).join('')||'<p class="muted">Todavía no hay audios.</p>'}
+    async function loadCustomers(){const d=await api('/api/customers');state.customers=d.customers;state.payments=d.payments;renderCustomers();renderPayments()}
+    function renderCustomers(){const q=($('customerSearch').value||'').toLowerCase();const list=state.customers.filter(c=>(customerFilter==='all'||c.status===customerFilter)&&(`${c.name} ${c.phone} ${c.productName}`.toLowerCase().includes(q)));$('customerCount').textContent=`${list.length} mostrados / ${state.customers.length}`;$('customerTable').innerHTML=`<table class="table"><thead><tr><th>Cliente</th><th>Producto</th><th>Periodo</th><th>Vence</th><th>Estado</th><th>Recordatorio</th><th>Acciones</th></tr></thead><tbody>${list.map(c=>`<tr><td><strong>${esc(c.name)}</strong><br><span class="muted">${esc(c.phone)} · ${esc(c.country)}</span></td><td>${esc(c.productName)}<br><span class="muted">S/${Number(c.pricePen).toFixed(2)} · ${esc(c.paymentMethod)}</span></td><td>${esc(c.activationDate)}<br><span class="muted">${c.durationValue} ${esc(c.durationUnit)}</span></td><td>${esc(c.expiryDate)}</td><td class="status-${c.status}">${esc(c.status)}</td><td>${c.reminderEnabled?`${c.reminderLeadDays} día(s) antes`:'Pausado'}${c.lastReminderAt?`<br><small>${new Date(c.lastReminderAt).toLocaleString()}</small>`:''}</td><td><div class="actions"><button class="small" data-ce="${c.id}">Editar</button><button class="small" data-cr="${c.id}">Avisar</button><button class="small primary" data-cn="${c.id}">Renovar</button><button class="small danger" data-cd="${c.id}">Eliminar</button></div></td></tr>`).join('')}</tbody></table>`}
+    function renderPayments(){$('paymentTable').innerHTML=`<table class="table"><thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Monto</th><th>Periodo</th><th>Nota</th></tr></thead><tbody>${state.payments.map(p=>{const c=state.customers.find(x=>x.id===p.customerId);return`<tr><td>${new Date(p.date).toLocaleString()}</td><td>${esc(c?.name||p.customerId||'—')}</td><td>${esc(p.type)}</td><td>${p.amount?`S/${Number(p.amount).toFixed(2)}`:'—'} · ${esc(p.method||'')}</td><td>${esc(p.periodStart||'')} ${p.newExpiry?`→ ${esc(p.newExpiry)}`:''}</td><td>${esc(p.note||'')}</td></tr>`}).join('')}</tbody></table>`}
+    function clearCustomer(){['customerId','customerName','customerPhone','customerNotes','customerExpiry'].forEach(id=>$(id).value='');$('customerCountry').value='Perú';$('customerProduct').value='';$('customerPrice').value='';$('customerPaymentMethod').value='yape';$('customerActivation').value=new Date().toISOString().slice(0,10);$('customerDurationValue').value=1;$('customerDurationUnit').value='months';$('customerReminderDays').value=state.config?.defaultReminderLeadDays||2;$('customerStatus').value='active';$('customerReminderEnabled').checked=true;$('customerFormTitle').textContent='Registrar compra'}
+    function selectCustomerProduct(){const p=state.products.find(x=>x.id===$('customerProduct').value);if(!p)return;$('customerPrice').value=p.pricePen;$('customerDurationValue').value=p.durationValue;$('customerDurationUnit').value=p.durationUnit;$('customerExpiry').value=''}
+    function editCustomer(id){const c=state.customers.find(x=>x.id===id);if(!c)return;$('customerId').value=c.id;$('customerName').value=c.name;$('customerPhone').value=c.phone;$('customerCountry').value=c.country;$('customerProduct').value=c.productId;$('customerPrice').value=c.pricePen;$('customerPaymentMethod').value=c.paymentMethod;$('customerActivation').value=c.activationDate;$('customerExpiry').value=c.expiryDate;$('customerDurationValue').value=c.durationValue;$('customerDurationUnit').value=c.durationUnit;$('customerReminderDays').value=c.reminderLeadDays;$('customerStatus').value=c.status;$('customerReminderEnabled').checked=c.reminderEnabled;$('customerNotes').value=c.notes;$('customerFormTitle').textContent='Editar cliente';scrollTo({top:0,behavior:'smooth'})}
+    async function saveCustomer(){const id=$('customerId').value;const body={name:$('customerName').value,phone:$('customerPhone').value,country:$('customerCountry').value,productId:$('customerProduct').value,pricePen:Number($('customerPrice').value),paymentMethod:$('customerPaymentMethod').value,activationDate:$('customerActivation').value,expiryDate:$('customerExpiry').value,durationValue:Number($('customerDurationValue').value),durationUnit:$('customerDurationUnit').value,reminderLeadDays:Number($('customerReminderDays').value),status:$('customerStatus').value,reminderEnabled:$('customerReminderEnabled').checked,notes:$('customerNotes').value};await api(id?`/api/customers/${id}`:'/api/customers',{method:id?'PUT':'POST',body});clearCustomer();await loadCustomers();toast(id?'Cliente actualizado':'Compra registrada')}
+    async function renewCustomer(id){const c=state.customers.find(x=>x.id===id);const date=prompt('Fecha del pago (AAAA-MM-DD):',new Date().toISOString().slice(0,10));if(!date)return;const amount=prompt('Monto pagado en soles:',String(c.pricePen));if(amount===null)return;const d=await api(`/api/customers/${id}/renew`,{method:'POST',body:{paymentDate:date,amount:Number(amount),method:c.paymentMethod}});toast(`Renovado hasta ${d.nextExpiry}`);await loadCustomers()}
 
-<style>
-  :root {
-    color-scheme: dark;
-    --bg: #0b0e12;
-    --panel: #141920;
-    --panel2: #10151b;
-    --border: #2a3441;
-    --text: #edf2f7;
-    --muted: #9aa8b7;
-    --accent: #35c56f;
-    --danger: #e46060;
-    --warning: #f0bb45;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: var(--bg); color: var(--text); }
-  button, input, textarea, select { font: inherit; }
-  button { cursor: pointer; border: 1px solid var(--border); border-radius: 9px; background: #202834; color: var(--text); padding: 10px 14px; }
-  button:hover { filter: brightness(1.12); }
-  button.primary { background: var(--accent); color: #07130b; border-color: var(--accent); font-weight: 700; }
-  button.danger { color: #ffb4b4; border-color: #703b3b; }
-  input, textarea, select { width: 100%; background: #0d1218; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-top: 6px; }
-  textarea { resize: vertical; }
-  label { display: block; margin: 13px 0; color: #dce5ef; }
-  code { display: block; background: #0a1015; border: 1px solid var(--border); padding: 10px; border-radius: 8px; overflow-wrap: anywhere; }
-  hr { border: 0; border-top: 1px solid var(--border); margin: 22px 0; }
-  .hidden { display: none !important; }
-  .muted { color: var(--muted); }
-  .error { color: #ff9090; margin-top: 10px; min-height: 20px; }
-  .brand { font-weight: 800; letter-spacing: .02em; color: var(--accent); }
-  .login-shell { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
-  .login-card { width: min(420px, 100%); background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
-  .login-card h1 { margin: 10px 0; font-size: 25px; }
-  .login-card button { width: 100%; margin-top: 14px; }
-  header { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 22px; background: rgba(11,14,18,.96); border-bottom: 1px solid var(--border); }
-  .header-actions, .actions { display: flex; gap: 8px; flex-wrap: wrap; }
-  .layout { display: grid; grid-template-columns: 220px minmax(0,1fr); min-height: calc(100vh - 70px); }
-  nav { border-right: 1px solid var(--border); padding: 18px 12px; background: var(--panel2); }
-  .nav-btn { width: 100%; text-align: left; margin-bottom: 7px; background: transparent; }
-  .nav-btn.active { background: var(--accent); color: #07130b; border-color: var(--accent); font-weight: 700; }
-  main { padding: 22px; max-width: 1250px; width: 100%; }
-  .tab { display: none; }
-  .tab.active { display: block; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 19px; margin-bottom: 18px; }
-  .panel h2 { margin: 0 0 13px; font-size: 20px; }
-  .grid { display: grid; gap: 18px; }
-  .grid.two { grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-bottom: 18px; }
-  .metric { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 15px; }
-  .metric span { color: var(--muted); display: block; font-size: 13px; }
-  .metric strong { display: block; margin-top: 5px; font-size: 21px; }
-  .form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 16px; }
-  .form-grid .wide { grid-column: 1 / -1; }
-  .check { display: flex; gap: 9px; align-items: center; }
-  .check input { width: auto; margin: 0; }
-  .qr-wrap { min-height: 300px; display: grid; place-items: center; background: white; border-radius: 12px; padding: 12px; margin: 15px 0; }
-  .qr-wrap img { max-width: 100%; width: 330px; }
-  .placeholder { color: #46515d; text-align: center; max-width: 300px; }
-  .events { max-height: 430px; overflow: auto; }
-  .event { border-bottom: 1px solid var(--border); padding: 10px 0; }
-  .event small { color: var(--muted); display: block; margin-top: 3px; }
-  .warning, .info { border: 1px solid #665425; background: #28220f; color: #f5d681; border-radius: 10px; padding: 12px; margin: 12px 0; }
-  .info { border-color: #28546a; background: #102631; color: #a8ddf4; }
-  .section-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-  .cards { display: grid; gap: 10px; }
-  .item-card { border: 1px solid var(--border); border-radius: 10px; padding: 13px; background: #10151b; }
-  .item-card .row { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
-  .item-card h3 { margin: 0 0 5px; }
-  .item-card p { margin: 6px 0; white-space: pre-wrap; }
-  .item-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-  .badge { display: inline-block; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; font-size: 12px; color: var(--muted); margin-right: 5px; }
-  .chat-result { margin-top: 16px; background: #13281c; border: 1px solid #27683f; border-radius: 12px; padding: 17px; white-space: pre-wrap; line-height: 1.5; }
-  .toast { position: fixed; right: 18px; bottom: 18px; max-width: 360px; background: #24303d; border: 1px solid var(--border); border-radius: 10px; padding: 13px 16px; z-index: 20; }
-  @media (max-width: 850px) {
-    .layout { grid-template-columns: 1fr; }
-    nav { border-right: 0; border-bottom: 1px solid var(--border); display: flex; gap: 7px; overflow-x: auto; padding: 10px; }
-    .nav-btn { width: auto; flex: 0 0 auto; margin: 0; }
-    .grid.two, .metrics, .form-grid { grid-template-columns: 1fr; }
-    .form-grid .wide { grid-column: auto; }
-    main { padding: 14px; }
-    header { padding: 12px 14px; }
-  }
-</style>
-
-<script>
-  const $ = (id) => document.getElementById(id);
-  let adminKey = localStorage.getItem('botAdminKey') || '';
-  let state = { status: null, config: null, products: [], faqs: [], documents: [] };
-  let pollTimer = null;
-
-  function toast(message) {
-    $('toast').textContent = message;
-    $('toast').classList.remove('hidden');
-    clearTimeout(toast.timer);
-    toast.timer = setTimeout(() => $('toast').classList.add('hidden'), 3500);
-  }
-
-  async function api(path, options = {}) {
-    const headers = { 'x-admin-key': adminKey, ...(options.headers || {}) };
-    if (options.body && !(options.body instanceof FormData) && typeof options.body !== 'string') {
-      headers['content-type'] = 'application/json';
-      options.body = JSON.stringify(options.body);
-    }
-    const response = await fetch(path, { ...options, headers });
-    const type = response.headers.get('content-type') || '';
-    const payload = type.includes('application/json') ? await response.json() : await response.text();
-    if (!response.ok) throw new Error(payload.error || payload || `Error ${response.status}`);
-    return payload;
-  }
-
-  async function login() {
-    adminKey = $('loginKey').value.trim();
-    try {
-      await api('/api/login', { method: 'POST' });
-      localStorage.setItem('botAdminKey', adminKey);
-      $('login').classList.add('hidden');
-      $('app').classList.remove('hidden');
-      await loadAll();
-      pollTimer = setInterval(loadStatus, 5000);
-    } catch (error) {
-      $('loginError').textContent = error.message;
-    }
-  }
-
-  function setTab(name) {
-    document.querySelectorAll('.nav-btn').forEach((btn) => btn.classList.toggle('active', btn.dataset.tab === name));
-    document.querySelectorAll('.tab').forEach((tab) => tab.classList.toggle('active', tab.id === `tab-${name}`));
-  }
-
-  async function loadAll() {
-    await Promise.all([loadStatus(), loadConfig(), loadProducts(), loadFaqs(), loadDocuments()]);
-  }
-
-  async function loadStatus() {
-    try {
-      const data = await api('/api/status');
-      state.status = data;
-      const r = data.runtime;
-      $('topStatus').textContent = `${r.status}: ${r.detail}`;
-      $('statusValue').textContent = r.status;
-      $('botValue').textContent = r.botEnabled ? 'Activo' : 'Pausado';
-      $('messagesValue').textContent = r.messagesReceived;
-      $('aiRepliesValue').textContent = r.aiReplies;
-      $('statusDetail').textContent = r.detail;
-      $('toggleBotBtn').textContent = r.botEnabled ? 'Pausar bot' : 'Activar bot';
-      $('persistenceWarning').textContent = data.dataPersistentWarning;
-      $('aiKeyStatus').textContent = data.aiKeyConfigured
-        ? 'La clave OPENAI_API_KEY está configurada. Puedes activar la IA.'
-        : 'La clave OPENAI_API_KEY todavía no está configurada en Render. El bot seguirá usando respuestas programadas.';
-      $('qrWrap').innerHTML = r.qrDataUrl
-        ? `<img src="${r.qrDataUrl}" alt="Código QR de WhatsApp">`
-        : `<div class="placeholder">${r.status === 'conectado' ? 'WhatsApp está conectado.' : 'Esperando un código QR o una conexión activa.'}</div>`;
-      $('events').innerHTML = (data.events || []).map((e) =>
-        `<div class="event"><strong>${escapeHtml(e.type)}</strong>: ${escapeHtml(e.text)}<small>${new Date(e.at).toLocaleString()}</small></div>`
-      ).join('') || '<p class="muted">Sin eventos todavía.</p>';
-    } catch (error) {
-      $('topStatus').textContent = error.message;
-    }
-  }
-
-  async function loadConfig() {
-    const data = await api('/api/config');
-    state.config = data.config;
-    Object.entries(data.config).forEach(([key, value]) => {
-      const element = $(key);
-      if (!element) return;
-      if (element.type === 'checkbox') element.checked = Boolean(value);
-      else element.value = value ?? '';
-    });
-  }
-
-  async function saveConfig() {
-    const payload = {
-      businessName: $('businessName').value,
-      hours: $('hours').value,
-      address: $('address').value,
-      mapsUrl: $('mapsUrl').value,
-      aiEnabled: $('aiEnabled').checked,
-      answerMode: $('answerMode').value,
-      aiModel: $('aiModel').value,
-      reasoningEffort: $('reasoningEffort').value,
-      maxOutputTokens: Number($('maxOutputTokens').value),
-      humanPauseMinutes: Number($('humanPauseMinutes').value),
-      systemPrompt: $('systemPrompt').value,
-      menuText: $('menuText').value,
-      fallbackText: $('fallbackText').value,
-      humanText: $('humanText').value,
-    };
-    await api('/api/config', { method: 'PUT', body: payload });
-    $('configMessage').textContent = ' Guardado.';
-    toast('Configuración guardada');
-    setTimeout(() => $('configMessage').textContent = '', 2500);
-  }
-
-  async function loadProducts() {
-    const data = await api('/api/products');
-    state.products = data.products;
-    $('productCount').textContent = `${data.products.length} producto(s)`;
-    $('productList').innerHTML = data.products.map((p) => `
-      <div class="item-card">
-        <div class="row">
-          <div>
-            <h3>${escapeHtml(p.name)}</h3>
-            <span class="badge">${p.active !== false ? 'Activo' : 'Inactivo'}</span>
-            ${p.price ? `<span class="badge">${escapeHtml(p.price)}</span>` : ''}
-            ${p.stock ? `<span class="badge">${escapeHtml(p.stock)}</span>` : ''}
-            <p>${escapeHtml(p.description || '')}</p>
-            ${p.tags ? `<small class="muted">${escapeHtml(p.tags)}</small>` : ''}
-          </div>
-          <div class="item-actions">
-            <button data-product-edit="${p.id}">Editar</button>
-            <button class="danger" data-product-delete="${p.id}">Eliminar</button>
-          </div>
-        </div>
-      </div>
-    `).join('') || '<p class="muted">Todavía no hay productos.</p>';
-  }
-
-  function clearProduct() {
-    ['productId','productName','productPrice','productStock','productDescription','productTags'].forEach((id) => $(id).value = '');
-    $('productActive').checked = true;
-    $('productFormTitle').textContent = 'Agregar producto';
-  }
-
-  function editProduct(id) {
-    const p = state.products.find((item) => item.id === id);
-    if (!p) return;
-    $('productId').value = p.id;
-    $('productName').value = p.name || '';
-    $('productPrice').value = p.price || '';
-    $('productStock').value = p.stock || '';
-    $('productDescription').value = p.description || '';
-    $('productTags').value = p.tags || '';
-    $('productActive').checked = p.active !== false;
-    $('productFormTitle').textContent = 'Editar producto';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  async function saveProduct() {
-    const id = $('productId').value;
-    const body = {
-      name: $('productName').value,
-      price: $('productPrice').value,
-      stock: $('productStock').value,
-      description: $('productDescription').value,
-      tags: $('productTags').value,
-      active: $('productActive').checked,
-    };
-    await api(id ? `/api/products/${id}` : '/api/products', { method: id ? 'PUT' : 'POST', body });
-    clearProduct();
-    await loadProducts();
-    toast('Producto guardado');
-  }
-
-  async function loadFaqs() {
-    const data = await api('/api/faqs');
-    state.faqs = data.faqs;
-    $('faqCount').textContent = `${data.faqs.length} respuesta(s)`;
-    $('faqList').innerHTML = data.faqs.map((f) => `
-      <div class="item-card">
-        <div class="row">
-          <div>
-            <h3>${escapeHtml(f.title)}</h3>
-            <span class="badge">${f.active !== false ? 'Activa' : 'Inactiva'}</span>
-            <p><strong>Activa con:</strong> ${escapeHtml(f.triggers || '')}</p>
-            <p>${escapeHtml(f.answer || '')}</p>
-          </div>
-          <div class="item-actions">
-            <button data-faq-edit="${f.id}">Editar</button>
-            <button class="danger" data-faq-delete="${f.id}">Eliminar</button>
-          </div>
-        </div>
-      </div>
-    `).join('') || '<p class="muted">No hay respuestas.</p>';
-  }
-
-  function clearFaq() {
-    ['faqId','faqTitle','faqTriggers','faqAnswer'].forEach((id) => $(id).value = '');
-    $('faqActive').checked = true;
-    $('faqFormTitle').textContent = 'Agregar respuesta';
-  }
-
-  function editFaq(id) {
-    const f = state.faqs.find((item) => item.id === id);
-    if (!f) return;
-    $('faqId').value = f.id;
-    $('faqTitle').value = f.title || '';
-    $('faqTriggers').value = f.triggers || '';
-    $('faqAnswer').value = f.answer || '';
-    $('faqActive').checked = f.active !== false;
-    $('faqFormTitle').textContent = 'Editar respuesta';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  async function saveFaq() {
-    const id = $('faqId').value;
-    const body = {
-      title: $('faqTitle').value,
-      triggers: $('faqTriggers').value,
-      answer: $('faqAnswer').value,
-      active: $('faqActive').checked,
-    };
-    await api(id ? `/api/faqs/${id}` : '/api/faqs', { method: id ? 'PUT' : 'POST', body });
-    clearFaq();
-    await loadFaqs();
-    toast('Respuesta guardada');
-  }
-
-  async function loadDocuments() {
-    const data = await api('/api/documents');
-    state.documents = data.documents;
-    $('documentList').innerHTML = data.documents.map((d) => `
-      <div class="item-card">
-        <div class="row">
-          <div>
-            <h3>${escapeHtml(d.title)}</h3>
-            <span class="badge">${escapeHtml(d.type)}</span>
-            <span class="badge">${d.chunks} fragmentos</span>
-            <p class="muted">${Number(d.characters || 0).toLocaleString()} caracteres · ${new Date(d.createdAt).toLocaleString()}</p>
-          </div>
-          <button class="danger" data-document-delete="${d.id}">Eliminar</button>
-        </div>
-      </div>
-    `).join('') || '<p class="muted">Todavía no importaste información.</p>';
-  }
-
-  async function uploadPdf() {
-    const file = $('pdfFile').files[0];
-    if (!file) throw new Error('Selecciona un PDF.');
-    const form = new FormData();
-    form.append('pdf', file);
-    form.append('title', $('pdfTitle').value);
-    $('pdfMessage').textContent = 'Procesando PDF…';
-    const data = await api('/api/knowledge/pdf', { method: 'POST', body: form });
-    $('pdfMessage').textContent = `Importado: ${data.document.chunks} fragmentos.`;
-    $('pdfFile').value = '';
-    await loadDocuments();
-    toast('PDF importado');
-  }
-
-  async function testBot() {
-    $('testResult').classList.remove('hidden');
-    $('testResult').textContent = 'Pensando…';
-    const data = await api('/api/test', { method: 'POST', body: { message: $('testMessage').value } });
-    $('testResult').textContent = `[${data.kind}]\n\n${data.answer}`;
-  }
-
-  function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, (char) => ({
-      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
-    })[char]);
-  }
-
-  async function run(action) {
-    try { await action(); }
-    catch (error) { toast(error.message); }
-  }
-
-  $('loginBtn').addEventListener('click', login);
-  $('loginKey').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
-  document.querySelectorAll('.nav-btn').forEach((btn) => btn.addEventListener('click', () => setTab(btn.dataset.tab)));
-  $('refreshBtn').addEventListener('click', () => run(loadAll));
-  $('logoutPanelBtn').addEventListener('click', () => {
-    localStorage.removeItem('botAdminKey');
-    location.reload();
-  });
-  $('saveConfigBtn').addEventListener('click', () => run(saveConfig));
-  $('toggleBotBtn').addEventListener('click', () => run(async () => {
-    await api('/api/toggle', { method: 'POST', body: { enabled: !state.status.runtime.botEnabled } });
-    await loadStatus();
-  }));
-  $('restartBtn').addEventListener('click', () => run(async () => {
-    await api('/api/restart', { method: 'POST' }); toast('Reinicio solicitado');
-  }));
-  $('waLogoutBtn').addEventListener('click', () => {
-    if (confirm('¿Cerrar la sesión de WhatsApp y generar un QR nuevo?')) run(async () => {
-      await api('/api/logout', { method: 'POST' }); toast('Sesión cerrada');
-    });
-  });
-  $('saveProductBtn').addEventListener('click', () => run(saveProduct));
-  $('cancelProductBtn').addEventListener('click', clearProduct);
-  $('bulkProductsBtn').addEventListener('click', () => run(async () => {
-    const data = await api('/api/products/bulk', { method: 'POST', body: { text: $('bulkProducts').value } });
-    $('bulkProducts').value = ''; await loadProducts(); toast(`${data.count} productos importados`);
-  }));
-  $('productList').addEventListener('click', (e) => {
-    const edit = e.target.dataset.productEdit;
-    const del = e.target.dataset.productDelete;
-    if (edit) editProduct(edit);
-    if (del && confirm('¿Eliminar este producto?')) run(async () => {
-      await api(`/api/products/${del}`, { method: 'DELETE' }); await loadProducts();
-    });
-  });
-  $('saveFaqBtn').addEventListener('click', () => run(saveFaq));
-  $('cancelFaqBtn').addEventListener('click', clearFaq);
-  $('faqList').addEventListener('click', (e) => {
-    const edit = e.target.dataset.faqEdit;
-    const del = e.target.dataset.faqDelete;
-    if (edit) editFaq(edit);
-    if (del && confirm('¿Eliminar esta respuesta?')) run(async () => {
-      await api(`/api/faqs/${del}`, { method: 'DELETE' }); await loadFaqs();
-    });
-  });
-  $('uploadPdfBtn').addEventListener('click', () => run(uploadPdf));
-  $('saveKnowledgeBtn').addEventListener('click', () => run(async () => {
-    await api('/api/knowledge/text', { method: 'POST', body: {
-      title: $('knowledgeTitle').value, text: $('knowledgeText').value
-    }});
-    $('knowledgeTitle').value = ''; $('knowledgeText').value = '';
-    await loadDocuments(); toast('Información guardada');
-  }));
-  $('documentList').addEventListener('click', (e) => {
-    const id = e.target.dataset.documentDelete;
-    if (id && confirm('¿Eliminar este documento y su conocimiento?')) run(async () => {
-      await api(`/api/documents/${id}`, { method: 'DELETE' }); await loadDocuments();
-    });
-  });
-  $('testBtn').addEventListener('click', () => run(testBot));
-  $('exportBtn').addEventListener('click', async () => {
-    const response = await fetch('/api/export', { headers: { 'x-admin-key': adminKey } });
-    if (!response.ok) return toast('No se pudo crear el respaldo');
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url; link.download = `bot-backup-${new Date().toISOString().slice(0,10)}.json`; link.click();
-    URL.revokeObjectURL(url);
-  });
-  $('importBtn').addEventListener('click', () => run(async () => {
-    const file = $('backupFile').files[0];
-    if (!file) throw new Error('Selecciona un archivo JSON.');
-    const database = JSON.parse(await file.text());
-    await api('/api/import', { method: 'POST', body: { database } });
-    await loadAll(); toast('Respaldo restaurado');
-  }));
-
-  if (adminKey) {
-    $('loginKey').value = adminKey;
-    login();
-  }
-</script>
+    $('loginBtn').onclick=login;$('loginKey').onkeydown=e=>{if(e.key==='Enter')login()};document.querySelectorAll('.nav-btn').forEach(b=>b.onclick=()=>tab(b.dataset.tab));$('refreshBtn').onclick=()=>run(loadAll);$('panelLogoutBtn').onclick=()=>{sessionStorage.removeItem('jadrixAdminKey');location.reload()};
+    $('toggleBotBtn').onclick=()=>run(async()=>{await api('/api/toggle',{method:'POST',body:{enabled:!state.status.runtime.botEnabled}});await loadStatus()});$('restartBtn').onclick=()=>run(async()=>{await api('/api/restart',{method:'POST'});toast('Reinicio solicitado')});$('waLogoutBtn').onclick=()=>{if(confirm('¿Cerrar la sesión de WhatsApp y pedir un QR nuevo?'))run(async()=>{await api('/api/logout',{method:'POST'});toast('Sesión cerrada')})};
+    ['saveCatalogBtn','saveAiBtn','savePaymentConfigBtn','saveAudioConfigBtn','saveBillingConfigBtn'].forEach(id=>$(id).onclick=()=>run(saveConfig));
+    $('quoteBtn').onclick=()=>run(async()=>{const d=await api('/api/quote',{method:'POST',body:{pricePen:Number($('quotePen').value)}});$('quoteResult').classList.remove('hidden');$('quoteResult').textContent=`S/${d.pricePen.toFixed(2)} = ${d.usdt.toFixed(2)} USDT\nTipo de cambio: ${d.rate}\nRecargo: ${d.surchargePct}%`});
+    $('saveProductBtn').onclick=()=>run(saveProduct);$('clearProductBtn').onclick=clearProduct;$('bulkProductsBtn').onclick=()=>run(async()=>{const d=await api('/api/products/bulk',{method:'POST',body:{text:$('bulkProducts').value}});$('bulkProducts').value='';await loadProducts();toast(`${d.count} productos importados`)});$('productSearch').oninput=renderProducts;$('showActiveOnlyBtn').onclick=()=>{activeOnly=!activeOnly;$('showActiveOnlyBtn').textContent=activeOnly?'Mostrar todos':'Solo disponibles';renderProducts()};$('productList').onclick=e=>{if(e.target.dataset.pe)editProduct(e.target.dataset.pe);if(e.target.dataset.pd&&confirm('¿Eliminar este producto?'))run(async()=>{await api(`/api/products/${e.target.dataset.pd}`,{method:'DELETE'});await loadProducts()})};
+    $('saveFaqBtn').onclick=()=>run(saveFaq);$('clearFaqBtn').onclick=clearFaq;$('faqList').onclick=e=>{if(e.target.dataset.fe)editFaq(e.target.dataset.fe);if(e.target.dataset.fd&&confirm('¿Eliminar esta respuesta?'))run(async()=>{await api(`/api/faqs/${e.target.dataset.fd}`,{method:'DELETE'});await loadFaqs()})};
+    $('uploadPdfBtn').onclick=()=>run(async()=>{const f=$('pdfFile').files[0];if(!f)throw new Error('Selecciona un PDF');const form=new FormData();form.append('pdf',f);form.append('title',$('pdfTitle').value);$('pdfMessage').textContent='Procesando…';const d=await api('/api/knowledge/pdf',{method:'POST',body:form});$('pdfMessage').textContent=`Importado: ${d.document.chunks} fragmentos`;await loadDocuments()});$('saveKnowledgeBtn').onclick=()=>run(async()=>{await api('/api/knowledge/text',{method:'POST',body:{title:$('knowledgeTitle').value,text:$('knowledgeText').value}});$('knowledgeTitle').value='';$('knowledgeText').value='';await loadDocuments();toast('Información guardada')});$('documentList').onclick=e=>{if(e.target.dataset.dd&&confirm('¿Eliminar este documento?'))run(async()=>{await api(`/api/documents/${e.target.dataset.dd}`,{method:'DELETE'});await loadDocuments()})};
+    $('uploadAudioBtn').onclick=()=>run(async()=>{const f=$('audioFile').files[0];if(!f)throw new Error('Selecciona un audio');const form=new FormData();form.append('audio',f);form.append('title',$('audioTitle').value);form.append('triggers',$('audioTriggers').value);form.append('productSeedKeys',$('audioProductKeys').value);form.append('ptt',String($('audioPtt').checked));$('audioMessage').textContent='Subiendo…';await api('/api/audios',{method:'POST',body:form});$('audioMessage').textContent='Audio guardado';$('audioFile').value='';await loadAudios()});$('audioList').onclick=e=>{const id=e.target.dataset.at||e.target.dataset.aa||e.target.dataset.ad;if(!id)return;if(e.target.dataset.at)run(async()=>{const phone=$('audioTestPhone').value;if(!phone)throw new Error('Escribe el número de prueba');await api(`/api/audios/${id}/test`,{method:'POST',body:{phone}});toast('Audio enviado')});if(e.target.dataset.aa)run(async()=>{const a=state.audios.find(x=>x.id===id);await api(`/api/audios/${id}`,{method:'PUT',body:{...a,active:!a.active}});await loadAudios()});if(e.target.dataset.ad&&confirm('¿Eliminar este audio?'))run(async()=>{await api(`/api/audios/${id}`,{method:'DELETE'});await loadAudios()})};
+    $('customerProduct').onchange=selectCustomerProduct;$('saveCustomerBtn').onclick=()=>run(saveCustomer);$('clearCustomerBtn').onclick=clearCustomer;$('customerSearch').oninput=renderCustomers;$('customerFilterBtn').onclick=()=>{const seq=['all','active','expiring','expired','paused'];customerFilter=seq[(seq.indexOf(customerFilter)+1)%seq.length];$('customerFilterBtn').textContent=customerFilter==='all'?'Todos':customerFilter;renderCustomers()};$('customerTable').onclick=e=>{const id=e.target.dataset.ce||e.target.dataset.cr||e.target.dataset.cn||e.target.dataset.cd;if(!id)return;if(e.target.dataset.ce)editCustomer(id);if(e.target.dataset.cr)run(async()=>{await api(`/api/customers/${id}/reminder`,{method:'POST'});toast('Recordatorio enviado');await loadCustomers()});if(e.target.dataset.cn)run(()=>renewCustomer(id));if(e.target.dataset.cd&&confirm('¿Eliminar este cliente?'))run(async()=>{await api(`/api/customers/${id}`,{method:'DELETE'});await loadCustomers()})};$('checkBillingBtn').onclick=()=>run(async()=>{const d=await api('/api/billing/check',{method:'POST'});toast(d.disabled?'La automatización está desactivada':`Revisados ${d.checked||0}; enviados ${d.sent||0}`);await loadCustomers()});
+    $('testBtn').onclick=()=>run(async()=>{$('testResult').classList.remove('hidden');$('testResult').textContent='Pensando…';const d=await api('/api/test',{method:'POST',body:{message:$('testMessage').value}});$('testResult').textContent=`[${d.kind}${d.product?` · ${d.product}`:''}]\n\n${d.answer}`});
+    $('exportBtn').onclick=async()=>{const r=await fetch('/api/export',{headers:{'x-admin-key':key}});if(!r.ok)return toast('No se pudo descargar');const blob=await r.blob(),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=`jadrixservs-v4-${new Date().toISOString().slice(0,10)}.json`;a.click();URL.revokeObjectURL(u)};$('importBtn').onclick=()=>run(async()=>{const f=$('backupFile').files[0];if(!f)throw new Error('Selecciona un JSON');await api('/api/import',{method:'POST',body:{database:JSON.parse(await f.text())}});await loadAll();toast('Respaldo restaurado')});
+    if(key){$('loginKey').value=key;login()}else clearCustomer();
+  </script>
+</body>
+</html>

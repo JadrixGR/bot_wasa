@@ -1,93 +1,53 @@
-# Bot WhatsApp QR + Panel + IA — versión 3
+# JadrixServs Bot v4
 
-Esta versión agrega un centro de control en la misma URL de Render.
+Bot de WhatsApp no oficial conectado por QR con Baileys, panel web, catálogo, respuestas con OpenAI, productos, PDF, audios, clientes y recordatorios de renovación.
 
-## Funciones
+## Novedades de v4
 
-- Conexión por QR con Baileys.
-- Estado, QR, reinicio y cierre de sesión.
-- Activar o pausar respuestas.
-- Editar nombre, horario, dirección y mensajes.
-- Registrar productos, precios, stock, descripción y palabras clave.
-- Importar muchos productos pegando una lista.
-- Crear comandos y respuestas rápidas.
-- Cargar PDF con catálogo, políticas o preguntas frecuentes.
-- Pegar información directamente.
-- Responder con OpenAI usando productos, FAQs y PDF como conocimiento.
-- Probar respuestas desde el panel.
-- Descargar y restaurar respaldo JSON.
+- Los tres mensajes iniciales configurados desde el panel.
+- Base inicial con los productos y condiciones recopiladas.
+- Productos no disponibles marcados como inactivos.
+- Reglas de DICloak, privacidad, soporte, pagos y recomendaciones.
+- Subida de audio explicativo y envío automático por palabra o producto.
+- Conversión PEN a USDT con recargo y redondeo hacia arriba.
+- Registro de compras, vencimientos y renovaciones sin perder días.
+- Recordatorios 1 o 2 días antes, activados manualmente.
+- Historial de compras, renovaciones y recordatorios.
+- Importación de PDF y texto.
+- Simulador de respuestas.
+- Respaldo JSON.
 
-## Importante: no es entrenamiento tradicional
+## Actualización
 
-El PDF y los productos forman una base de conocimiento. Cuando llega una pregunta, el bot busca la información relevante y se la entrega a la IA. Esto permite actualizarlo desde el panel sin reentrenar un modelo.
-
-## Actualizar tu repositorio actual
-
-1. Extrae este ZIP.
-2. Copia todos los archivos dentro de tu carpeta actual del repositorio.
-3. Reemplaza los archivos existentes, pero no borres la carpeta oculta `.git`.
-4. Ejecuta:
+Copia los archivos sobre tu repositorio actual sin borrar `.git` y ejecuta:
 
 ```powershell
 git add .
-git commit -m "Agregar panel de productos PDF e IA"
+git commit -m "Actualizar JadrixServs Bot a version 4"
 git push
 ```
 
-Render iniciará un despliegue automático.
-
-## Configurar la IA
-
-En Render abre:
-
-`whatsapp-qr-render-bot → Environment`
-
-Agrega:
+## Variables de Render
 
 ```text
-OPENAI_API_KEY = tu_clave_secreta
-OPENAI_MODEL = gpt-5.6-luna
+ADMIN_KEY=tu_clave_del_panel
+OPENAI_API_KEY=tu_clave_de_api_opcional
+OPENAI_MODEL=gpt-5-mini
+SESSION_PATH=/data/baileys_auth
+DATA_DIR=/data/bot-control
+WA_LOG_LEVEL=silent
 ```
 
-La clave se configura únicamente en Render. No la escribas en GitHub ni en el panel del navegador.
+La API de OpenAI se factura por separado de ChatGPT.
 
-Después pulsa `Save and deploy`.
+## Recordatorios
 
-La API de OpenAI se cobra por separado de ChatGPT Plus.
-
-## Uso del panel
-
-Entra a tu URL de Render y usa la ADMIN_KEY.
-
-### Productos
-
-Puedes registrar cada producto individualmente o importar líneas con este formato:
-
-```text
-Nombre | Precio | Stock | Descripción | palabras clave
-Laptop Pro | S/ 2500 | 5 unidades | Laptop para oficina | laptop, computadora
-```
-
-### Respuestas rápidas
-
-Agrega palabras separadas por comas:
-
-```text
-delivery, envío, envios, hacen entregas
-```
-
-y escribe la respuesta correspondiente.
-
-### PDF
-
-Carga un PDF con texto seleccionable. Los PDF escaneados como imagen no se pueden leer sin OCR.
-
-### Modos
-
-- `Híbrido`: respuestas rápidas cuando existe una coincidencia clara; IA para las demás preguntas.
-- `IA`: usa IA para casi todo, salvo la derivación a asesor.
-- `Solo reglas`: no consume la API de IA.
+La automatización queda desactivada inicialmente. Actívala desde `Clientes y cobros` cuando los registros estén revisados. El proceso comprueba los vencimientos cada 10 minutos, pero solo envía después de la hora configurada y una vez por periodo.
 
 ## Persistencia
 
-Render gratuito usa almacenamiento temporal. Guarda respaldos JSON frecuentemente. Para conservar permanentemente la sesión y la configuración necesitas un disco persistente o una base de datos externa.
+Render gratis usa almacenamiento temporal y puede suspender el servicio. Para conservar audios, clientes, configuración y sesión, usa un servicio con disco persistente. Descarga respaldos JSON con frecuencia.
+
+## Aviso
+
+La conexión por Baileys controla WhatsApp Web y no es una API oficial. Úsala con un número de prueba, sin spam, y cumple las políticas de WhatsApp y de los proveedores de los servicios ofrecidos.
