@@ -5,226 +5,136 @@ const assert = require("node:assert/strict");
 const { BotEngine, normalizeText } = require("../src/bot-engine");
 const { createInitialData } = require("../src/defaults");
 
-function makeHarness(conversation = {}, ai = null) {
+function makeHarness(conversation = {}, registeredClient = null) {
   const data = createInitialData();
   const sent = [];
+  const logs = [];
+  const conversations = {
+    "51900000000@s.whatsapp.net": conversation
+  };
   const store = {
     data,
-    getConversation: () => ({ ...conversation }),
-    updateConversation: (_chatId, patch) => Object.assign(conversation, patch),
+    getConversation: (chatId) => ({ ...(conversations[chatId] || {}) }),
+    updateConversation: (chatId, patch) => {
+      conversations[chatId] ||= {};
+      return Object.assign(conversations[chatId], patch);
+    },
     getSettings: () => structuredClone(data.settings),
-    getKnowledgeBase: () => structuredClone(data.knowledgeBase),
-    getMedia: (kind) => data.media[kind],
-    addLog: () => undefined,
+    findClientByWhatsApp: () => registeredClient,
+    addLog: (type, message, metadata) =>
+      logs.push({ type, message, metadata }),
     save: () => undefined
   };
   const engine = new BotEngine({
     store,
-    ai,
-    sendText: async (_chatId, text) => sent.push({ type: "text", text }),
-    sendMedia: async (_chatId, filePath) => sent.push({ type: "media", filePath }),
-    beginTyping: async () => {
-      sent.push({ type: "typing" });
-      return async () => sent.push({ type: "typing-stop" });
-    }
+    sendText: async (_chatId, text) => sent.push(text)
   });
-  return { engine, sent, conversation };
+  return { engine, sent, logs, conversation, conversations };
 }
 
 test("normaliza acentos y signos", () => {
   assert.equal(normalizeText("¡RENOVACIÓN, por favor!"), "renovacion por favor");
 });
 
-test("un saludo recibe una sola respuesta corta, sin catálogo", async () => {
-  const { engine, sent } = makeHarness();
+test("el primer mensaje de cualquier contacto nuevo recibe exactamente la secuencia de tres mensajes", async () => {
+  const { engine, sent, conversation } = makeHarness();
   const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "Hola"
+    chatId: "51900000000@s.whatsapp.net",
+    body: "Hola, vi su anuncio",
+    fromName: "Ana"
   });
-  assert.equal(result.action, "greeting");
-  assert.equal(sent.length, 1);
-  assert.doesNotMatch(sent[0].text, /Claude Pro/);
-  assert.doesNotMatch(sent[0].text, /Plan Pro/);
-});
 
-test("la consulta del Super Combo IA 2026 envía exactamente los tres mensajes separados", async () => {
-  const { engine, sent } = makeHarness();
-  const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "¿Cuál es el precio del Super Combo IA 2026?"
-  });
-  const texts = sent.filter((item) => item.type === "text");
   assert.equal(result.action, "welcome-sequence");
   assert.equal(result.messages, 3);
-  assert.equal(texts.length, 3);
-  assert.ok(texts[0].text.startsWith("🚀 JADRIXSERVS 🚀"));
-  assert.ok(texts[1].text.startsWith("💼 COMBOS ESPECIALES - Todo en 1"));
-  assert.ok(texts[2].text.startsWith("✅ `Entrega inmediata`"));
-  assert.ok(texts[2].text.endsWith("JadrixServs 💪"));
+  assert.equal(sent.length, 3);
+  assert.ok(sent[0].startsWith("🚀 JADRIXSERVS 🚀"));
+  assert.ok(sent[1].startsWith("💼 COMBOS ESPECIALES - Todo en 1"));
+  assert.ok(sent[2].startsWith("✅ `Entrega inmediata`"));
+  assert.equal(conversation.welcomeMessagesSent, 3);
+  assert.ok(conversation.welcomeSequenceSentAt);
 });
 
-test("responde con todos los detalles de ChatGPT Pro", async () => {
-  const { engine, sent } = makeHarness();
-  const result = await engine.handleIncoming({ chatId: "51900000000@c.us", body: "Quiero ChatGPT Pro" });
-  assert.equal(result.action, "product");
-  assert.match(sent[0].text, /S\/45/);
-  assert.match(sent[0].text, /DICloak/);
-  assert.match(sent[0].text, /celular/);
-});
-
-test("si preguntan solo el precio, responde solo precio y duración", async () => {
-  const { engine, sent } = makeHarness();
-  await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "¿Cuánto cuesta Claude Pro?"
-  });
-  assert.equal(sent.length, 1);
-  assert.match(sent[0].text, /S\/25/);
-  assert.doesNotMatch(sent[0].text, /otros usuarios/i);
-  assert.doesNotMatch(sent[0].text, /pagar/i);
-});
-
-test("distingue ChatGPT Plus Personal de ChatGPT Plus", async () => {
-  const { engine, sent } = makeHarness();
-  const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "Quiero ChatGPT Plus Personal"
-  });
-  assert.equal(result.id, "chatgpt-plus-personal");
-  assert.match(sent[0].text, /S\/30/);
-});
-
-test("explica que la renovación anticipada no pierde días", async () => {
-  const { engine, sent } = makeHarness();
-  const result = await engine.handleIncoming({ chatId: "51900000000@c.us", body: "¿Puedo renovar antes?" });
-  assert.equal(result.action, "trained");
-  assert.match(sent[0].text, /sin perder días/i);
-  assert.match(sent[0].text, /fecha de vencimiento actual/i);
-});
-
-test("usa el entrenamiento local sin llamar a OpenAI", async () => {
-  let aiCalls = 0;
-  const fakeAi = {
-    getStatus: () => ({ enabled: true, model: "test" }),
-    answer: async () => {
-      aiCalls += 1;
-      return "No debería usarse.";
-    }
-  };
-  const { engine, sent } = makeHarness({}, fakeAi);
-  const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "¿Cuál es mejor ChatGPT o Gemini?"
-  });
-  assert.equal(result.action, "trained");
-  assert.equal(aiCalls, 0);
-  assert.equal(sent.filter((item) => item.type === "text").length, 1);
-  assert.match(sent[0].text, /uso general te recomiendo ChatGPT/i);
-});
-
-test("una pregunta por combo personalizado recibe solo la respuesta entrenada", async () => {
-  const { engine, sent } = makeHarness();
-  const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "¿Puedo armar mi combo personalizado?"
-  });
-  assert.equal(result.action, "trained");
-  assert.equal(sent.length, 1);
-  assert.match(sent[0].text, /indícame qué servicios/i);
-  assert.doesNotMatch(sent[0].text, /Plan Pro/i);
-});
-
-test("recuerda el producto para responder una pregunta corta de seguimiento", async () => {
+test("después de la bienvenida no vuelve a responder mensajes entrantes", async () => {
   const conversation = {};
   const { engine, sent } = makeHarness(conversation);
+
   await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "Quiero Claude Pro"
+    chatId: "51900000000@s.whatsapp.net",
+    body: "¿Cuál es el precio del Super Combo IA 2026?"
   });
-  const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "¿Funciona en celular?"
+  const second = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "Quiero ChatGPT Pro"
   });
-  assert.equal(result.action, "product-followup");
-  assert.equal(result.id, "claude-pro");
-  assert.match(sent.at(-1).text, /celular.*laptop/i);
+
+  assert.equal(second.action, "welcome-already-sent");
+  assert.equal(sent.length, 3);
 });
 
-test("al pedir asesor pausa las respuestas automáticas", async () => {
-  const { engine, conversation } = makeHarness();
-  const result = await engine.handleIncoming({ chatId: "51900000000@c.us", body: "Quiero un asesor" });
-  assert.equal(result.action, "human");
-  assert.equal(conversation.paused, true);
-});
-
-test("al preguntar cómo pagar, primero pregunta el país y no envía ambos bloques", async () => {
-  const { engine, sent } = makeHarness();
-  const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "¿Cómo puedo pagar?"
+test("la bienvenida no se repite si WhatsApp alterna entre LID y número", async () => {
+  const { engine, sent, conversations } = makeHarness();
+  await engine.handleIncoming({
+    chatId: "100000000000@lid",
+    alternateChatId: "51900000000@s.whatsapp.net",
+    body: "Hola"
   });
-  assert.equal(result.action, "payment-country");
-  assert.equal(sent.length, 1);
-  assert.match(sent[0].text, /Perú o desde otro país/);
-  assert.doesNotMatch(sent[0].text, /921/);
-  assert.doesNotMatch(sent[0].text, /1205380212/);
-});
-
-test("si responde Perú tras la pregunta de pago, envía solo el método local", async () => {
-  const { engine, sent } = makeHarness({ paymentCountryRequested: true });
-  const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "Perú"
+  const second = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    alternateChatId: "100000000000@lid",
+    body: "¿Siguen disponibles?"
   });
-  assert.equal(result.action, "peru-payment");
-  assert.equal(sent.length, 1);
-  assert.match(sent[0].text, /Yape/);
-  assert.doesNotMatch(sent[0].text, /Binance/i);
+
+  assert.equal(second.action, "welcome-already-sent");
+  assert.equal(sent.length, 3);
+  assert.ok(conversations["100000000000@lid"].welcomeSequenceSentAt);
+  assert.ok(
+    conversations["51900000000@s.whatsapp.net"].welcomeSequenceSentAt
+  );
 });
 
-test("al pedir precios envía únicamente el catálogo solicitado", async () => {
-  const { engine, sent } = makeHarness();
-  const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "Precios"
-  });
-  assert.equal(result.action, "catalog");
-  assert.equal(sent.length, 1);
-  assert.match(sent[0].text, /ChatGPT Pro/);
-});
-
-test("usa OpenAI solo como respaldo para una pregunta no prevista", async () => {
-  const fakeAi = {
-    getStatus: () => ({ enabled: true, model: "test" }),
-    answer: async () => "La respuesta breve basada en el entrenamiento."
+test("un cliente registrado no recibe la bienvenida al responder un recordatorio", async () => {
+  const client = {
+    id: "cliente-1",
+    name: "Ana",
+    whatsapp: "51900000000"
   };
-  const { engine, sent } = makeHarness({}, fakeAi);
+  const { engine, sent, conversation } = makeHarness({}, client);
   const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "¿Puedo usarlo durante un viaje?"
+    chatId: "100000000000@lid",
+    alternateChatId: "51900000000@s.whatsapp.net",
+    body: "Sí, mañana renuevo"
   });
-  assert.equal(result.action, "ai");
-  assert.equal(sent.filter((item) => item.type === "text").length, 1);
-  assert.match(sent.find((item) => item.type === "text").text, /respuesta breve/);
-  assert.equal(sent[0].type, "typing");
+
+  assert.equal(result.action, "registered-client");
+  assert.equal(result.clientId, "cliente-1");
+  assert.equal(sent.length, 0);
+  assert.equal(conversation.registeredClientId, "cliente-1");
 });
 
-test("si OpenAI no tiene saldo, responde con el fallback local y no expone el error 429", async () => {
-  const fakeAi = {
-    getStatus: () => ({ enabled: true, model: "test" }),
-    answer: async () => {
-      const error = new Error("La cuenta de API no tiene saldo.");
-      error.code = "quota";
-      throw error;
-    }
-  };
-  const { engine, sent } = makeHarness({}, fakeAi);
+test("si la conexión se corta durante la bienvenida, continúa con los mensajes pendientes", async () => {
+  const conversation = { welcomeMessagesSent: 1 };
+  const { engine, sent } = makeHarness(conversation);
   const result = await engine.handleIncoming({
-    chatId: "51900000000@c.us",
-    body: "¿Tienen una promoción para estudiantes?"
+    chatId: "51900000000@s.whatsapp.net",
+    body: "Hola nuevamente"
   });
-  assert.equal(result.action, "fallback");
-  const reply = sent.filter((item) => item.type === "text").at(-1).text;
-  assert.doesNotMatch(reply, /429|quota|billing/i);
-  assert.match(reply, /asesor de JadrixServs/i);
+
+  assert.equal(result.action, "welcome-resumed");
+  assert.equal(result.messages, 2);
+  assert.equal(sent.length, 2);
+  assert.ok(sent[0].startsWith("💼 COMBOS ESPECIALES - Todo en 1"));
+  assert.ok(sent[1].startsWith("✅ `Entrega inmediata`"));
+});
+
+test("un archivo como primer contacto también recibe únicamente los tres mensajes iniciales", async () => {
+  const { engine, sent, conversation } = makeHarness();
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    hasMedia: true,
+    body: ""
+  });
+
+  assert.equal(result.action, "welcome-sequence");
+  assert.equal(sent.length, 3);
+  assert.equal(conversation.lastInboundHadMedia, true);
 });

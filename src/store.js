@@ -6,6 +6,15 @@ const crypto = require("node:crypto");
 const { createInitialData, defaultSettings } = require("./defaults");
 const { calculateRenewal, todayInTimeZone } = require("./date-utils");
 
+function normalizeWhatsAppDigits(value) {
+  const localPart = String(value || "")
+    .split("@")[0]
+    .split(":")[0];
+  let digits = localPart.replace(/\D/g, "");
+  if (digits.length === 9) digits = `51${digits}`;
+  return digits;
+}
+
 class JsonStore {
   constructor(dataDir) {
     this.dataDir = path.resolve(dataDir);
@@ -25,6 +34,9 @@ class JsonStore {
       const parsed = JSON.parse(fs.readFileSync(this.filePath, "utf8"));
       const initial = createInitialData();
       const isPreTrainingVersion = Number(parsed.version || 0) < 4.3;
+      const isUpgrade = Number(parsed.version || 0) < initial.version;
+      const migratedAt = new Date().toISOString();
+      const previousConversations = parsed.conversations || {};
       const migrated = {
         ...initial,
         ...parsed,
@@ -37,17 +49,47 @@ class JsonStore {
                 welcomeTriggers: defaultSettings.welcomeTriggers,
                 greetingMessages: structuredClone(defaultSettings.greetingMessages)
               }
-            : {})
+            : {}),
+          inboundMode: "welcome_once"
         },
         media: { ...initial.media, ...(parsed.media || {}) },
         knowledgeBase: Array.isArray(parsed.knowledgeBase)
           ? parsed.knowledgeBase
           : initial.knowledgeBase,
-        clients: Array.isArray(parsed.clients) ? parsed.clients : [],
+        clients: Array.isArray(parsed.clients)
+          ? parsed.clients.map((client) => ({
+              ...client,
+              accountReference: String(client.accountReference || ""),
+              reminderDays: 2,
+              autoReminder:
+                client.autoReminder === undefined
+                  ? true
+                  : Boolean(client.autoReminder),
+              autoCharge: Boolean(client.autoCharge)
+            }))
+          : [],
         logs: Array.isArray(parsed.logs) ? parsed.logs : [],
-        conversations: parsed.conversations || {}
+        conversations: Object.fromEntries(
+          Object.entries(previousConversations).map(([chatId, value]) => {
+            const conversation =
+              value && typeof value === "object" ? value : {};
+            return [
+              chatId,
+              isUpgrade && !conversation.welcomeSequenceSentAt
+                ? {
+                    ...conversation,
+                    welcomeMessagesSent: 3,
+                    welcomeSequenceSentAt:
+                      conversation.lastInboundAt ||
+                      conversation.updatedAt ||
+                      migratedAt
+                  }
+                : conversation
+            ];
+          })
+        )
       };
-      if (isPreTrainingVersion) this.#write(migrated);
+      if (isUpgrade) this.#write(migrated);
       return migrated;
     } catch (error) {
       const backup = `${this.filePath}.corrupt-${Date.now()}`;
@@ -79,6 +121,7 @@ class JsonStore {
   updateSettings(patch) {
     const allowed = [
       "businessName",
+      "inboundMode",
       "shortGreeting",
       "welcomeTriggers",
       "peruPayment",
@@ -96,7 +139,13 @@ class JsonStore {
           if (!Array.isArray(patch[key]) || patch[key].length !== 3) {
             throw new Error("El saludo debe contener exactamente 3 mensajes.");
           }
-          this.data.settings[key] = patch[key].map(String);
+          const messages = patch[key].map((message) =>
+            String(message || "").trim()
+          );
+          if (messages.some((message) => !message)) {
+            throw new Error("Los 3 mensajes de bienvenida son obligatorios.");
+          }
+          this.data.settings[key] = messages;
         } else {
           this.data.settings[key] = String(patch[key]);
         }
@@ -164,6 +213,18 @@ class JsonStore {
     return this.data.clients.find((client) => client.id === id) || null;
   }
 
+  findClientByWhatsApp(...values) {
+    const candidates = new Set(values.map(normalizeWhatsAppDigits).filter(Boolean));
+    if (!candidates.size) return null;
+    return (
+      this.data.clients.find(
+        (client) =>
+          !client.archived &&
+          candidates.has(normalizeWhatsAppDigits(client.whatsapp))
+      ) || null
+    );
+  }
+
   createClient(input) {
     const now = new Date().toISOString();
     const client = this.#normalizeClient({
@@ -173,7 +234,9 @@ class JsonStore {
       archived: false,
       lastReminderKey: null,
       lastChargeKey: null,
-      ...input
+      ...input,
+      autoReminder: input.autoReminder === undefined ? true : input.autoReminder,
+      autoCharge: input.autoCharge === undefined ? false : input.autoCharge
     });
     this.data.clients.push(client);
     this.addLog("client", `Cliente registrado: ${client.name}`, { clientId: client.id });
@@ -200,7 +263,10 @@ class JsonStore {
     return this.updateClient(id, { archived: true, status: "archivado" });
   }
 
-  renewClient(id, { paymentDate, termMonths = 1, price, paymentMethod, notes }) {
+  renewClient(
+    id,
+    { paymentDate, termMonths = 1, price, paymentMethod, accountReference, notes }
+  ) {
     const client = this.getClient(id);
     if (!client) throw new Error("Cliente no encontrado.");
     const paidOn = paymentDate || todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima");
@@ -211,6 +277,7 @@ class JsonStore {
       termMonths: Math.max(1, Number(termMonths) || 1),
       price: price ?? client.price,
       paymentMethod: paymentMethod ?? client.paymentMethod,
+      accountReference: accountReference ?? client.accountReference,
       notes: notes ?? client.notes,
       status: "activo",
       lastPaymentDate: paidOn,
@@ -239,15 +306,14 @@ class JsonStore {
       product,
       price: String(input.price || "").trim(),
       paymentMethod: String(input.paymentMethod || "").trim(),
+      accountReference: String(input.accountReference || "").trim().slice(0, 240),
       startDate: String(input.startDate),
       expiryDate: String(input.expiryDate),
       termMonths: Math.max(1, Number(input.termMonths) || 1),
       status: ["activo", "pendiente", "vencido", "pausado", "archivado"].includes(input.status)
         ? input.status
         : "activo",
-      reminderDays: [1, 2].includes(Number(input.reminderDays))
-        ? Number(input.reminderDays)
-        : 2,
+      reminderDays: 2,
       autoReminder: Boolean(input.autoReminder),
       autoCharge: Boolean(input.autoCharge),
       notes: String(input.notes || ""),
@@ -314,4 +380,4 @@ class JsonStore {
   }
 }
 
-module.exports = { JsonStore };
+module.exports = { JsonStore, normalizeWhatsAppDigits };

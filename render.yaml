@@ -20,12 +20,6 @@ services:
         value: America/Lima
       - key: REMINDER_CHECK_MINUTES
         value: "15"
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENAI_MODEL
-        value: gpt-5.6-luna
-      - key: OPENAI_TIMEOUT_MS
-        value: "25000"
       - key: HUMAN_DELAY_MIN_MS
         value: "900"
       - key: HUMAN_DELAY_MAX_MS

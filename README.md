@@ -1,149 +1,124 @@
-# JadrixServs Bot V4.3
+# JadrixServs Bot V4.4
 
-Bot de WhatsApp con panel privado para administrar respuestas, entrenamiento, clientes, cobros, vencimientos y recordatorios.
+Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clientes y automatizar renovaciones.
 
-## Qué corrige la V4.3
+## Flujo de mensajes
 
-### Inicio de sesión de WhatsApp
+La V4.4 funciona en modo **solo bienvenida**:
 
-La conexión usa Baileys 7 por WebSocket, sin Chromium.
+1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales.
+2. Los tres se envían por separado, mostrando “escribiendo…” y una pequeña demora antes de cada envío.
+3. Después de completar esa secuencia, el bot no vuelve a responder los mensajes entrantes de ese contacto.
+4. Si el número ya está registrado como cliente, sus respuestas tampoco activan la bienvenida.
+5. Desde ese momento, el bot solamente envía recordatorios o cobranzas programadas desde el panel.
 
-- Guarda la sesión en el disco persistente de Render.
-- Cuando WhatsApp acepta el QR y solicita un reinicio interno, lo completa automáticamente.
-- Reintenta una conexión vinculada sin borrar sus credenciales.
-- El panel distingue QR, autenticación, reconexión y conexión completa.
-- **Forzar conexión** reabre la sesión guardada.
-- **Cerrar sesión** elimina las credenciales y genera un QR totalmente nuevo.
+El contenido de los tres mensajes iniciales puede editarse en **Mensajes automáticos**. Los datos antiguos de productos y entrenamiento se conservan al actualizar, pero no generan respuestas en este modo. `OPENAI_API_KEY` no es necesaria para la bienvenida ni para las renovaciones.
 
-### Super Combo IA 2026
+## Clientes y renovaciones
 
-La frase:
+En **Clientes y cobros** puedes guardar y editar:
 
-```text
-¿Cuál es el precio del Super Combo IA 2026?
-```
+- Nombre y número de WhatsApp.
+- Servicio o plan comprado.
+- Cuenta asociada, perfil o código interno.
+- Precio y método de pago.
+- Fecha de activación y fecha de vencimiento.
+- Duración, estado y notas.
+- Recordatorio automático y cobranza automática.
 
-envía exactamente tres mensajes separados y en este orden:
+No guardes contraseñas en el campo **Cuenta asociada**.
 
-1. Catálogo de JadrixServs.
-2. Combos especiales.
-3. Entrega, soporte y llamada final.
+Al registrar un cliente:
 
-Cada mensaje muestra “escribiendo…”, espera un tiempo proporcional a su longitud y recién después se envía. Las frases que activan esta secuencia y el contenido de los tres mensajes se editan desde **Mensajes y archivos**.
+- El recordatorio queda activado por defecto y se envía exactamente **2 días antes** del vencimiento.
+- La cobranza automática queda apagada. Debes activarla manualmente en la ficha del cliente si quieres que se envíe el día del vencimiento.
+- Los botones **Recordar** y **Cobrar** permiten enviar cualquiera de los dos mensajes manualmente.
+- **Procesar vencimientos** ejecuta una revisión inmediata.
 
-Un “hola” normal recibe solamente el saludo corto. Las demás consultas reciben únicamente la información solicitada, no los tres bloques completos.
+El programador revisa los vencimientos cada 15 minutos mientras WhatsApp está conectado. Cada aviso se marca con la fecha de renovación para no enviarlo dos veces.
 
-### Entrenamiento local
+Al pulsar **Renovar**, el nuevo periodo comienza desde el vencimiento vigente si el cliente pagó antes; así no pierde días. También puedes actualizar la cuenta asociada durante la renovación.
 
-El panel ahora incluye **Entrenamiento local**:
+## Editar los mensajes
 
-- Puedes crear hasta 200 respuestas.
-- Cada respuesta admite hasta 20 formas distintas de hacer la pregunta.
-- Se puede activar, desactivar, editar o eliminar cada respuesta.
-- Funciona aunque `OPENAI_API_KEY` no esté configurada o no tenga saldo.
-- La V4.3 incluye respuestas sobre productos, privacidad, cuentas compartidas, dispositivos, DICloak, entrega, garantía, renovación, pagos, comprobantes, combos y streaming.
+En **Mensajes automáticos** puedes editar:
 
-Los productos y planes también siguen entrenados directamente en el motor, con sus precios y condiciones.
+- Los tres mensajes de bienvenida.
+- El recordatorio de 2 días antes.
+- La cobranza del día de vencimiento.
 
-### OpenAI como respaldo
+Los mensajes de renovación admiten estas variables:
 
-OpenAI se consulta solamente cuando no coincide una respuesta local, un producto, un plan, un pago u otra regla confirmada.
+| Variable | Contenido |
+| --- | --- |
+| `{nombre}` | Nombre del cliente |
+| `{producto}` | Servicio o plan |
+| `{cuenta}` | Cuenta asociada |
+| `{precio}` | Precio registrado |
+| `{fecha}` | Fecha de vencimiento |
 
-- Usa la Responses API.
-- El modelo recibe los productos, planes y respuestas editables.
-- La instrucción exige contestar únicamente la pregunta actual en una a tres oraciones.
-- No agrega catálogo, pagos ni promociones que no fueron solicitados.
-- No inventa información: si falta un dato, deriva a un asesor.
-- La respuesta máxima está limitada para controlar costo y evitar bloques largos.
-- El modelo predeterminado es `gpt-5.6-luna`, apropiado para respuestas breves y de menor costo.
-
-## Qué significa el error 429 de la captura
-
-El mensaje `You exceeded your current quota` significa que la cuenta de la API no tiene créditos disponibles o alcanzó el límite de gasto. No significa que falte el código del bot.
-
-ChatGPT Plus y la API de OpenAI tienen facturación separada. Para habilitar el respaldo:
-
-1. Entra a la [facturación de la plataforma de OpenAI](https://platform.openai.com/settings/organization/billing/overview).
-2. Agrega un método de pago y créditos de API.
-3. Revisa que el proyecto u organización tenga un límite de gasto mayor que cero.
-4. En Render configura `OPENAI_API_KEY` y `OPENAI_MODEL=gpt-5.6-luna`.
-5. Despliega y usa **Mensajes y archivos → Probar conexión con OpenAI**.
-
-La V4.3 traduce errores de cuota, clave, permisos, modelo y conexión a mensajes claros dentro del panel. Nunca envía el error 429 al cliente; usa el entrenamiento local o la respuesta para derivar a un asesor.
-
-## Actualizar el repositorio
-
-Antes de limpiar archivos antiguos, guarda una copia fuera del repositorio de `server.js` y `seed-data.js` si allí tenías respuestas personalizadas. El bot nuevo no ejecuta esos archivos; el proceso correcto inicia `src/server.js`.
+## Actualizar una instalación existente
 
 1. Descomprime `JadrixServs-Bot-V4.zip`.
-2. Copia el contenido de la carpeta `jadrixservs-bot-v4` dentro de tu repositorio.
-3. Acepta reemplazar archivos y no borres `.git`.
-4. Abre CMD dentro de la carpeta y ejecuta:
+2. Copia el contenido de `jadrixservs-bot-v4` dentro de tu repositorio.
+3. Acepta reemplazar los archivos y no borres la carpeta `.git`.
+4. Elimina los archivos antiguos de la raíz si todavía existen:
 
 ```bat
-git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt
+git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt
 git add -A
-git commit -m "Actualizar JadrixServs a V4.3"
+git commit -m "Actualizar JadrixServs a V4.4"
 git push
 ```
 
-El archivo persistente `/data/jadrixservs-v4.json` conserva clientes, vencimientos, conversaciones y ajustes. Al leer datos V4.2, la aplicación instala automáticamente el disparador del Super Combo y el entrenamiento local V4.3.
+El proceso inicia desde `src/server.js`. El archivo persistente `/data/jadrixservs-v4.json` se migra automáticamente a V4.4 y conserva clientes, fechas, mensajes, conversaciones y demás datos existentes. Los contactos que ya tenían una conversación guardada se marcan como atendidos para que la actualización no les repita la bienvenida.
 
 ## Variables de Render
 
-En **Render → tu servicio → Environment**:
+En **Render → tu servicio → Environment** revisa:
 
-| Variable | Valor |
+| Variable | Valor recomendado |
 | --- | --- |
-| `ADMIN_PASSWORD` | Contraseña segura para el panel. |
-| `COOKIE_SECRET` | Texto largo y secreto. |
+| `ADMIN_PASSWORD` | Contraseña segura para el panel |
+| `COOKIE_SECRET` | Texto largo y secreto |
 | `DATA_DIR` | `/data` |
 | `MEDIA_DIR` | `/data/media` |
 | `BOT_TIMEZONE` | `America/Lima` |
-| `OPENAI_API_KEY` | Clave de la plataforma de OpenAI. |
-| `OPENAI_MODEL` | `gpt-5.6-luna` |
-| `OPENAI_TIMEOUT_MS` | `25000` |
+| `REMINDER_CHECK_MINUTES` | `15` |
 | `HUMAN_DELAY_MIN_MS` | `900` |
 | `HUMAN_DELAY_MAX_MS` | `4200` |
 | `WHATSAPP_READY_TIMEOUT_MS` | `45000` |
 | `WHATSAPP_RECONNECT_DELAY_MS` | `3000` |
 
-No escribas claves dentro del código ni las subas a GitHub.
+`render.yaml` configura un disco persistente de 1 GB montado en `/data`. Es indispensable para conservar la sesión de WhatsApp y los clientes después de cada despliegue.
 
-## Vincular WhatsApp después de actualizar
+## Vincular WhatsApp
 
-La sesión del sistema antiguo no es compatible con Baileys. Haz esto una sola vez:
+1. Espera a que Render termine el despliegue.
+2. Abre **WhatsApp** en el panel.
+3. Si aparece un QR, en el celular entra a **Dispositivos vinculados → Vincular un dispositivo**.
+4. Escanea el QR y espera; el panel debe pasar de **Autenticando** a **Conectado** automáticamente.
+5. No pulses **Reiniciar** mientras esté autenticando.
 
-1. Espera a que Render termine el despliegue V4.3.
-2. En el celular abre **WhatsApp → Dispositivos vinculados**.
-3. Elimina el dispositivo viejo del bot.
-4. En el panel abre **WhatsApp** y pulsa **Cerrar sesión**.
-5. Espera el QR nuevo y escanéalo.
-6. No pulses Reiniciar mientras diga **Autenticando**.
-7. El panel debe cambiar a **Conectado** automáticamente.
+Si el celular muestra la sesión iniciada pero el panel no termina de conectar:
 
-Si no conecta después de 45 segundos:
+1. Espera 45 segundos.
+2. Pulsa **Forzar conexión** una sola vez.
+3. Si continúa detenido, pulsa **Cerrar sesión**, elimina también ese dispositivo desde el celular y escanea el QR nuevo.
 
-1. Pulsa **Forzar conexión** una sola vez.
-2. Espera otros 45 segundos.
-3. Si aparece **Error de sesión**, pulsa **Cerrar sesión**, elimina el dispositivo del celular y escanea el QR nuevo.
-4. Revisa **Actividad** para ver el código de desconexión.
+La sesión válida se guarda en `/data/whatsapp-session`; no hace falta volver a escanear después de cada despliegue.
 
-## Probar respuestas
+## Prueba recomendada
 
-Pruebas recomendadas desde otro número:
+Desde un número que no esté registrado como cliente:
 
-```text
-¿Cuál es el precio del Super Combo IA 2026?
-¿Cuánto cuesta Claude Pro?
-¿Cuál es mejor, ChatGPT o Gemini?
-¿Puedo renovar antes?
-¿Cómo puedo pagar?
-```
+1. Envía cualquier mensaje.
+2. Debes recibir tres mensajes separados.
+3. Envía una segunda consulta: el bot debe permanecer en silencio.
 
-La primera debe producir tres mensajes. Cada una de las demás debe producir una sola respuesta relacionada con la pregunta.
+Luego registra un cliente con vencimiento dentro de 2 días, deja activo el recordatorio y pulsa **Procesar vencimientos**. Para probar la cobranza, usa un vencimiento de hoy y activa manualmente **Cobranza automática**.
 
-## Ejecutar en una computadora
+## Ejecutar localmente
 
 Requiere Node.js 20 o superior:
 
@@ -155,15 +130,4 @@ npm start
 
 Abre `http://localhost:3000`.
 
-## Disco persistente y seguridad
-
-`render.yaml` configura un servicio Starter con un disco de 1 GB montado en `/data`. Allí se guardan:
-
-- Credenciales de WhatsApp.
-- Entrenamiento editable.
-- Clientes y vencimientos.
-- Audio DICloak y catálogo PDF.
-
-La carpeta de autenticación equivale a una credencial privada. No la subas a GitHub ni la compartas.
-
-Este proyecto usa Baileys y no la API oficial de Meta. Evita envíos masivos y mensajes no solicitados.
+La carpeta de autenticación de WhatsApp equivale a una credencial privada. No la subas a GitHub ni la compartas. Este proyecto usa Baileys y no la API oficial de Meta; evita envíos masivos o no solicitados.

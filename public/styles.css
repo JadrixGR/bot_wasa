@@ -343,7 +343,7 @@ th, td { padding: 0.95rem 1rem; border-bottom: 1px solid #edf0f5; text-align: le
 th { color: #788096; background: #fbfcfe; font-size: 0.66rem; letter-spacing: 0.05em; text-transform: uppercase; }
 td strong, td span { display: block; }
 td span { margin-top: 0.2rem; color: var(--muted); font-size: 0.68rem; }
-.row-actions { display: flex; justify-content: flex-end; gap: 0.35rem; }
+.row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.35rem; }
 .row-actions button { padding: 0.42rem 0.58rem; border: 1px solid var(--line); border-radius: 0.5rem; color: #4d546a; background: white; font-size: 0.68rem; font-weight: 800; }
 .row-actions button:hover { border-color: var(--primary); color: var(--primary); }
 .automation-flags { display: flex; gap: 0.35rem; }
@@ -351,6 +351,7 @@ td span { margin-top: 0.2rem; color: var(--muted); font-size: 0.68rem; }
 .mini-flag.on { color: #256d55; background: #e4f7ef; }
 
 .settings-grid label + label { margin-top: 1rem; }
+.mode-notice { margin-bottom: 1.25rem; }
 .training-panel { margin-top: 1.25rem; }
 .training-copy { max-width: 60rem; margin: -0.2rem 0 1rem; font-size: 0.8rem; line-height: 1.55; }
 .knowledge-list { display: grid; gap: 1rem; margin-bottom: 1rem; }

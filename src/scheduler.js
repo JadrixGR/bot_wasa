@@ -3,21 +3,30 @@
 const { daysBetween, todayInTimeZone } = require("./date-utils");
 
 function fillTemplate(template, client) {
+  const [year, month, day] = String(client.expiryDate || "").split("-");
+  const formattedDate =
+    year && month && day ? `${day}/${month}/${year}` : client.expiryDate;
   const replacements = {
     nombre: client.name,
     producto: client.product,
     precio: client.price,
-    fecha: client.expiryDate
+    fecha: formattedDate,
+    cuenta: client.accountReference
   };
-  return String(template).replace(/\{(nombre|producto|precio|fecha)\}/g, (_, key) => replacements[key] || "");
+  return String(template).replace(
+    /\{(nombre|producto|precio|fecha|cuenta)\}/g,
+    (_, key) => replacements[key] || ""
+  );
 }
 
 function reminderActionFor(client, today) {
   if (client.archived || client.status !== "activo" || !client.expiryDate) return null;
   const remaining = daysBetween(today, client.expiryDate);
-  if (client.autoReminder && remaining === Number(client.reminderDays || 2)) {
-    const key = `${client.expiryDate}:reminder:${remaining}`;
-    if (client.lastReminderKey !== key) return { type: "reminder", key, remaining };
+  if (client.autoReminder && remaining === 2) {
+    const key = `${client.expiryDate}:reminder:2`;
+    if (client.lastReminderKey !== key) {
+      return { type: "reminder", key, remaining };
+    }
   }
   if (client.autoCharge && remaining === 0) {
     const key = `${client.expiryDate}:charge`;
@@ -27,10 +36,17 @@ function reminderActionFor(client, today) {
 }
 
 class ReminderScheduler {
-  constructor({ store, whatsapp, timeZone = "America/Lima", intervalMinutes = 15 }) {
+  constructor({
+    store,
+    whatsapp,
+    timeZone = "America/Lima",
+    intervalMinutes = 15,
+    todayFn = todayInTimeZone
+  }) {
     this.store = store;
     this.whatsapp = whatsapp;
     this.timeZone = timeZone;
+    this.todayFn = todayFn;
     this.intervalMs = Math.max(5, Number(intervalMinutes) || 15) * 60000;
     this.timer = null;
     this.running = false;
@@ -60,7 +76,7 @@ class ReminderScheduler {
     this.running = true;
     let sent = 0;
     const errors = [];
-    const today = todayInTimeZone(this.timeZone);
+    const today = this.todayFn(this.timeZone);
     const settings = this.store.getSettings();
 
     try {
@@ -77,7 +93,7 @@ class ReminderScheduler {
               : { lastChargeKey: action.key })
           });
           this.store.addLog(
-            "reminder",
+            action.type,
             `${action.type === "reminder" ? "Recordatorio" : "Cobro"} enviado a ${client.name}`,
             { clientId: client.id }
           );

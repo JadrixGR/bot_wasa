@@ -5,9 +5,6 @@ const state = {
   settings: null,
   products: [],
   plans: [],
-  knowledgeBase: [],
-  media: {},
-  ai: null,
   activeSection: "dashboard",
   poller: null
 };
@@ -22,12 +19,6 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
-}
-
-function displayWhatsAppId(value) {
-  return String(value || "")
-    .replace(/@(c\.us|s\.whatsapp\.net|lid)$/, "")
-    .split(":")[0];
 }
 
 function showToast(message, error = false) {
@@ -95,21 +86,19 @@ function navigate(section) {
     dashboard: "Resumen",
     whatsapp: "WhatsApp",
     clients: "Clientes y cobros",
-    messages: "Mensajes y archivos",
-    attention: "Atención personal",
+    messages: "Mensajes automáticos",
     activity: "Actividad"
   };
   $("#pageTitle").textContent = titles[section] || "JadrixServs";
   $(".sidebar").classList.remove("open");
   if (section === "clients") loadClients();
-  if (section === "attention") loadConversations();
   if (section === "activity") loadLogs();
   if (section === "messages") loadSettings();
 }
 
 function statusPresentation(status) {
   const map = {
-    ready: ["Conectado", "green", "WhatsApp está respondiendo automáticamente."],
+    ready: ["Conectado", "green", "WhatsApp está listo para bienvenidas, recordatorios y cobranzas."],
     qr: ["Escanea el QR", "amber", "Abre WhatsApp en tu celular y vincula este dispositivo."],
     authenticated: ["Autenticando", "blue", "WhatsApp aceptó el QR. Espera unos segundos."],
     loading: ["Sincronizando", "blue", `WhatsApp está cargando${status.loadingPercent !== null ? ` (${status.loadingPercent}%)` : ""}.`],
@@ -162,7 +151,7 @@ function renderWhatsApp(status) {
   }
 
   $("#dashboardWaBody").innerHTML = status.ready
-    ? `<strong>✓ Bot conectado</strong><p class="muted">${escapeHtml(status.phone || "Sesión activa")} · Las respuestas y recordatorios están disponibles.</p>`
+    ? `<strong>✓ Bot conectado</strong><p class="muted">${escapeHtml(status.phone || "Sesión activa")} · Bienvenidas y renovaciones automáticas disponibles.</p>`
     : status.qrDataUrl
       ? `<strong>Falta escanear el QR</strong><p class="muted">Ve a la sección WhatsApp para vincular tu celular.</p>`
       : `<strong>${escapeHtml(label)}</strong><p class="muted">${escapeHtml(status.error || description)}</p>`;
@@ -202,7 +191,7 @@ function today() {
 
 async function refreshAll() {
   try {
-    const [dashboard] = await Promise.all([api("/api/dashboard"), loadSettings(), loadClients(), loadConversations()]);
+    const [dashboard] = await Promise.all([api("/api/dashboard"), loadSettings(), loadClients()]);
     renderDashboard(dashboard);
     renderWhatsApp(dashboard.whatsapp);
   } catch (error) {
@@ -221,8 +210,8 @@ async function refreshWhatsAppStatus() {
 function renderDashboard(dashboard) {
   $("#statActive").textContent = dashboard.stats.active;
   $("#statDue").textContent = dashboard.stats.dueSoon;
+  $("#statToday").textContent = dashboard.stats.dueToday;
   $("#statExpired").textContent = dashboard.stats.expired;
-  $("#statPaused").textContent = dashboard.stats.pausedChats;
   renderLogs(dashboard.recentLogs, $("#recentLogs"), true);
 }
 
@@ -235,7 +224,7 @@ function renderClients() {
   const query = $("#clientSearch").value.trim().toLowerCase();
   const status = $("#clientStatusFilter").value;
   const clients = state.clients.filter((client) => {
-    const haystack = `${client.name} ${client.whatsapp} ${client.product}`.toLowerCase();
+    const haystack = `${client.name} ${client.whatsapp} ${client.product} ${client.accountReference || ""}`.toLowerCase();
     return (!query || haystack.includes(query)) && (!status || client.status === status);
   });
   const table = $("#clientsTable");
@@ -243,11 +232,13 @@ function renderClients() {
     <tr>
       <td><strong>${escapeHtml(client.name)}</strong><span>${escapeHtml(client.whatsapp)}</span></td>
       <td><strong>${escapeHtml(client.product)}</strong><span>${escapeHtml(client.price || "Sin precio")}</span></td>
+      <td><strong>${escapeHtml(client.accountReference || "Sin registrar")}</strong></td>
       <td><strong>${escapeHtml(formatDate(client.expiryDate))}</strong><span>Desde ${escapeHtml(formatDate(client.startDate))}</span></td>
-      <td><div class="automation-flags"><span class="mini-flag ${client.autoReminder ? "on" : ""}">Aviso ${client.reminderDays}d</span><span class="mini-flag ${client.autoCharge ? "on" : ""}">Cobro</span></div></td>
+      <td><div class="automation-flags"><span class="mini-flag ${client.autoReminder ? "on" : ""}">Aviso 2d</span><span class="mini-flag ${client.autoCharge ? "on" : ""}">Cobro</span></div></td>
       <td><span class="pill ${client.status === "activo" ? "green" : client.status === "vencido" ? "red" : "amber"}">${escapeHtml(client.status)}</span></td>
       <td><div class="row-actions">
-        <button data-action="remind" data-id="${client.id}" type="button">Avisar</button>
+        <button data-action="remind" data-id="${client.id}" type="button">Recordar</button>
+        <button data-action="charge" data-id="${client.id}" type="button">Cobrar</button>
         <button data-action="renew" data-id="${client.id}" type="button">Renovar</button>
         <button data-action="edit" data-id="${client.id}" type="button">Editar</button>
       </div></td>
@@ -263,14 +254,14 @@ function openClientDialog(client = null) {
   $("#clientName").value = client?.name || "";
   $("#clientWhatsapp").value = client?.whatsapp || "";
   $("#clientProduct").value = client?.product || "";
+  $("#clientAccountReference").value = client?.accountReference || "";
   $("#clientPrice").value = client?.price || "";
   $("#clientPaymentMethod").value = client?.paymentMethod || "";
   $("#clientStatus").value = client?.status || "activo";
   $("#clientStartDate").value = client?.startDate || today();
   $("#clientTermMonths").value = String(client?.termMonths || 1);
   $("#clientExpiryDate").value = client?.expiryDate || addMonths(today(), 1);
-  $("#clientReminderDays").value = String(client?.reminderDays || 2);
-  $("#clientAutoReminder").checked = Boolean(client?.autoReminder);
+  $("#clientAutoReminder").checked = client ? Boolean(client.autoReminder) : true;
   $("#clientAutoCharge").checked = Boolean(client?.autoCharge);
   $("#clientNotes").value = client?.notes || "";
   $("#clientDialog").showModal();
@@ -283,13 +274,14 @@ async function saveClient(event) {
     name: $("#clientName").value,
     whatsapp: $("#clientWhatsapp").value,
     product: $("#clientProduct").value,
+    accountReference: $("#clientAccountReference").value,
     price: $("#clientPrice").value,
     paymentMethod: $("#clientPaymentMethod").value,
     status: $("#clientStatus").value,
     startDate: $("#clientStartDate").value,
     expiryDate: $("#clientExpiryDate").value,
     termMonths: Number($("#clientTermMonths").value),
-    reminderDays: Number($("#clientReminderDays").value),
+    reminderDays: 2,
     autoReminder: $("#clientAutoReminder").checked,
     autoCharge: $("#clientAutoCharge").checked,
     notes: $("#clientNotes").value
@@ -311,6 +303,7 @@ function openRenewDialog(client) {
   $("#renewTermMonths").value = String(client.termMonths || 1);
   $("#renewPrice").value = client.price || "";
   $("#renewPaymentMethod").value = client.paymentMethod || "";
+  $("#renewAccountReference").value = client.accountReference || "";
   $("#renewDialog").showModal();
 }
 
@@ -324,7 +317,8 @@ async function saveRenewal(event) {
         paymentDate: $("#renewPaymentDate").value,
         termMonths: Number($("#renewTermMonths").value),
         price: $("#renewPrice").value,
-        paymentMethod: $("#renewPaymentMethod").value
+        paymentMethod: $("#renewPaymentMethod").value,
+        accountReference: $("#renewAccountReference").value
       }
     });
     $("#renewDialog").close();
@@ -335,139 +329,16 @@ async function saveRenewal(event) {
   }
 }
 
-function renderAiStatus(ai = {}) {
-  const presentations = {
-    missing_key: [
-      "Sin clave",
-      "amber",
-      "Configura OPENAI_API_KEY en Render. El entrenamiento local seguirá respondiendo sin la API."
-    ],
-    quota: [
-      "Sin saldo",
-      "red",
-      "La clave está configurada, pero la cuenta de API no tiene saldo o alcanzó su límite de gasto. Agrega créditos y vuelve a probar."
-    ],
-    rate_limit: [
-      "Límite temporal",
-      "amber",
-      "OpenAI recibió demasiadas solicitudes. Espera un momento y vuelve a probar."
-    ],
-    invalid_key: [
-      "Clave inválida",
-      "red",
-      "OPENAI_API_KEY no es válida. Reemplázala en Render por una clave de la plataforma de OpenAI."
-    ],
-    forbidden: [
-      "Sin permiso",
-      "red",
-      "El proyecto de OpenAI no tiene permiso para usar la API. Revisa la organización y sus límites."
-    ],
-    model: [
-      "Modelo no disponible",
-      "red",
-      "Revisa OPENAI_MODEL en Render. Para esta versión se recomienda gpt-5.6-luna."
-    ],
-    connection: [
-      "Sin conexión",
-      "amber",
-      "No se pudo comunicar con OpenAI. El entrenamiento local continúa funcionando."
-    ],
-    openai_error: [
-      "Error de API",
-      "red",
-      "OpenAI no pudo completar la prueba. Revisa la clave, el saldo y el modelo."
-    ],
-    ready: [
-      "Conectada",
-      "green",
-      `OpenAI respondió correctamente${ai.model ? ` con ${ai.model}` : ""}. Se usará solo para preguntas sin respuesta local.`
-    ],
-    configured: [
-      "Configurada",
-      "blue",
-      `La clave está configurada${ai.model ? ` con ${ai.model}` : ""}. Pulsa “Probar conexión con OpenAI” para comprobar saldo y acceso.`
-    ]
-  };
-  const health = ai.health || (ai.enabled ? "configured" : "missing_key");
-  const [label, tone, defaultText] =
-    presentations[health] || presentations.openai_error;
-  $("#aiStatusPill").textContent = label;
-  $("#aiStatusPill").className = `pill ${tone}`;
-  $("#aiStatusText").textContent = ai.lastError || defaultText;
-}
-
-function renderKnowledgeBase() {
-  const entries = state.knowledgeBase || [];
-  const active = entries.filter((entry) => entry.enabled !== false).length;
-  $("#knowledgeCount").textContent = `${active} activa${active === 1 ? "" : "s"}`;
-  $("#knowledgeList").innerHTML = entries.length
-    ? entries.map((entry, index) => `
-      <article class="knowledge-card" data-knowledge-index="${index}">
-        <div class="knowledge-card-heading">
-          <span class="knowledge-number">${index + 1}</span>
-          <label class="knowledge-enabled">
-            <input class="knowledge-enabled-input" type="checkbox" ${entry.enabled !== false ? "checked" : ""}>
-            Activa
-          </label>
-          <button class="text-button knowledge-remove" data-remove-knowledge="${index}" type="button">Eliminar</button>
-        </div>
-        <div class="knowledge-fields">
-          <label>
-            Tema
-            <input class="knowledge-title" maxlength="120" value="${escapeHtml(entry.title || "")}" placeholder="Ej.: Garantía de los servicios">
-          </label>
-          <label>
-            Preguntas o frases de activación
-            <textarea class="knowledge-triggers" rows="4" placeholder="Una frase por línea">${escapeHtml((entry.triggers || []).join("\n"))}</textarea>
-            <small>Usa una frase por línea. Puedes agregar hasta 20 variantes.</small>
-          </label>
-          <label>
-            Respuesta exacta
-            <textarea class="knowledge-answer" rows="5" maxlength="3000" placeholder="Respuesta breve que recibirá el cliente">${escapeHtml(entry.answer || "")}</textarea>
-          </label>
-        </div>
-      </article>
-    `).join("")
-    : `<div class="empty-state compact"><strong>No hay respuestas entrenadas.</strong><span>Agrega la primera para responder sin depender de OpenAI.</span></div>`;
-}
-
-function collectKnowledgeBase() {
-  return $$(".knowledge-card", $("#knowledgeList")).map((card, index) => ({
-    id: state.knowledgeBase[index]?.id || "",
-    title: $(".knowledge-title", card).value,
-    triggers: $(".knowledge-triggers", card).value
-      .split(/\r?\n|,/)
-      .map((trigger) => trigger.trim())
-      .filter(Boolean),
-    answer: $(".knowledge-answer", card).value,
-    enabled: $(".knowledge-enabled-input", card).checked
-  }));
-}
-
 async function loadSettings() {
   const payload = await api("/api/settings");
   state.settings = payload.settings;
   state.products = payload.products;
   state.plans = payload.plans;
-  state.knowledgeBase = payload.knowledgeBase || [];
-  state.media = payload.media;
-  state.ai = payload.ai || null;
-  $("#welcomeTriggers").value = payload.settings.welcomeTriggers || "";
   $("#greeting1").value = payload.settings.greetingMessages[0] || "";
   $("#greeting2").value = payload.settings.greetingMessages[1] || "";
   $("#greeting3").value = payload.settings.greetingMessages[2] || "";
-  $("#shortGreeting").value = payload.settings.shortGreeting || "";
-  $("#peruPayment").value = payload.settings.peruPayment || "";
-  $("#internationalPayment").value = payload.settings.internationalPayment || "";
   $("#reminderTemplate").value = payload.settings.reminderTemplate || "";
   $("#chargeTemplate").value = payload.settings.chargeTemplate || "";
-  $("#receiptReply").value = payload.settings.receiptReply || "";
-  $("#humanReply").value = payload.settings.humanReply || "";
-  $("#fallbackReply").value = payload.settings.fallbackReply || "";
-  $("#audioStatus").textContent = payload.media.dicloakAudio?.originalName || "Sin cargar";
-  $("#pdfStatus").textContent = payload.media.catalogPdf?.originalName || "Sin cargar";
-  renderAiStatus(payload.ai);
-  renderKnowledgeBase();
   $("#productOptions").innerHTML = [...payload.products, ...payload.plans]
     .map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join("");
 }
@@ -477,74 +348,28 @@ async function saveSettings() {
     const payload = await api("/api/settings", {
       method: "PUT",
       body: {
-        shortGreeting: $("#shortGreeting").value,
-        welcomeTriggers: $("#welcomeTriggers").value,
+        inboundMode: "welcome_once",
         greetingMessages: [$("#greeting1").value, $("#greeting2").value, $("#greeting3").value],
-        peruPayment: $("#peruPayment").value,
-        internationalPayment: $("#internationalPayment").value,
         reminderTemplate: $("#reminderTemplate").value,
-        chargeTemplate: $("#chargeTemplate").value,
-        receiptReply: $("#receiptReply").value,
-        humanReply: $("#humanReply").value,
-        fallbackReply: $("#fallbackReply").value,
-        knowledgeBase: collectKnowledgeBase()
+        chargeTemplate: $("#chargeTemplate").value
       }
     });
     state.settings = payload.settings;
-    state.knowledgeBase = payload.knowledgeBase || [];
-    renderKnowledgeBase();
-    showToast("Mensajes y entrenamiento guardados.");
+    showToast("Mensajes automáticos guardados.");
   } catch (error) {
     showToast(error.message, true);
   }
-}
-
-async function uploadMedia(event, kind) {
-  event.preventDefault();
-  const fileInput = kind === "dicloakAudio" ? $("#audioFile") : $("#pdfFile");
-  if (!fileInput.files[0]) return;
-  const file = fileInput.files[0];
-  try {
-    await api(`/api/media/${kind}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "X-File-Name": encodeURIComponent(file.name),
-        "X-File-Type": file.type || "application/octet-stream"
-      },
-      body: file
-    });
-    fileInput.value = "";
-    await loadSettings();
-    showToast("Archivo cargado correctamente.");
-  } catch (error) {
-    showToast(error.message, true);
-  }
-}
-
-async function loadConversations() {
-  const conversations = await api("/api/conversations");
-  $("#pausedConversations").innerHTML = conversations.map((item) => `
-    <article class="attention-card">
-      <div><strong>${escapeHtml(displayWhatsAppId(item.chatId))}</strong><span>${escapeHtml(item.pauseReason || "Solicitó atención personal")} · ${escapeHtml(formatRelative(item.pausedAt || item.updatedAt))}</span></div>
-      <button class="button secondary" data-resume="${escapeHtml(item.chatId)}" type="button">Reactivar bot</button>
-    </article>
-  `).join("");
-  $("#pausedEmpty").classList.toggle("hidden", conversations.length > 0);
 }
 
 function logLabel(type) {
   return {
     incoming: "Mensaje recibido",
     outgoing: "Mensaje enviado",
-    receipt: "Comprobante",
+    welcome: "Bienvenida",
     whatsapp: "WhatsApp",
     reminder: "Recordatorio",
-    human: "Atención personal",
+    charge: "Cobranza",
     client: "Cliente",
-    media: "Archivo",
-    training: "Entrenamiento",
-    ai: "Respuesta de IA",
     security: "Seguridad",
     error: "Error"
   }[type] || type;
@@ -638,69 +463,37 @@ function bindEvents() {
       try {
         await api(`/api/clients/${client.id}/reminder`, { method: "POST" });
         showToast(`Recordatorio enviado a ${client.name}.`);
+        await loadClients();
+      } catch (error) { showToast(error.message, true); }
+    }
+    if (button.dataset.action === "charge") {
+      if (!confirm(`¿Enviar ahora el mensaje de cobranza a ${client.name}?`)) return;
+      try {
+        await api(`/api/clients/${client.id}/charge`, { method: "POST" });
+        showToast(`Cobranza enviada a ${client.name}.`);
+        await loadClients();
       } catch (error) { showToast(error.message, true); }
     }
   });
   $("#saveSettingsButton").addEventListener("click", saveSettings);
-  $("#addKnowledgeButton").addEventListener("click", () => {
-    state.knowledgeBase = [
-      ...collectKnowledgeBase(),
-      {
-        id: "",
-        title: "",
-        triggers: [],
-        answer: "",
-        enabled: true
-      }
-    ];
-    renderKnowledgeBase();
-    const lastCard = $(".knowledge-card:last-child", $("#knowledgeList"));
-    $(".knowledge-title", lastCard)?.focus();
-  });
-  $("#knowledgeList").addEventListener("click", (event) => {
-    const button = event.target.closest("[data-remove-knowledge]");
-    if (!button) return;
-    const entries = collectKnowledgeBase();
-    entries.splice(Number(button.dataset.removeKnowledge), 1);
-    state.knowledgeBase = entries;
-    renderKnowledgeBase();
-  });
-  $("#knowledgeList").addEventListener("change", (event) => {
-    if (!event.target.matches(".knowledge-enabled-input")) return;
-    const active = $$(".knowledge-enabled-input:checked", $("#knowledgeList")).length;
-    $("#knowledgeCount").textContent = `${active} activa${active === 1 ? "" : "s"}`;
-  });
-  $("#testAiButton").addEventListener("click", async () => {
-    const button = $("#testAiButton");
+  $("#runSchedulerButton").addEventListener("click", async () => {
+    const button = $("#runSchedulerButton");
     button.disabled = true;
-    button.textContent = "Probando…";
+    button.textContent = "Procesando…";
     try {
-      const result = await api("/api/ai/test", { method: "POST" });
-      showToast(`OpenAI conectado correctamente con ${result.model}.`);
-      await loadSettings();
+      const result = await api("/api/scheduler/run", { method: "POST" });
+      showToast(
+        result.skipped
+          ? "WhatsApp debe estar conectado para procesar vencimientos."
+          : `${result.sent} mensaje${result.sent === 1 ? "" : "s"} enviado${result.sent === 1 ? "" : "s"}.`
+      );
+      await Promise.all([loadClients(), refreshDashboardOnly()]);
     } catch (error) {
-      renderAiStatus({
-        enabled: true,
-        model: state.ai?.model,
-        health: error.code || "openai_error",
-        lastError: error.message
-      });
       showToast(error.message, true);
     } finally {
       button.disabled = false;
-      button.textContent = "Probar conexión con OpenAI";
+      button.textContent = "Procesar vencimientos";
     }
-  });
-  $("#audioForm").addEventListener("submit", (event) => uploadMedia(event, "dicloakAudio"));
-  $("#pdfForm").addEventListener("submit", (event) => uploadMedia(event, "catalogPdf"));
-  $("#pausedConversations").addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-resume]");
-    if (!button) return;
-    try {
-      await api(`/api/conversations/${encodeURIComponent(button.dataset.resume)}/resume`, { method: "POST" });
-      await Promise.all([loadConversations(), refreshDashboardOnly()]);
-      showToast("El bot volvió a atender esa conversación.");
-    } catch (error) { showToast(error.message, true); }
   });
   $("#refreshLogsButton").addEventListener("click", loadLogs);
 }

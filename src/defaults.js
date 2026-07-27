@@ -361,6 +361,7 @@ function buildGreetingMessages() {
 
 const defaultSettings = {
   businessName: "JadrixServs",
+  inboundMode: "welcome_once",
   shortGreeting:
     "¡Hola! 👋 Soy parte del equipo de JadrixServs. ¿En qué servicio estás interesado o qué deseas consultar?",
   welcomeTriggers:
@@ -376,15 +377,15 @@ const defaultSettings = {
   fallbackReply:
     "No tengo ese dato confirmado. Si deseas, puedo comunicarte con un asesor de JadrixServs.",
   reminderTemplate:
-    "Hola {nombre} 👋 Te recordamos que tu servicio *{producto}* vence el {fecha}. Puedes renovar anticipadamente sin perder ningún día; el nuevo mes comienza desde tu fecha de vencimiento actual.",
+    "Hola {nombre} 👋 Te recordamos que tu servicio *{producto}* vence en 2 días, el *{fecha}*. Puedes renovar anticipadamente sin perder ningún día; el nuevo periodo comienza desde tu fecha de vencimiento actual.",
   chargeTemplate:
-    "Hola {nombre} 👋 Hoy corresponde renovar tu servicio *{producto}*. El monto es *{precio}*. Escríbenos para enviarte los datos de pago y mantener el servicio activo.",
+    "Hola {nombre} 👋 Hoy vence tu servicio *{producto}*. El monto de renovación es *{precio}*. Escríbenos para mantener el servicio activo.",
   greetingMessages: buildGreetingMessages()
 };
 
 function createInitialData() {
   return {
-    version: 4.3,
+    version: 4.4,
     settings: structuredClone(defaultSettings),
     products: structuredClone(products),
     plans: structuredClone(plans),

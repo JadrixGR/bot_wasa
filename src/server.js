@@ -8,7 +8,7 @@ const cookieSession = require("cookie-session");
 const { JsonStore } = require("./store");
 const { AiService } = require("./ai-service");
 const { WhatsAppService } = require("./whatsapp-service");
-const { ReminderScheduler } = require("./scheduler");
+const { ReminderScheduler, fillTemplate } = require("./scheduler");
 const { daysBetween, todayInTimeZone } = require("./date-utils");
 
 const rootDir = path.resolve(__dirname, "..");
@@ -69,7 +69,7 @@ function asyncRoute(handler) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.3",
+    version: "4.4",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
     time: new Date().toISOString()
@@ -98,20 +98,25 @@ app.post("/api/auth/logout", requireAuth, (req, res) => {
 
 app.get("/api/dashboard", requireAuth, (req, res) => {
   const clients = store.listClients();
+  const activeClients = clients.filter((client) => client.status === "activo");
   const today = todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima");
-  const dueSoon = clients.filter((client) => {
+  const dueSoon = activeClients.filter((client) => {
     const days = daysBetween(today, client.expiryDate);
-    return days >= 0 && days <= 2;
+    return days === 2;
   }).length;
-  const expired = clients.filter((client) => daysBetween(today, client.expiryDate) < 0).length;
-  const pausedChats = Object.values(store.data.conversations).filter((item) => item.paused).length;
+  const dueToday = activeClients.filter(
+    (client) => daysBetween(today, client.expiryDate) === 0
+  ).length;
+  const expired = activeClients.filter(
+    (client) => daysBetween(today, client.expiryDate) < 0
+  ).length;
   res.json({
     whatsapp: whatsapp.getStatus(),
     stats: {
-      active: clients.filter((client) => client.status === "activo").length,
+      active: activeClients.length,
       dueSoon,
+      dueToday,
       expired,
-      pausedChats,
       total: clients.length
     },
     recentLogs: store.listLogs(8)
@@ -182,13 +187,31 @@ app.post(
     const client = store.getClient(req.params.id);
     if (!client) return res.status(404).json({ error: "Cliente no encontrado." });
     const settings = store.getSettings();
-    const message = settings.reminderTemplate
-      .replaceAll("{nombre}", client.name)
-      .replaceAll("{producto}", client.product)
-      .replaceAll("{precio}", client.price)
-      .replaceAll("{fecha}", client.expiryDate);
+    const message = fillTemplate(settings.reminderTemplate, client);
     await whatsapp.sendText(client.whatsapp, message);
+    store.updateClient(client.id, {
+      lastReminderKey: `${client.expiryDate}:reminder:2`
+    });
     store.addLog("reminder", `Recordatorio manual enviado a ${client.name}`, {
+      clientId: client.id
+    });
+    store.save();
+    return res.json({ ok: true });
+  })
+);
+
+app.post(
+  "/api/clients/:id/charge",
+  requireAuth,
+  asyncRoute(async (req, res) => {
+    const client = store.getClient(req.params.id);
+    if (!client) return res.status(404).json({ error: "Cliente no encontrado." });
+    const message = fillTemplate(store.getSettings().chargeTemplate, client);
+    await whatsapp.sendText(client.whatsapp, message);
+    store.updateClient(client.id, {
+      lastChargeKey: `${client.expiryDate}:charge`
+    });
+    store.addLog("charge", `Cobranza manual enviada a ${client.name}`, {
       clientId: client.id
     });
     store.save();
@@ -318,6 +341,7 @@ app.get("/api/export/clients.csv", requireAuth, (_req, res) => {
     "nombre",
     "whatsapp",
     "producto",
+    "cuenta_asociada",
     "precio",
     "metodo_pago",
     "fecha_activacion",
@@ -334,6 +358,7 @@ app.get("/api/export/clients.csv", requireAuth, (_req, res) => {
       client.name,
       client.whatsapp,
       client.product,
+      client.accountReference,
       client.price,
       client.paymentMethod,
       client.startDate,
@@ -364,7 +389,7 @@ app.use((error, _req, res, _next) => {
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4.3 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V4.4 disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
   }

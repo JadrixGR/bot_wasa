@@ -1,0 +1,68 @@
+JADRIXSERVS BOT V4.4 - ACTUALIZACIÓN
+
+1. Descomprime JadrixServs-Bot-V4.zip.
+
+2. Copia el CONTENIDO de la carpeta jadrixservs-bot-v4 dentro de la carpeta
+   de tu repositorio. Acepta reemplazar los archivos.
+
+3. No borres la carpeta .git.
+
+4. Elimina estos archivos viejos si todavía aparecen:
+   server.js
+   seed-data.js
+   ACTUALIZAR-A-V3.txt
+   ACTUALIZAR-A-V4.txt
+   INSTRUCCIONES-ACTUALIZACION.txt
+   INSTRUCCIONES-RAPIDAS.txt
+   PASOS-ACTUALIZAR-V4.3.txt
+
+5. Abre CMD dentro de la carpeta y ejecuta, una línea por vez:
+
+   git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt
+   git add -A
+   git commit -m "Actualizar JadrixServs a V4.4"
+   git push
+
+6. En Render > Environment revisa:
+   DATA_DIR=/data
+   MEDIA_DIR=/data/media
+   BOT_TIMEZONE=America/Lima
+   REMINDER_CHECK_MINUTES=15
+
+   OPENAI_API_KEY no es necesaria para el modo de bienvenida y renovaciones.
+
+7. Espera que el nuevo despliegue de Render finalice.
+
+8. Si el panel conserva una sesión válida, espera que vuelva a mostrar
+   "Conectado"; no tienes que escanear otro QR.
+
+9. Si aparece un QR, escanéalo desde:
+   WhatsApp del celular > Dispositivos vinculados > Vincular un dispositivo.
+
+10. No pulses Reiniciar mientras diga "Autenticando".
+   Debe cambiar automáticamente a "Conectado".
+
+11. Si no conecta después de 45 segundos, pulsa "Forzar conexión" una vez
+    y vuelve a esperar.
+
+12. Prueba desde un número que no esté registrado como cliente:
+    - El primer mensaje debe recibir 3 mensajes separados.
+    - El segundo mensaje no debe recibir respuesta.
+
+13. En Clientes y cobros registra:
+    - Persona y WhatsApp.
+    - Servicio o plan.
+    - Cuenta asociada, sin guardar contraseñas.
+    - Precio, fecha de activación y fecha de vencimiento.
+
+14. El recordatorio de 2 días queda encendido por defecto.
+    La cobranza del día de vencimiento queda apagada hasta que la actives
+    manualmente en la ficha del cliente.
+
+15. En Mensajes automáticos puedes editar los 3 mensajes iniciales,
+    el recordatorio y la cobranza.
+
+IMPORTANTE:
+- Render debe tener un disco persistente montado en /data.
+- /data conserva la sesión de WhatsApp, los clientes y sus vencimientos.
+- El archivo que inicia el bot es src/server.js.

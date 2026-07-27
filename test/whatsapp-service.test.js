@@ -23,15 +23,31 @@ function flush() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+async function settleMessageQueue(service) {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    await flush();
+    if (service.queues.size === 0) return;
+  }
+  throw new Error("La cola de mensajes no terminó a tiempo.");
+}
+
 function makeStore() {
   const logs = [];
+  const conversations = {};
   return {
     logs,
-    data: { conversations: {} },
+    data: { conversations },
     addLog: (type, message, details) => logs.push({ type, message, details }),
     save: () => undefined,
-    getConversation: () => ({}),
-    updateConversation: (_chatId, patch) => patch,
+    getConversation: (chatId) => ({ ...(conversations[chatId] || {}) }),
+    updateConversation: (chatId, patch) => {
+      conversations[chatId] = {
+        ...(conversations[chatId] || {}),
+        ...patch
+      };
+      return { ...conversations[chatId] };
+    },
+    findClientByWhatsApp: () => null,
     getSettings: () => ({
       shortGreeting: "Hola",
       greetingMessages: ["Catálogo", "Planes", "Ayuda"],
@@ -106,7 +122,7 @@ function makeFakeBaileys({ registered = false } = {}) {
 
 function makeService(fake, options = {}) {
   return new WhatsAppService({
-    store: makeStore(),
+    store: options.store || makeStore(),
     sessionDir:
       options.sessionDir || path.join(testRuntimeDir, "whatsapp-session"),
     mediaDir: options.mediaDir || path.join(testRuntimeDir, "media"),
@@ -252,6 +268,105 @@ test("descarta sincronizaciones solicitadas y no las trata como mensajes nuevos"
   assert.equal(socket.calls.read.length, 0);
   assert.equal(socket.calls.sent.length, 0);
   assert.ok(service.store.logs.some((item) => item.type === "security"));
+});
+
+test("un mensaje entrante real envía la bienvenida una sola vez en tres mensajes", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake, {
+    sessionDir: path.join(testRuntimeDir, "incoming-session"),
+    mediaDir: path.join(testRuntimeDir, "incoming-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  const key = {
+    remoteJid: "100000000000@lid",
+    remoteJidAlt: "51911112222@s.whatsapp.net",
+    fromMe: false
+  };
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key,
+        pushName: "Ana",
+        message: { conversation: "Hola, vi su anuncio" }
+      }
+    ]
+  });
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          remoteJid: key.remoteJidAlt,
+          remoteJidAlt: key.remoteJid,
+          fromMe: false
+        },
+        pushName: "Ana",
+        message: { conversation: "¿Qué incluye?" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.deepEqual(
+    socket.calls.sent.map((item) => item.content.text),
+    ["Catálogo", "Planes", "Ayuda"]
+  );
+  assert.equal(
+    socket.calls.presence.filter((item) => item.type === "composing").length,
+    3
+  );
+  assert.equal(socket.calls.read.length, 2);
+  assert.equal(socket.calls.sent.length, 3);
+});
+
+test("la respuesta de un cliente registrado se lee pero no activa la bienvenida", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  let identifiers = [];
+  store.findClientByWhatsApp = (...values) => {
+    identifiers = values;
+    return { id: "cliente-1" };
+  };
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "registered-session"),
+    mediaDir: path.join(testRuntimeDir, "registered-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          remoteJid: "200000000000@lid",
+          remoteJidAlt: "51933334444@s.whatsapp.net",
+          fromMe: false
+        },
+        message: { conversation: "Sí, voy a renovar" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.deepEqual(identifiers, [
+    "200000000000@lid",
+    "51933334444@s.whatsapp.net"
+  ]);
+  assert.equal(socket.calls.read.length, 1);
+  assert.equal(socket.calls.sent.length, 0);
+  assert.equal(
+    store.data.conversations["200000000000@lid"].registeredClientId,
+    "cliente-1"
+  );
 });
 
 test("envía escribiendo, pausa y luego un solo mensaje", async () => {

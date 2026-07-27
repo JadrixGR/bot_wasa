@@ -618,7 +618,12 @@ class WhatsAppService {
         continue;
       }
 
-      const previous = this.queues.get(chatId) || Promise.resolve();
+      const alternateChatId = message?.key?.remoteJidAlt || "";
+      const queueId =
+        [chatId, alternateChatId].find((id) =>
+          String(id).endsWith("@s.whatsapp.net")
+        ) || chatId;
+      const previous = this.queues.get(queueId) || Promise.resolve();
       const next = previous
         .catch(() => undefined)
         .then(() => this.#handleMessage(socket, message))
@@ -629,9 +634,9 @@ class WhatsAppService {
           this.store.save();
         })
         .finally(() => {
-          if (this.queues.get(chatId) === next) this.queues.delete(chatId);
+          if (this.queues.get(queueId) === next) this.queues.delete(queueId);
         });
-      this.queues.set(chatId, next);
+      this.queues.set(queueId, next);
     }
   }
 
@@ -659,6 +664,7 @@ class WhatsAppService {
 
     await this.engine.handleIncoming({
       chatId,
+      alternateChatId: message.key.remoteJidAlt || "",
       body,
       hasMedia,
       mediaType: type.replace(/Message$/, ""),

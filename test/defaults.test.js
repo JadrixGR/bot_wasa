@@ -7,7 +7,8 @@ const {
   plans,
   knowledgeBase,
   defaultSettings,
-  buildGreetingMessages
+  buildGreetingMessages,
+  createInitialData
 } = require("../src/defaults");
 
 test("el catálogo conserva los 12 productos y precios entrenados", () => {
@@ -57,6 +58,12 @@ test("el Super Combo IA 2026 activa la secuencia inicial", () => {
     defaultSettings.welcomeTriggers,
     /¿Cuál es el precio del Super Combo IA 2026\?/
   );
+});
+
+test("la V4.4 usa el modo de bienvenida única", () => {
+  assert.equal(createInitialData().version, 4.4);
+  assert.equal(defaultSettings.inboundMode, "welcome_once");
+  assert.match(defaultSettings.reminderTemplate, /vence en 2 días/i);
 });
 
 test("incluye respuestas locales para consultas frecuentes aun sin OpenAI", () => {
