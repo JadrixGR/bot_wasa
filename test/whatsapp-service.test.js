@@ -8,8 +8,10 @@ const assert = require("node:assert/strict");
 const {
   WhatsAppService,
   calculateHumanDelay,
+  compatibleBrowserProfile,
   extractMessageBody,
   getDisconnectStatusCode,
+  isSensitiveSignalSessionDump,
   normalizeWhatsAppId
 } = require("../src/whatsapp-service");
 
@@ -66,7 +68,7 @@ function makeFakeBaileys({ registered = false, lidPhone = null } = {}) {
   const sockets = [];
   const state = { creds: { registered }, keys: {} };
 
-  function makeWASocket() {
+  function makeWASocket(config = {}) {
     const ev = new EventEmitter();
     ev.destroy = () => undefined;
     const calls = {
@@ -79,6 +81,7 @@ function makeFakeBaileys({ registered = false, lidPhone = null } = {}) {
     const socket = {
       ev,
       calls,
+      config,
       user: { id: "51999888777:12@s.whatsapp.net", name: "Jadrix" },
       signalRepository: {
         lidMapping: {
@@ -106,7 +109,10 @@ function makeFakeBaileys({ registered = false, lidPhone = null } = {}) {
   return {
     module: {
       default: makeWASocket,
-      Browsers: { ubuntu: (name) => ["Ubuntu", name, "1.0"] },
+      Browsers: {
+        ubuntu: (name) => ["Ubuntu", name, "1.0"],
+        macOS: (name) => ["Mac OS", name, "14.4.1"]
+      },
       DisconnectReason: {
         loggedOut: 401,
         forbidden: 403,
@@ -194,6 +200,32 @@ test("lee el código de desconexión que entrega WhatsApp", () => {
   assert.equal(getDisconnectStatusCode(new Error("sin código")), null);
 });
 
+test("usa el perfil Mac OS con Chrome compatible con WhatsApp", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake);
+  await service.initialize();
+
+  assert.deepEqual(
+    compatibleBrowserProfile(fake.module.Browsers),
+    ["Mac OS", "Chrome", "14.4.1"]
+  );
+  assert.deepEqual(
+    fake.sockets[0].config.browser,
+    ["Mac OS", "Chrome", "14.4.1"]
+  );
+});
+
+test("identifica únicamente el volcado sensible Closing session", () => {
+  assert.equal(
+    isSensitiveSignalSessionDump(["Closing session:", { privateKey: "oculta" }]),
+    true
+  );
+  assert.equal(
+    isSensitiveSignalSessionDump(["WhatsApp conectado", { phone: "51999" }]),
+    false
+  );
+});
+
 test("el QR aceptado termina en estado conectado", async () => {
   const fake = makeFakeBaileys();
   const service = makeService(fake);
@@ -243,6 +275,43 @@ test("el reinicio requerido después del QR abre un socket nuevo y termina conec
   await flush();
   assert.equal(service.getStatus().state, "ready");
   assert.equal(service.getStatus().ready, true);
+});
+
+test("el error 405 aplica el perfil compatible y conserva la sesión", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake, {
+    sessionDir: path.join(testRuntimeDir, "error-405-session"),
+    mediaDir: path.join(testRuntimeDir, "error-405-media")
+  });
+  await service.initialize();
+  const firstSocket = fake.sockets[0];
+
+  firstSocket.ev.emit("connection.update", {
+    connection: "close",
+    lastDisconnect: {
+      error: {
+        message: "Connection Failure",
+        output: { statusCode: 405 }
+      }
+    }
+  });
+  await flush();
+
+  assert.equal(service.getStatus().state, "reconnecting");
+  assert.equal(service.getStatus().waState, "405");
+  assert.match(service.getStatus().loadingMessage, /Mac OS \+ Chrome/i);
+  assert.match(service.getStatus().error, /sin borrar tu sesión/i);
+  assert.equal(fake.state.creds.registered, true);
+
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  assert.equal(firstSocket.calls.loggedOut, 0);
+  assert.equal(firstSocket.calls.ended, 1);
+  assert.equal(fake.sockets.length, 2);
+  assert.deepEqual(
+    fake.sockets[1].config.browser,
+    ["Mac OS", "Chrome", "14.4.1"]
+  );
+  await service.shutdown();
 });
 
 test("Forzar conexión reabre el socket sin borrar las credenciales", async () => {

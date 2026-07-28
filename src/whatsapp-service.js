@@ -7,6 +7,9 @@ const { BotEngine } = require("./bot-engine");
 const { parseRegistrationCommand } = require("./command-registry");
 
 const BAILEYS_VERSION = "7.0.0-rc13";
+const SIGNAL_LOG_FILTER_MARKER = Symbol.for(
+  "jadrixservs.signal-session-log-filter"
+);
 
 let baileysModulePromise;
 
@@ -65,6 +68,31 @@ function createSilentLogger() {
     fatal: () => undefined
   };
   return logger;
+}
+
+function isSensitiveSignalSessionDump(args) {
+  return Array.isArray(args) && args[0] === "Closing session:";
+}
+
+function installSignalSessionLogFilter() {
+  if (globalThis.console?.[SIGNAL_LOG_FILTER_MARKER]) return;
+  const originalInfo = globalThis.console.info.bind(globalThis.console);
+  Object.defineProperty(globalThis.console, SIGNAL_LOG_FILTER_MARKER, {
+    value: originalInfo,
+    enumerable: false,
+    configurable: false
+  });
+  globalThis.console.info = (...args) => {
+    if (isSensitiveSignalSessionDump(args)) return;
+    originalInfo(...args);
+  };
+}
+
+function compatibleBrowserProfile(Browsers) {
+  if (typeof Browsers?.macOS === "function") {
+    return Browsers.macOS("Chrome");
+  }
+  return ["Mac OS", "Chrome", "14.4.1"];
 }
 
 function getDisconnectStatusCode(error) {
@@ -165,6 +193,7 @@ class WhatsAppService {
     sleepFn = sleep,
     readyTimeoutMs
   }) {
+    installSignalSessionLogFilter();
     this.store = store;
     this.sessionDir = path.resolve(sessionDir);
     this.mediaDir = path.resolve(mediaDir);
@@ -202,7 +231,7 @@ class WhatsAppService {
       waState: null,
       phone: null,
       name: null,
-      webVersion: `Baileys ${BAILEYS_VERSION}`,
+      webVersion: `Baileys ${BAILEYS_VERSION} · Mac OS/Chrome`,
       transport: "websocket",
       recoveryAttempts: 0,
       reconnectAttempts: 0,
@@ -335,7 +364,7 @@ class WhatsAppService {
 
       const socket = makeWASocket({
         auth: state,
-        browser: Browsers.ubuntu("JadrixServs Bot"),
+        browser: compatibleBrowserProfile(Browsers),
         logger: createSilentLogger(),
         printQRInTerminal: false,
         markOnlineOnConnect: false,
@@ -575,22 +604,37 @@ class WhatsAppService {
     }
 
     const restartRequired = statusCode === DisconnectReason.restartRequired;
+    const rejectedClientProfile = statusCode === 405;
+    const reconnectPresentation = restartRequired
+      ? {
+          loadingPercent: 85,
+          loadingMessage: "QR aceptado; reiniciando para completar el vínculo",
+          error: null
+        }
+      : rejectedClientProfile
+        ? {
+            loadingPercent: 35,
+            loadingMessage: "Aplicando perfil compatible Mac OS + Chrome",
+            error:
+              "WhatsApp rechazó el intento anterior (405). Reintentando con el perfil compatible sin borrar tu sesión…"
+          }
+        : {
+            loadingPercent: null,
+            loadingMessage: "Reconectando con WhatsApp",
+            error: "La conexión se interrumpió. Reintentando automáticamente…"
+          };
     this.#setStatus({
       state: "reconnecting",
       ready: false,
       qrDataUrl: null,
-      loadingPercent: restartRequired ? 85 : null,
-      loadingMessage: restartRequired
-        ? "QR aceptado; reiniciando para completar el vínculo"
-        : "Reconectando con WhatsApp",
       waState: String(statusCode || "CLOSED"),
       phone: null,
-      error: restartRequired
-        ? null
-        : "La conexión se interrumpió. Reintentando automáticamente…"
+      ...reconnectPresentation
     });
     this.#scheduleReconnect(
-      restartRequired ? 1000 : Number(process.env.WHATSAPP_RECONNECT_DELAY_MS) || 3000
+      restartRequired || rejectedClientProfile
+        ? 1000
+        : Number(process.env.WHATSAPP_RECONNECT_DELAY_MS) || 3000
     );
   }
 
@@ -602,16 +646,17 @@ class WhatsAppService {
       1000 * 2 ** Math.min(this.reconnectAttempts - 1, 6)
     );
     const scheduledDelay = Math.max(100, Number(delayMs) || 0, exponentialDelay);
-    const completingLogin = this.status.loadingPercent === 85;
+    const preservingConnectionGuidance =
+      this.status.loadingPercent === 85 || this.status.waState === "405";
     this.#setStatus({
       state: "reconnecting",
       ready: false,
       reconnectAttempts: this.reconnectAttempts,
-      loadingMessage: completingLogin
+      loadingMessage: preservingConnectionGuidance
         ? this.status.loadingMessage
         : `Reconexión automática ${this.reconnectAttempts}`,
-      error: completingLogin
-        ? null
+      error: preservingConnectionGuidance
+        ? this.status.error
         : `La conexión se interrumpió. Nuevo intento automático en ${Math.ceil(scheduledDelay / 1000)} segundos.`
     });
     this.reconnectTimer = setTimeout(() => {
@@ -980,6 +1025,8 @@ module.exports = {
   WhatsAppService,
   normalizeWhatsAppId,
   calculateHumanDelay,
+  compatibleBrowserProfile,
   extractMessageBody,
-  getDisconnectStatusCode
+  getDisconnectStatusCode,
+  isSensitiveSignalSessionDump
 };
