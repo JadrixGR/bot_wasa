@@ -1,24 +1,23 @@
-# JadrixServs Bot V4.7.2
+# JadrixServs Bot V4.8 Profesional
 
-## Novedades de V4.7.2
+## Novedades de V4.8
 
-- Botón **Modo noche / Modo día** disponible tanto en el acceso como dentro del panel.
-- La preferencia visual se guarda en el navegador y se conserva al recargar o volver a iniciar sesión.
-- La skin oscura cubre paneles, formularios, tablas, buscador, ventanas, AFK y clientes, manteniendo visibles los colores de vencimiento.
-- En el primer inicio se crea `/data/jadrixservs-v4.pre-v4.7.2.json` sin reemplazar `/data/jadrixservs-v4.json`.
-
-- La tabla de clientes muestra los días restantes y colorea cada fila: verde de 3 a 30 días, amarillo de 0 a 2 días y rojo cuando ya venció.
-- El número de WhatsApp es el único dato mostrado en la columna de cliente y se copia al portapapeles con un clic.
-- Cada número puede tener hasta 2 compras o servicios registrados. Registrar el mismo producto continúa renovando el registro existente.
-- Se puede eliminar solo una compra o eliminar por completo al cliente con todos sus registros.
-- La actualización conserva `/data/jadrixservs-v4.json`; no crea una base nueva ni borra los clientes existentes. En el primer inicio también guarda `/data/jadrixservs-v4.pre-v4.7.2.json`.
+- Interfaz profesional completamente renovada en el acceso y en todas las secciones del panel.
+- Resumen ejecutivo con estados visuales, indicadores animados y contadores suaves.
+- Navegación con iconos, cabecera inteligente y menú móvil accesible.
+- Animaciones discretas en paneles, clientes, QR, ventanas y notificaciones.
+- Modo día y modo noche rediseñados; la preferencia continúa guardándose en el navegador.
+- Mejor adaptación para computadora, tablet y celular, sin eliminar ningún control.
+- Se mantienen el bot, comandos, clientes, renovaciones, cobranzas, AFK, respaldos y conexión de WhatsApp.
+- La actualización conserva `/data/jadrixservs-v4.json`, `/data/jadrixservs-v4.backup.json`, `/data/media` y `/data/whatsapp-session`.
+- El esquema interno de datos permanece en V4.7 deliberadamente, evitando una migración innecesaria y protegiendo la base existente.
 
 
 Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clientes, consultar servicios por celular, usar modo AFK y automatizar renovaciones.
 
 ## Flujo de mensajes
 
-La V4.7 funciona en modo **solo bienvenida**:
+La V4.8 funciona en modo **solo bienvenida**:
 
 1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales.
 2. Los tres se envían por separado, mostrando “escribiendo…” y una pequeña demora antes de cada envío.
@@ -50,7 +49,7 @@ La primera parte identifica el producto o plan y el número indica los días agr
 - Ignora los comandos escritos por el cliente; solamente los mensajes enviados por el propietario pueden registrar o renovar.
 - Evita sumar dos veces si WhatsApp repite el mismo evento.
 
-El comando queda visible dentro del chat y el bot no envía una confirmación adicional. La lista completa está en `public/COMANDOS-WHATSAPP-V4.7.txt` y también se descarga desde **Clientes y cobros**.
+El comando queda visible dentro del chat y el bot no envía una confirmación adicional. La lista completa está en `public/COMANDOS-WHATSAPP-V4.8.txt` y también se descarga desde **Clientes y cobros**.
 
 ## Clientes y renovaciones
 
@@ -93,7 +92,7 @@ Al pulsar **Renovar**, el nuevo periodo comienza desde el vencimiento vigente si
 
 La base principal continúa siendo `/data/jadrixservs-v4.json`; no se cambia su nombre ni su ubicación, por lo que la actualización conserva los clientes existentes. La sesión vinculada se mantiene en `/data/whatsapp-session`.
 
-La V4.7 agrega dos niveles de protección:
+La V4.8 conserva estos niveles de protección:
 
 - Antes de reemplazar una base válida guarda `/data/jadrixservs-v4.backup.json`.
 - Si el JSON principal queda dañado, el bot recupera automáticamente la copia válida.
@@ -127,23 +126,23 @@ Los mensajes de renovación admiten estas variables:
 
 Antes de subir el código, abre el panel actual y pulsa **Clientes y cobros → Descargar respaldo JSON**. Después abre **Render → tu servicio → Disks** y confirma que ya existe el disco `jadrixservs-data` montado en `/data`.
 
-Si el disco no existe, guarda primero el respaldo JSON y después crea el disco con `Mount Path: /data` y `1 GB`. Al adjuntar el disco Render realiza un despliegue y los archivos efímeros anteriores no se copian automáticamente. Una vez instalada la V4.7, usa **Restaurar respaldo JSON** para recuperar la base. El respaldo recupera clientes y configuración; si la sesión de WhatsApp estaba únicamente en almacenamiento efímero, será necesario escanear el QR una vez para guardarla en el disco nuevo.
+Si el disco no existe, guarda primero el respaldo JSON y después crea el disco con `Mount Path: /data` y `1 GB`. Al adjuntar el disco Render realiza un despliegue y los archivos efímeros anteriores no se copian automáticamente. Una vez instalada la V4.8, usa **Restaurar respaldo JSON** para recuperar la base. El respaldo recupera clientes y configuración; si la sesión de WhatsApp estaba únicamente en almacenamiento efímero, será necesario escanear el QR una vez para guardarla en el disco nuevo.
 
 Si el disco ya aparece, continúa:
 
-1. Descomprime `JadrixServs-Bot-V4.7.zip`.
+1. Descomprime `JadrixServs-Bot-V4.8-Profesional.zip`.
 2. Copia el contenido de `jadrixservs-bot-v4` dentro de tu repositorio.
 3. Acepta reemplazar los archivos y no borres la carpeta `.git`.
 4. Elimina los archivos antiguos si todavía existen:
 
 ```bat
-git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt PASOS-ACTUALIZAR-V4.5.txt public/COMANDOS-WHATSAPP-V4.5.txt public/COMANDOS-WHATSAPP-V4.6.txt PASOS-ACTUALIZAR-V4.6.txt
+git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt PASOS-ACTUALIZAR-V4.5.txt PASOS-ACTUALIZAR-V4.6.txt PASOS-ACTUALIZAR-V4.7.2.txt public/COMANDOS-WHATSAPP-V4.5.txt public/COMANDOS-WHATSAPP-V4.6.txt public/COMANDOS-WHATSAPP-V4.7.txt
 git add -A
-git commit -m "Actualizar JadrixServs a V4.7"
+git commit -m "Actualizar JadrixServs a V4.8 Profesional"
 git push
 ```
 
-El proceso inicia desde `src/server.js`. El archivo persistente `/data/jadrixservs-v4.json` se migra automáticamente a V4.7 y conserva clientes, fechas, mensajes, entrenamiento, conversaciones y demás datos existentes. Los contactos que ya tenían una conversación guardada se marcan como atendidos para que la actualización no les repita la bienvenida.
+El proceso inicia desde `src/server.js`. El archivo persistente `/data/jadrixservs-v4.json` conserva su esquema V4.7 y no cambia de nombre ni ubicación. Se mantienen clientes, fechas, mensajes, entrenamiento heredado, conversaciones y demás datos existentes. Los contactos que ya tenían una conversación guardada continúan marcados como atendidos para que la actualización no les repita la bienvenida.
 
 ## Variables de Render
 
@@ -173,7 +172,7 @@ En un servicio existente también puedes revisarlo directamente en Render:
 5. Si tienes acceso a **Shell**, antes de actualizar puedes crear una copia adicional:
 
 ```bash
-cp /data/jadrixservs-v4.json /data/jadrixservs-v4.pre-v4.7.json
+cp /data/jadrixservs-v4.json /data/jadrixservs-v4.pre-v4.8-manual.json
 ```
 
 Los servicios gratuitos de Render no admiten discos persistentes. Para mantener la sesión y los clientes entre reinicios o despliegues, el servicio debe usar un plan de pago compatible con disco, como Starter.
@@ -197,7 +196,7 @@ Si el celular muestra la sesión iniciada pero el panel no termina de conectar:
 
 La sesión válida se guarda en `/data/whatsapp-session`; no hace falta volver a escanear después de cada despliegue.
 
-Ningún bot basado en una conexión no oficial puede prometer una sesión literalmente ilimitada: WhatsApp puede revocarla, reemplazarla si se abre otra conexión o solicitar un nuevo QR. La V4.7 evita que un corte temporal detenga definitivamente el bot y mantiene reintentos automáticos mientras la sesión siga siendo válida.
+Ningún bot basado en una conexión no oficial puede prometer una sesión literalmente ilimitada: WhatsApp puede revocarla, reemplazarla si se abre otra conexión o solicitar un nuevo QR. La V4.8 evita que un corte temporal detenga definitivamente el bot y mantiene reintentos automáticos mientras la sesión siga siendo válida.
 
 ## Prueba recomendada
 

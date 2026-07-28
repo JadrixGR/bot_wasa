@@ -1,0 +1,75 @@
+JADRIXSERVS BOT V4.8 - COMANDOS PARA REGISTRAR CLIENTES
+=========================================================
+
+FORMATO
+
+  /comando dias
+
+Ejemplos:
+
+  /planpro 30
+  /gptpro 30
+  /geminipro 365
+
+IMPORTANTE
+
+- Escribe el comando TÚ desde tu propio WhatsApp dentro del chat del cliente.
+- Los comandos escritos por un cliente no se ejecutan.
+- El comando queda visible en el chat. El bot no envía una confirmación adicional.
+- "dias" debe ser un número entero entre 1 y 3650.
+- El bot obtiene automáticamente el número del chat.
+- Un registro nuevo se guarda con el nombre "estimad@".
+- El recordatorio automático queda activado para 2 días antes.
+- La cobranza del día de vencimiento queda apagada hasta que la actives en el panel.
+- Si el mismo número ya tiene ese mismo servicio, el comando suma los días desde
+  su vencimiento actual. Si ya venció, cuenta desde el día del comando.
+- Si el mismo número compra otro servicio, se crea otro registro independiente.
+- Si usas una duración o un precio especial, revisa y edita el precio desde el panel.
+
+COMANDOS DE PRODUCTOS
+
+  /claudepro DIAS       Claude Pro
+  /gptpro DIAS          ChatGPT Pro
+  /gptplus DIAS         ChatGPT Plus
+  /gptpersonal DIAS     ChatGPT Plus Personal
+  /geminipro DIAS       Gemini Pro
+  /supergrok DIAS       SuperGrok
+  /perplexitypro DIAS   Perplexity Pro
+  /gammapro DIAS        Gamma Pro
+  /capcutpro DIAS       CapCut Pro
+  /netflix DIAS         Netflix
+  /hbo DIAS             HBO
+  /crunchyroll DIAS     Crunchyroll
+
+COMANDOS DE PLANES
+
+  /planpro DIAS         Plan Pro
+  /planplus DIAS        Plan Plus
+
+EJEMPLOS COMPLETOS
+
+  /claudepro 30
+  /gptpro 30
+  /gptplus 30
+  /gptpersonal 30
+  /geminipro 30
+  /geminipro 365
+  /geminipro 548
+  /supergrok 30
+  /perplexitypro 30
+  /gammapro 30
+  /capcutpro 30
+  /netflix 30
+  /hbo 30
+  /crunchyroll 30
+  /planpro 30
+  /planplus 30
+
+DESPUÉS DE ENVIAR UN COMANDO
+
+1. Abre el panel JadrixServs.
+2. Entra a "Clientes y cobros".
+3. Verifica el producto, los días y la fecha de vencimiento.
+4. Edita la cuenta asociada si corresponde.
+5. Activa la cobranza automática solamente si deseas que se envíe el día del
+   vencimiento.

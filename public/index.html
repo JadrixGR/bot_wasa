@@ -1,9 +1,9 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta id="themeColorMeta" name="theme-color" content="#f4f6fb">
+    <meta id="themeColorMeta" name="theme-color" content="#f3f6fc">
     <script>
       (() => {
         try {
@@ -17,122 +17,216 @@
         }
       })();
     </script>
-    <title>JadrixServs · Bot V4.7.2</title>
+    <title>JadrixServs · Panel Profesional V4.8</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
   </head>
   <body>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-    <main id="loginView" class="login-shell">
-      <section class="login-card">
-        <button class="theme-toggle login-theme-toggle" data-theme-toggle type="button" aria-label="Activar modo noche" aria-pressed="false">
-          <span class="theme-icon" aria-hidden="true">☾</span>
-          <span class="theme-label">Modo noche</span>
-        </button>
-        <div class="brand-mark">J</div>
-        <p class="eyebrow">JADRIXSERVS</p>
-        <h1>Panel del bot</h1>
-        <p class="muted">Administra WhatsApp, clientes, renovaciones y mensajes automáticos desde un solo lugar.</p>
-        <form id="loginForm" class="stack">
-          <label>
-            Contraseña
-            <input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
-          </label>
-          <button class="button primary wide" type="submit">Ingresar al panel</button>
-        </form>
-        <p id="loginWarning" class="warning hidden">
-          Estás usando la contraseña local predeterminada. Configura ADMIN_PASSWORD en Render.
-        </p>
-      </section>
-    </main>
+    <section id="loginView" class="login-shell" aria-label="Acceso al panel">
+      <div class="login-ambient" aria-hidden="true">
+        <span class="ambient-orb orb-one"></span>
+        <span class="ambient-orb orb-two"></span>
+        <span class="ambient-grid"></span>
+      </div>
+      <div class="login-layout">
+        <section class="login-showcase" aria-label="Presentación de JadrixServs">
+          <div class="showcase-brand">
+            <div class="brand-mark showcase-logo">J</div>
+            <div>
+              <strong>JadrixServs</strong>
+              <span>Customer Operations</span>
+            </div>
+          </div>
+          <div class="showcase-copy">
+            <span class="live-chip"><i></i> Centro de operaciones</span>
+            <h2>Tu negocio, tus clientes y WhatsApp en un solo lugar.</h2>
+            <p>Controla renovaciones, cobranzas y atención automática desde un panel privado diseñado para trabajar con claridad.</p>
+          </div>
+          <div class="showcase-features">
+            <article>
+              <span class="feature-icon">01</span>
+              <div><strong>Seguimiento inteligente</strong><small>Vencimientos y clientes siempre visibles.</small></div>
+            </article>
+            <article>
+              <span class="feature-icon">02</span>
+              <div><strong>Información protegida</strong><small>Datos y sesión conservados en Render.</small></div>
+            </article>
+            <article>
+              <span class="feature-icon">03</span>
+              <div><strong>Atención automatizada</strong><small>Bienvenidas, AFK y cobranzas programadas.</small></div>
+            </article>
+          </div>
+          <p class="showcase-footnote"><span>●</span> Panel privado · V4.8 Profesional</p>
+        </section>
+
+        <section class="login-card">
+          <button class="theme-toggle login-theme-toggle" data-theme-toggle type="button" aria-label="Activar modo noche" aria-pressed="false">
+            <span class="theme-icon" aria-hidden="true">☾</span>
+            <span class="theme-label">Modo noche</span>
+          </button>
+          <div class="login-mobile-brand">
+            <div class="brand-mark">J</div>
+            <strong>JadrixServs</strong>
+          </div>
+          <div class="login-heading">
+            <p class="eyebrow">ACCESO SEGURO</p>
+            <h1>Bienvenido de nuevo</h1>
+            <p class="muted">Ingresa a tu centro de control para administrar toda la operación.</p>
+          </div>
+          <form id="loginForm" class="stack">
+            <label>
+              Contraseña de administrador
+              <span class="field-shell">
+                <span class="field-leading" aria-hidden="true">••</span>
+                <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Ingresa tu contraseña" required>
+              </span>
+            </label>
+            <button class="button primary wide login-submit" type="submit">
+              Ingresar al panel <span aria-hidden="true">→</span>
+            </button>
+          </form>
+          <p class="login-security"><span aria-hidden="true">◆</span> Conexión privada y sesión protegida</p>
+          <p id="loginWarning" class="warning hidden">
+            Estás usando la contraseña local predeterminada. Configura ADMIN_PASSWORD en Render.
+          </p>
+        </section>
+      </div>
+    </section>
 
     <div id="appView" class="app-shell hidden">
       <aside class="sidebar">
+        <div class="sidebar-ambient" aria-hidden="true"></div>
         <div class="sidebar-brand">
           <div class="brand-mark small">J</div>
           <div>
             <strong>JadrixServs</strong>
-            <span>Bot V4.7.2</span>
+            <span>Panel Profesional V4.8</span>
           </div>
         </div>
         <nav aria-label="Secciones del panel">
-          <button class="nav-button active" data-section="dashboard">
-            <span>⌂</span> Resumen
+          <p class="nav-caption">OPERACIÓN</p>
+          <button class="nav-button active" data-section="dashboard" aria-current="page" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>
+            </span><span>Resumen</span>
           </button>
-          <button class="nav-button" data-section="whatsapp">
-            <span>◉</span> WhatsApp
+          <button class="nav-button" data-section="whatsapp" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-11.8 7l-4.2 1 1.1-4A8 8 0 1 1 20 11.5Z"/><path d="M8.5 9.2c.7 2.2 2.1 3.7 4.4 4.5"/></svg>
+            </span><span>WhatsApp</span>
           </button>
-          <button class="nav-button" data-section="clients">
-            <span>♙</span> Clientes y cobros
+          <button class="nav-button" data-section="clients" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M16 20v-1.5c0-2-1.8-3.5-4-3.5H7c-2.2 0-4 1.5-4 3.5V20"/><circle cx="9.5" cy="8" r="3.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 15c1.8.3 3 1.6 3 3.3V20"/></svg>
+            </span><span>Clientes y cobros</span>
           </button>
-          <button class="nav-button" data-section="lookup">
-            <span>⌕</span> Buscar celular
+          <button class="nav-button" data-section="lookup" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+            </span><span>Buscar celular</span>
           </button>
-          <button class="nav-button" data-section="messages">
-            <span>✦</span> Mensajes automáticos
+          <p class="nav-caption nav-caption-secondary">AUTOMATIZACIÓN</p>
+          <button class="nav-button" data-section="messages" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M5 18.5 3.5 21l4.2-.9a9 9 0 1 0-2.7-1.6Z"/><path d="M8 9h8M8 13h5"/></svg>
+            </span><span>Mensajes automáticos</span>
           </button>
-          <button class="nav-button" data-section="afk">
-            <span>☾</span> Modo AFK
+          <button class="nav-button" data-section="afk" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z"/></svg>
+            </span><span>Modo AFK</span>
           </button>
-          <button class="nav-button" data-section="activity">
-            <span>≡</span> Actividad
+          <button class="nav-button" data-section="activity" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 18V6M9 18v-5m5 5V9m5 9V3"/></svg>
+            </span><span>Actividad</span>
           </button>
         </nav>
         <div class="sidebar-footer">
           <span id="sidebarStatus" class="status-dot offline"></span>
-          <span id="sidebarStatusText">Conectando…</span>
-          <button id="logoutButton" class="text-button" type="button">Salir</button>
+          <div class="sidebar-status-copy">
+            <small>Estado del servicio</small>
+            <span id="sidebarStatusText">Conectando…</span>
+          </div>
+          <button id="logoutButton" class="logout-button" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg>
+          </button>
         </div>
       </aside>
+      <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Cerrar menú"></button>
 
-      <main class="content">
+      <main class="content" aria-label="Panel de administración">
         <header class="topbar">
-          <div>
+          <div class="topbar-heading">
             <p class="eyebrow">PANEL DE CONTROL</p>
             <h1 id="pageTitle">Resumen</h1>
           </div>
           <div class="top-actions">
+            <span class="date-chip">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="15" rx="2"/><path d="M8 3v5M16 3v5M3.5 10h17"/></svg>
+              <span id="clockText" class="muted"></span>
+            </span>
             <button class="theme-toggle" data-theme-toggle type="button" aria-label="Activar modo noche" aria-pressed="false">
               <span class="theme-icon" aria-hidden="true">☾</span>
               <span class="theme-label">Modo noche</span>
             </button>
-            <span id="clockText" class="muted"></span>
-            <button id="mobileMenu" class="icon-button" type="button" aria-label="Abrir menú">☰</button>
+            <span class="admin-chip" title="Sesión de administrador">
+              <span class="admin-avatar">J</span>
+              <span><strong>Administrador</strong><small>JadrixServs</small></span>
+            </span>
+            <button id="mobileMenu" class="icon-button menu-button" type="button" aria-label="Abrir menú" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+            </button>
           </div>
         </header>
 
         <section id="section-dashboard" class="page-section active">
           <div class="hero-card">
-            <div>
+            <span class="hero-grid-pattern" aria-hidden="true"></span>
+            <div class="hero-copy">
               <span id="heroBadge" class="pill neutral">Revisando WhatsApp</span>
-              <h2>Tu operación de JadrixServs, en orden.</h2>
+              <h2>Todo tu negocio bajo control.</h2>
               <p id="heroText">Conecta WhatsApp y administra cada renovación desde este panel.</p>
+              <div class="hero-actions">
+                <button class="button light" data-go="whatsapp" type="button">Ver conexión <span aria-hidden="true">→</span></button>
+                <span class="hero-secure"><i></i> Operación protegida en Render</span>
+              </div>
             </div>
-            <button class="button light" data-go="whatsapp" type="button">Ver conexión</button>
+            <div class="hero-visual" aria-hidden="true">
+              <span class="orbit orbit-one"></span>
+              <span class="orbit orbit-two"></span>
+              <div class="hero-core">
+                <span class="core-pulse"></span>
+                <svg viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-11.8 7l-4.2 1 1.1-4A8 8 0 1 1 20 11.5Z"/><path d="M8.5 9.2c.7 2.2 2.1 3.7 4.4 4.5"/></svg>
+              </div>
+              <span class="floating-status status-top"><i></i> Sesión segura</span>
+              <span class="floating-status status-bottom"><i></i> Datos activos</span>
+            </div>
           </div>
 
           <div class="stats-grid">
-            <article class="stat-card">
-              <span class="stat-icon blue">✓</span>
-              <div><strong id="statActive">0</strong><span>Clientes activos</span></div>
+            <article class="stat-card stat-active">
+              <span class="stat-icon blue"><svg viewBox="0 0 24 24"><path d="M16 20v-1.5c0-2-1.8-3.5-4-3.5H7c-2.2 0-4 1.5-4 3.5V20"/><circle cx="9.5" cy="8" r="3.5"/><path d="M16 6h5M18.5 3.5v5"/></svg></span>
+              <div><span>Clientes activos</span><strong id="statActive">0</strong><small>Servicios en curso</small></div>
             </article>
-            <article class="stat-card">
-              <span class="stat-icon amber">!</span>
-              <div><strong id="statDue">0</strong><span>Vencen en 2 días</span></div>
+            <article class="stat-card stat-due">
+              <span class="stat-icon amber"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+              <div><span>Próximos a vencer</span><strong id="statDue">0</strong><small>En los siguientes 2 días</small></div>
             </article>
-            <article class="stat-card">
-              <span class="stat-icon purple">●</span>
-              <div><strong id="statToday">0</strong><span>Renuevan hoy</span></div>
+            <article class="stat-card stat-today">
+              <span class="stat-icon purple"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 3v6M16 3v6M4 11h16"/><path d="m9 16 2 2 4-4"/></svg></span>
+              <div><span>Renuevan hoy</span><strong id="statToday">0</strong><small>Cobranzas del día</small></div>
             </article>
-            <article class="stat-card">
-              <span class="stat-icon red">×</span>
-              <div><strong id="statExpired">0</strong><span>Vencidos</span></div>
+            <article class="stat-card stat-expired">
+              <span class="stat-icon red"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 17h.01"/><path d="M10.3 3.8 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.8a2 2 0 0 0-3.4 0Z"/></svg></span>
+              <div><span>Servicios vencidos</span><strong id="statExpired">0</strong><small>Requieren seguimiento</small></div>
             </article>
           </div>
 
           <div class="two-column">
-            <article class="panel">
+            <article class="panel dashboard-panel whatsapp-summary-panel">
               <div class="panel-heading">
                 <div>
                   <p class="eyebrow">ESTADO</p>
@@ -142,7 +236,7 @@
               </div>
               <div id="dashboardWaBody" class="empty-state compact">Consultando conexión…</div>
             </article>
-            <article class="panel">
+            <article class="panel dashboard-panel activity-summary-panel">
               <div class="panel-heading">
                 <div>
                   <p class="eyebrow">ÚLTIMOS EVENTOS</p>
@@ -226,7 +320,7 @@
             <p class="microcopy">
               Si ese número ya tiene el mismo servicio, los días se agregan desde su vencimiento vigente. Cada número puede tener hasta 2 compras o servicios registrados. Los clientes no pueden ejecutar estos comandos.
             </p>
-            <a class="button secondary" href="/COMANDOS-WHATSAPP-V4.7.txt" download>Descargar todos los comandos</a>
+            <a class="button secondary" href="/COMANDOS-WHATSAPP-V4.8.txt" download>Descargar todos los comandos</a>
           </article>
           <article class="panel table-panel">
             <div class="table-tools">
@@ -239,7 +333,7 @@
                 <option value="pausado">Pausados</option>
               </select>
             </div>
-            <div class="client-color-legend" aria-label="Colores de vencimiento">
+            <div class="client-color-legend" role="group" aria-label="Colores de vencimiento">
               <span><i class="legend-dot green"></i> De 3 a 30 días</span>
               <span><i class="legend-dot yellow"></i> De 0 a 2 días</span>
               <span><i class="legend-dot red"></i> Vencido</span>
@@ -390,16 +484,16 @@
         </div>
         <input id="clientId" type="hidden">
         <div class="form-grid">
-          <label>Nombre<input id="clientName" required></label>
-          <label>WhatsApp<input id="clientWhatsapp" inputmode="tel" placeholder="921444991" required></label>
-          <label>Servicio o plan<input id="clientProduct" list="productOptions" required></label>
+          <label>Nombre<input id="clientName" type="text" required></label>
+          <label>WhatsApp<input id="clientWhatsapp" type="text" inputmode="tel" placeholder="921444991" required></label>
+          <label>Servicio o plan<input id="clientProduct" type="text" list="productOptions" required></label>
           <label>
             Cuenta asociada
-            <input id="clientAccountReference" placeholder="Correo, perfil o código interno">
+            <input id="clientAccountReference" type="text" placeholder="Correo, perfil o código interno">
             <small>No guardes contraseñas aquí.</small>
           </label>
-          <label>Precio<input id="clientPrice" placeholder="S/25"></label>
-          <label>Método de pago<input id="clientPaymentMethod" placeholder="Yape, Binance…"></label>
+          <label>Precio<input id="clientPrice" type="text" placeholder="S/25"></label>
+          <label>Método de pago<input id="clientPaymentMethod" type="text" placeholder="Yape, Binance…"></label>
           <label>Estado
             <select id="clientStatus">
               <option value="activo">Activo</option>
@@ -447,11 +541,11 @@
               <option value="18">18 meses</option>
             </select>
           </label>
-          <label>Precio<input id="renewPrice"></label>
-          <label>Método de pago<input id="renewPaymentMethod"></label>
+          <label>Precio<input id="renewPrice" type="text"></label>
+          <label>Método de pago<input id="renewPaymentMethod" type="text"></label>
           <label class="span-2">
             Cuenta asociada
-            <input id="renewAccountReference" placeholder="Correo, perfil o código interno">
+            <input id="renewAccountReference" type="text" placeholder="Correo, perfil o código interno">
           </label>
         </div>
         <div class="dialog-actions">

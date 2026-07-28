@@ -33,7 +33,7 @@ function applyTheme(theme, persist = false) {
   document.documentElement.style.colorScheme = nextTheme;
 
   const themeMeta = $("#themeColorMeta");
-  if (themeMeta) themeMeta.setAttribute("content", isDark ? "#0d1220" : "#f4f6fb");
+  if (themeMeta) themeMeta.setAttribute("content", isDark ? "#090e1a" : "#f3f6fc");
 
   $$('[data-theme-toggle]').forEach((button) => {
     button.setAttribute("aria-pressed", String(isDark));
@@ -116,21 +116,40 @@ async function api(url, options = {}) {
 function showLogin() {
   $("#loginView").classList.remove("hidden");
   $("#appView").classList.add("hidden");
+  document.body.classList.remove("app-active", "menu-open");
+  setSidebarOpen(false);
   clearInterval(state.poller);
 }
 
 async function showApp() {
   $("#loginView").classList.add("hidden");
   $("#appView").classList.remove("hidden");
+  document.body.classList.add("app-active");
   await refreshAll();
   clearInterval(state.poller);
   state.poller = setInterval(refreshWhatsAppStatus, 4000);
 }
 
+function setSidebarOpen(open) {
+  const sidebar = $(".sidebar");
+  const backdrop = $("#sidebarBackdrop");
+  const menuButton = $("#mobileMenu");
+  sidebar.classList.toggle("open", open);
+  backdrop.classList.toggle("visible", open);
+  document.body.classList.toggle("menu-open", open);
+  menuButton.setAttribute("aria-expanded", String(open));
+  menuButton.setAttribute("aria-label", open ? "Cerrar menú" : "Abrir menú");
+}
+
 function navigate(section) {
   state.activeSection = section;
   $$(".page-section").forEach((element) => element.classList.toggle("active", element.id === `section-${section}`));
-  $$(".nav-button").forEach((button) => button.classList.toggle("active", button.dataset.section === section));
+  $$(".nav-button").forEach((button) => {
+    const active = button.dataset.section === section;
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
   const titles = {
     dashboard: "Resumen",
     whatsapp: "WhatsApp",
@@ -141,7 +160,11 @@ function navigate(section) {
     activity: "Actividad"
   };
   $("#pageTitle").textContent = titles[section] || "JadrixServs";
-  $(".sidebar").classList.remove("open");
+  setSidebarOpen(false);
+  window.scrollTo({
+    top: 0,
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+  });
   if (section === "clients") loadClients();
   if (section === "activity") loadLogs();
   if (section === "messages" || section === "afk") loadSettings();
@@ -202,10 +225,10 @@ function renderWhatsApp(status) {
   }
 
   $("#dashboardWaBody").innerHTML = status.ready
-    ? `<strong>✓ Bot conectado</strong><p class="muted">${escapeHtml(status.phone || "Sesión activa")} · Bienvenidas y renovaciones automáticas disponibles.</p>`
+    ? `<span class="dashboard-status-icon success">✓</span><div><strong>Bot conectado</strong><p class="muted">${escapeHtml(status.phone || "Sesión activa")} · Bienvenidas y renovaciones automáticas disponibles.</p></div>`
     : status.qrDataUrl
-      ? `<strong>Falta escanear el QR</strong><p class="muted">Ve a la sección WhatsApp para vincular tu celular.</p>`
-      : `<strong>${escapeHtml(label)}</strong><p class="muted">${escapeHtml(status.error || description)}</p>`;
+      ? `<span class="dashboard-status-icon warning">⌁</span><div><strong>Falta escanear el QR</strong><p class="muted">Ve a la sección WhatsApp para vincular tu celular.</p></div>`
+      : `<span class="dashboard-status-icon neutral">••</span><div><strong>${escapeHtml(label)}</strong><p class="muted">${escapeHtml(status.error || description)}</p></div>`;
 }
 
 function formatRelative(value) {
@@ -259,10 +282,10 @@ async function refreshWhatsAppStatus() {
 }
 
 function renderDashboard(dashboard) {
-  $("#statActive").textContent = dashboard.stats.active;
-  $("#statDue").textContent = dashboard.stats.dueSoon;
-  $("#statToday").textContent = dashboard.stats.dueToday;
-  $("#statExpired").textContent = dashboard.stats.expired;
+  animateStatValue($("#statActive"), dashboard.stats.active);
+  animateStatValue($("#statDue"), dashboard.stats.dueSoon);
+  animateStatValue($("#statToday"), dashboard.stats.dueToday);
+  animateStatValue($("#statExpired"), dashboard.stats.expired);
   const storageNotice = $("#storageNotice");
   if (storageNotice) {
     const protectedStorage = Boolean(
@@ -274,6 +297,24 @@ function renderDashboard(dashboard) {
       : "<strong>Atención:</strong> DATA_DIR no apunta a <code>/data</code>. Corrígelo en Render antes de actualizar para no perder la sesión ni los clientes al reiniciar.";
   }
   renderLogs(dashboard.recentLogs, $("#recentLogs"), true);
+}
+
+function animateStatValue(element, value) {
+  const target = Number(value) || 0;
+  const start = Number(element.textContent) || 0;
+  if (start === target || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    element.textContent = target;
+    return;
+  }
+  const startedAt = performance.now();
+  const duration = 520;
+  const tick = (time) => {
+    const progress = Math.min(1, (time - startedAt) / duration);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    element.textContent = Math.round(start + (target - start) * eased);
+    if (progress < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 
 async function loadClients() {
@@ -397,10 +438,10 @@ function renderClients() {
     return (!query || haystack.includes(query)) && (!status || client.status === status);
   });
   const table = $("#clientsTable");
-  table.innerHTML = clients.map((client) => {
+  table.innerHTML = clients.map((client, index) => {
     const remaining = daysRemainingPresentation(client);
     return `
-    <tr class="client-row tone-${remaining.tone}">
+    <tr class="client-row tone-${remaining.tone}" style="--row-index:${index}">
       <td>
         <button class="phone-copy" data-action="copy-phone" data-id="${client.id}" type="button" title="Copiar número al portapapeles">
           ${escapeHtml(client.whatsapp)}
@@ -414,12 +455,12 @@ function renderClients() {
       <td><div class="automation-flags"><span class="mini-flag ${client.autoReminder ? "on" : ""}">Aviso 2d</span><span class="mini-flag ${client.autoCharge ? "on" : ""}">Cobro</span></div></td>
       <td><span class="pill ${clientStatusTone(client.status)}">${escapeHtml(client.status)}</span></td>
       <td><div class="row-actions">
-        <button data-action="remind" data-id="${client.id}" type="button">Recordar</button>
-        <button data-action="charge" data-id="${client.id}" type="button">Cobrar</button>
-        <button data-action="renew" data-id="${client.id}" type="button">Renovar</button>
-        <button data-action="edit" data-id="${client.id}" type="button">Editar</button>
-        <button class="danger" data-action="delete-record" data-id="${client.id}" type="button">Eliminar registro</button>
-        <button class="danger" data-action="delete-client" data-id="${client.id}" type="button">Eliminar cliente</button>
+        <button class="action-remind" data-action="remind" data-id="${client.id}" type="button" title="Enviar recordatorio manual">Recordar</button>
+        <button class="action-charge" data-action="charge" data-id="${client.id}" type="button" title="Enviar cobranza ahora">Cobrar</button>
+        <button class="action-renew" data-action="renew" data-id="${client.id}" type="button" title="Registrar renovación">Renovar</button>
+        <button class="action-edit" data-action="edit" data-id="${client.id}" type="button" title="Editar este registro">Editar</button>
+        <button class="danger" data-action="delete-record" data-id="${client.id}" type="button" title="Eliminar únicamente esta compra">Eliminar registro</button>
+        <button class="danger" data-action="delete-client" data-id="${client.id}" type="button" title="Eliminar todas las compras de este número">Eliminar cliente</button>
       </div></td>
     </tr>`;
   }).join("");
@@ -636,7 +677,11 @@ function bindEvents() {
   });
   $$(".nav-button").forEach((button) => button.addEventListener("click", () => navigate(button.dataset.section)));
   $$("[data-go]").forEach((button) => button.addEventListener("click", () => navigate(button.dataset.go)));
-  $("#mobileMenu").addEventListener("click", () => $(".sidebar").classList.toggle("open"));
+  $("#mobileMenu").addEventListener("click", () => setSidebarOpen(!$(".sidebar").classList.contains("open")));
+  $("#sidebarBackdrop").addEventListener("click", () => setSidebarOpen(false));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && $(".sidebar").classList.contains("open")) setSidebarOpen(false);
+  });
   $("#restartWaButton").addEventListener("click", async () => {
     try {
       await api("/api/whatsapp/restart", { method: "POST" });
@@ -819,6 +864,8 @@ async function init() {
     else showLogin();
   } catch (error) {
     showToast(error.message, true);
+  } finally {
+    requestAnimationFrame(() => document.body.classList.add("ui-ready"));
   }
 }
 
