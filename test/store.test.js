@@ -445,7 +445,7 @@ test("elimina por completo todas las compras del mismo número", () => {
 });
 
 
-test("crea una copia previa a V4.7.1 sin alterar los clientes existentes", () => {
+test("crea una copia previa a V4.7.2 sin alterar los clientes existentes", () => {
   const directory = temporaryDataDir();
   try {
     const existing = createInitialData();
@@ -483,7 +483,7 @@ test("crea una copia previa a V4.7.1 sin alterar los clientes existentes", () =>
     const store = new JsonStore(directory);
     const preUpdatePath = path.join(
       directory,
-      "jadrixservs-v4.pre-v4.7.1.json"
+      "jadrixservs-v4.pre-v4.7.2.json"
     );
     assert.equal(fs.existsSync(preUpdatePath), true);
     assert.equal(store.listClients().length, 1);

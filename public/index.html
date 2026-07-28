@@ -3,8 +3,21 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0b1020">
-    <title>JadrixServs · Bot V4.7.1</title>
+    <meta id="themeColorMeta" name="theme-color" content="#f4f6fb">
+    <script>
+      (() => {
+        try {
+          const savedTheme = localStorage.getItem("jadrixservs-theme");
+          const theme = savedTheme === "dark" || savedTheme === "light"
+            ? savedTheme
+            : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+          document.documentElement.dataset.theme = theme;
+        } catch {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
+    <title>JadrixServs · Bot V4.7.2</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
   </head>
@@ -13,6 +26,10 @@
 
     <main id="loginView" class="login-shell">
       <section class="login-card">
+        <button class="theme-toggle login-theme-toggle" data-theme-toggle type="button" aria-label="Activar modo noche" aria-pressed="false">
+          <span class="theme-icon" aria-hidden="true">☾</span>
+          <span class="theme-label">Modo noche</span>
+        </button>
         <div class="brand-mark">J</div>
         <p class="eyebrow">JADRIXSERVS</p>
         <h1>Panel del bot</h1>
@@ -36,7 +53,7 @@
           <div class="brand-mark small">J</div>
           <div>
             <strong>JadrixServs</strong>
-            <span>Bot V4.7.1</span>
+            <span>Bot V4.7.2</span>
           </div>
         </div>
         <nav aria-label="Secciones del panel">
@@ -76,6 +93,10 @@
             <h1 id="pageTitle">Resumen</h1>
           </div>
           <div class="top-actions">
+            <button class="theme-toggle" data-theme-toggle type="button" aria-label="Activar modo noche" aria-pressed="false">
+              <span class="theme-icon" aria-hidden="true">☾</span>
+              <span class="theme-label">Modo noche</span>
+            </button>
             <span id="clockText" class="muted"></span>
             <button id="mobileMenu" class="icon-button" type="button" aria-label="Abrir menú">☰</button>
           </div>

@@ -1,12 +1,17 @@
-# JadrixServs Bot V4.7.1
+# JadrixServs Bot V4.7.2
 
-## Novedades de V4.7.1
+## Novedades de V4.7.2
+
+- Botón **Modo noche / Modo día** disponible tanto en el acceso como dentro del panel.
+- La preferencia visual se guarda en el navegador y se conserva al recargar o volver a iniciar sesión.
+- La skin oscura cubre paneles, formularios, tablas, buscador, ventanas, AFK y clientes, manteniendo visibles los colores de vencimiento.
+- En el primer inicio se crea `/data/jadrixservs-v4.pre-v4.7.2.json` sin reemplazar `/data/jadrixservs-v4.json`.
 
 - La tabla de clientes muestra los días restantes y colorea cada fila: verde de 3 a 30 días, amarillo de 0 a 2 días y rojo cuando ya venció.
 - El número de WhatsApp es el único dato mostrado en la columna de cliente y se copia al portapapeles con un clic.
 - Cada número puede tener hasta 2 compras o servicios registrados. Registrar el mismo producto continúa renovando el registro existente.
 - Se puede eliminar solo una compra o eliminar por completo al cliente con todos sus registros.
-- La actualización conserva `/data/jadrixservs-v4.json`; no crea una base nueva ni borra los clientes existentes. En el primer inicio también guarda `/data/jadrixservs-v4.pre-v4.7.1.json`.
+- La actualización conserva `/data/jadrixservs-v4.json`; no crea una base nueva ni borra los clientes existentes. En el primer inicio también guarda `/data/jadrixservs-v4.pre-v4.7.2.json`.
 
 
 Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clientes, consultar servicios por celular, usar modo AFK y automatizar renovaciones.

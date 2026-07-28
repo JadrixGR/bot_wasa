@@ -32,7 +32,7 @@ class JsonStore {
     );
     this.preUpdateBackupFilePath = path.join(
       this.dataDir,
-      "jadrixservs-v4.pre-v4.7.1.json"
+      "jadrixservs-v4.pre-v4.7.2.json"
     );
     fs.mkdirSync(this.dataDir, { recursive: true });
     this.#createPreUpdateBackup();

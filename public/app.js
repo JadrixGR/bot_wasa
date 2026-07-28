@@ -1,5 +1,7 @@
 "use strict";
 
+const THEME_STORAGE_KEY = "jadrixservs-theme";
+
 const state = {
   clients: [],
   settings: null,
@@ -12,6 +14,52 @@ const state = {
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+
+function preferredTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    if (saved === "dark" || saved === "light") return saved;
+  } catch {
+    // El panel continúa aunque el navegador bloquee el almacenamiento local.
+  }
+  if (document.documentElement.dataset.theme === "dark") return "dark";
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme(theme, persist = false) {
+  const nextTheme = theme === "dark" ? "dark" : "light";
+  const isDark = nextTheme === "dark";
+  document.documentElement.dataset.theme = nextTheme;
+  document.documentElement.style.colorScheme = nextTheme;
+
+  const themeMeta = $("#themeColorMeta");
+  if (themeMeta) themeMeta.setAttribute("content", isDark ? "#0d1220" : "#f4f6fb");
+
+  $$('[data-theme-toggle]').forEach((button) => {
+    button.setAttribute("aria-pressed", String(isDark));
+    button.setAttribute("aria-label", isDark ? "Activar modo día" : "Activar modo noche");
+    button.title = isDark ? "Cambiar a modo día" : "Cambiar a modo noche";
+    const icon = $(".theme-icon", button);
+    const label = $(".theme-label", button);
+    if (icon) icon.textContent = isDark ? "☀" : "☾";
+    if (label) label.textContent = isDark ? "Modo día" : "Modo noche";
+  });
+
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    } catch {
+      // La preferencia solo durará hasta recargar si el almacenamiento está bloqueado.
+    }
+  }
+}
+
+function toggleTheme() {
+  const current = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  const nextTheme = current === "dark" ? "light" : "dark";
+  applyTheme(nextTheme, true);
+  showToast(nextTheme === "dark" ? "Modo noche activado." : "Modo día activado.");
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -571,6 +619,7 @@ async function refreshDashboardOnly() {
 }
 
 function bindEvents() {
+  $$(`[data-theme-toggle]`).forEach((button) => button.addEventListener("click", toggleTheme));
   $("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
@@ -759,6 +808,7 @@ function bindEvents() {
 }
 
 async function init() {
+  applyTheme(preferredTheme());
   bindEvents();
   const date = new Intl.DateTimeFormat("es-PE", { dateStyle: "full" }).format(new Date());
   $("#clockText").textContent = date.charAt(0).toUpperCase() + date.slice(1);
