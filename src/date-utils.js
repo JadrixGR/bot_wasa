@@ -49,13 +49,31 @@ function daysBetween(from, to) {
   return Math.round((parseDateOnly(to) - parseDateOnly(from)) / 86400000);
 }
 
-function todayInTimeZone(timeZone = "America/Lima") {
+function todayInTimeZone(timeZone = "America/Lima", date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
-  }).format(new Date());
+  }).format(date);
+}
+
+function minutesInTimeZone(timeZone = "America/Lima", date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const hour = Number(parts.find((part) => part.type === "hour")?.value || 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value || 0);
+  return hour * 60 + minute;
+}
+
+function timeToMinutes(value = "09:00") {
+  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(String(value || ""));
+  if (!match) throw new Error("La hora debe tener el formato HH:MM.");
+  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 function calculateRenewal(previousExpiry, paymentDate, termMonths = 1) {
@@ -78,5 +96,7 @@ module.exports = {
   compareDateOnly,
   daysBetween,
   todayInTimeZone,
+  minutesInTimeZone,
+  timeToMinutes,
   calculateRenewal
 };

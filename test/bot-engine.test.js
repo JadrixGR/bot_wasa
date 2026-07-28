@@ -29,7 +29,7 @@ function makeHarness(conversation = {}, registeredClient = null) {
     store,
     sendText: async (_chatId, text) => sent.push(text)
   });
-  return { engine, sent, logs, conversation, conversations };
+  return { engine, sent, logs, conversation, conversations, data };
 }
 
 test("normaliza acentos y signos", () => {
@@ -137,4 +137,46 @@ test("un archivo como primer contacto también recibe únicamente los tres mensa
   assert.equal(result.action, "welcome-sequence");
   assert.equal(sent.length, 3);
   assert.equal(conversation.lastInboundHadMedia, true);
+});
+
+
+test("el modo AFK responde una sola vez por contacto durante cada activación", async () => {
+  const { engine, sent, data, conversation } = makeHarness();
+  data.settings.afkEnabled = true;
+  data.settings.afkMessage = "Estamos fuera del horario de atención.";
+  data.settings.afkSessionId = "afk-1";
+
+  const first = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "Hola",
+    fromName: "Ana"
+  });
+  const second = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "¿Me ayudan?",
+    fromName: "Ana"
+  });
+
+  assert.equal(first.action, "afk-reply");
+  assert.equal(second.action, "afk-already-sent");
+  assert.deepEqual(sent, ["Estamos fuera del horario de atención."]);
+  assert.equal(conversation.lastAfkSessionId, "afk-1");
+  assert.equal(conversation.welcomeSequenceSentAt, undefined);
+});
+
+test("el modo AFK también informa a un cliente registrado", async () => {
+  const client = { id: "cliente-afk", name: "Ana", whatsapp: "51900000000" };
+  const { engine, sent, data } = makeHarness({}, client);
+  data.settings.afkEnabled = true;
+  data.settings.afkMessage = "Volvemos mañana a las 9 AM.";
+  data.settings.afkSessionId = "afk-2";
+
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "Quiero renovar"
+  });
+
+  assert.equal(result.action, "afk-reply");
+  assert.equal(result.clientId, "cliente-afk");
+  assert.deepEqual(sent, ["Volvemos mañana a las 9 AM."]);
 });

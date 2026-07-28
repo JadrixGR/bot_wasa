@@ -6,7 +6,9 @@ const {
   addDays,
   addMonthsClamped,
   calculateRenewal,
-  daysBetween
+  daysBetween,
+  minutesInTimeZone,
+  timeToMinutes
 } = require("../src/date-utils");
 
 test("la renovación anticipada comienza desde el vencimiento actual", () => {
@@ -36,4 +38,13 @@ test("calcula días usando fechas sin hora", () => {
 test("agrega días exactos incluso al cambiar de mes o año", () => {
   assert.equal(addDays("2026-07-27", 30), "2026-08-26");
   assert.equal(addDays("2027-12-31", 60), "2028-02-29");
+});
+
+
+test("convierte la hora de cobranza y respeta America/Lima", () => {
+  assert.equal(timeToMinutes("09:00"), 540);
+  assert.equal(
+    minutesInTimeZone("America/Lima", new Date("2026-07-28T14:30:00.000Z")),
+    570
+  );
 });

@@ -380,12 +380,17 @@ const defaultSettings = {
     "Hola {nombre} 👋 Te recordamos que tu servicio *{producto}* vence en 2 días, el *{fecha}*. Puedes renovar anticipadamente sin perder ningún día; el nuevo periodo comienza desde tu fecha de vencimiento actual.",
   chargeTemplate:
     "Hola {nombre} 👋 Hoy vence tu servicio *{producto}*. El monto de renovación es *{precio}*. Escríbenos para mantener el servicio activo.",
+  chargeStartTime: "09:00",
+  afkEnabled: false,
+  afkMessage:
+    "👋 Gracias por escribir a JadrixServs. En este momento estamos fuera del horario de atención. Apenas volvamos, revisaremos tu mensaje y te responderemos por este chat.",
+  afkSessionId: null,
   greetingMessages: buildGreetingMessages()
 };
 
 function createInitialData() {
   return {
-    version: 4.6,
+    version: 4.7,
     settings: structuredClone(defaultSettings),
     products: structuredClone(products),
     plans: structuredClone(plans),

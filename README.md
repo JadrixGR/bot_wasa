@@ -1,10 +1,10 @@
-# JadrixServs Bot V4.6
+# JadrixServs Bot V4.7
 
-Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clientes mediante comandos y automatizar renovaciones.
+Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clientes, consultar servicios por celular, usar modo AFK y automatizar renovaciones.
 
 ## Flujo de mensajes
 
-La V4.6 funciona en modo **solo bienvenida**:
+La V4.7 funciona en modo **solo bienvenida**:
 
 1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales.
 2. Los tres se envían por separado, mostrando “escribiendo…” y una pequeña demora antes de cada envío.
@@ -36,7 +36,7 @@ La primera parte identifica el producto o plan y el número indica los días agr
 - Ignora los comandos escritos por el cliente; solamente los mensajes enviados por el propietario pueden registrar o renovar.
 - Evita sumar dos veces si WhatsApp repite el mismo evento.
 
-El comando queda visible dentro del chat y el bot no envía una confirmación adicional. La lista completa está en `public/COMANDOS-WHATSAPP-V4.6.txt` y también se descarga desde **Clientes y cobros**.
+El comando queda visible dentro del chat y el bot no envía una confirmación adicional. La lista completa está en `public/COMANDOS-WHATSAPP-V4.7.txt` y también se descarga desde **Clientes y cobros**.
 
 ## Clientes y renovaciones
 
@@ -61,17 +61,30 @@ Al registrar un cliente:
 
 El programador revisa los vencimientos cada 15 minutos mientras WhatsApp está conectado. Cada aviso se marca con la fecha de renovación para no enviarlo dos veces.
 
+### Cobrar a quienes vencen hoy
+
+En **Clientes y cobros** aparece el botón **Cobrar a los que vencen hoy**. Envía el mensaje de cobranza a todos los clientes activos cuya fecha de vencimiento sea hoy y omite los que ya fueron cobrados para esa misma fecha. Tanto este botón como la cobranza automática se habilitan desde la hora configurada en **Mensajes automáticos**; el valor inicial es **09:00**, usando `America/Lima`.
+
+### Buscar cliente por celular
+
+La sección **Buscar celular** permite escribir los 9 dígitos peruanos o el número con código de país. El panel muestra todos los servicios asociados al número, su precio, cuenta, estado, activación y fecha de vencimiento. Un mismo celular puede tener varios servicios independientes.
+
+### Modo AFK
+
+La sección **Modo AFK** permite activar o desactivar un mensaje editable para fuera del horario de atención. Durante cada activación, cada contacto recibe el mensaje AFK una sola vez para evitar respuestas repetidas. El modo AFK también responde a clientes registrados y tiene prioridad sobre la bienvenida: mientras esté activo, un contacto nuevo recibe el AFK; al desactivarlo, la bienvenida de tres mensajes vuelve a funcionar cuando ese contacto escriba nuevamente.
+
 Al pulsar **Renovar**, el nuevo periodo comienza desde el vencimiento vigente si el cliente pagó antes; así no pierde días. También puedes actualizar la cuenta asociada durante la renovación.
 
 ## Protección de clientes y sesión
 
 La base principal continúa siendo `/data/jadrixservs-v4.json`; no se cambia su nombre ni su ubicación, por lo que la actualización conserva los clientes existentes. La sesión vinculada se mantiene en `/data/whatsapp-session`.
 
-La V4.6 agrega dos niveles de protección:
+La V4.7 agrega dos niveles de protección:
 
 - Antes de reemplazar una base válida guarda `/data/jadrixservs-v4.backup.json`.
 - Si el JSON principal queda dañado, el bot recupera automáticamente la copia válida.
 - En **Clientes y cobros → Descargar respaldo JSON** puedes guardar una copia completa en tu computadora.
+- **Restaurar respaldo JSON** vuelve a cargar clientes, fechas, mensajes y configuración desde esa copia sin tocar la sesión de WhatsApp.
 
 No elimines el disco persistente, no cambies su punto de montaje y no crees otro servicio de Render para hacer la actualización. El disco debe seguir unido al mismo servicio.
 
@@ -82,6 +95,9 @@ En **Mensajes automáticos** puedes editar:
 - Los tres mensajes de bienvenida.
 - El recordatorio de 2 días antes.
 - La cobranza del día de vencimiento.
+- La hora mínima para iniciar cobranzas, configurada inicialmente a las 09:00.
+
+El mensaje fuera de horario se edita por separado en **Modo AFK**.
 
 Los mensajes de renovación admiten estas variables:
 
@@ -95,21 +111,25 @@ Los mensajes de renovación admiten estas variables:
 
 ## Actualizar una instalación existente
 
-Antes de subir el código, abre **Render → tu servicio → Disks** y confirma que ya existe el disco `jadrixservs-data` montado en `/data`. Si no aparece, **detente y no hagas `git push` todavía**: un despliegue sobre almacenamiento efímero puede borrar la base actual. Primero debe extraerse una copia de los datos del servicio en ejecución. Si el disco sí aparece, continúa:
+Antes de subir el código, abre el panel actual y pulsa **Clientes y cobros → Descargar respaldo JSON**. Después abre **Render → tu servicio → Disks** y confirma que ya existe el disco `jadrixservs-data` montado en `/data`.
 
-1. Descomprime `JadrixServs-Bot-V4.6.zip`.
+Si el disco no existe, guarda primero el respaldo JSON y después crea el disco con `Mount Path: /data` y `1 GB`. Al adjuntar el disco Render realiza un despliegue y los archivos efímeros anteriores no se copian automáticamente. Una vez instalada la V4.7, usa **Restaurar respaldo JSON** para recuperar la base. El respaldo recupera clientes y configuración; si la sesión de WhatsApp estaba únicamente en almacenamiento efímero, será necesario escanear el QR una vez para guardarla en el disco nuevo.
+
+Si el disco ya aparece, continúa:
+
+1. Descomprime `JadrixServs-Bot-V4.7.zip`.
 2. Copia el contenido de `jadrixservs-bot-v4` dentro de tu repositorio.
 3. Acepta reemplazar los archivos y no borres la carpeta `.git`.
 4. Elimina los archivos antiguos si todavía existen:
 
 ```bat
-git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt PASOS-ACTUALIZAR-V4.5.txt public/COMANDOS-WHATSAPP-V4.5.txt
+git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt PASOS-ACTUALIZAR-V4.5.txt public/COMANDOS-WHATSAPP-V4.5.txt public/COMANDOS-WHATSAPP-V4.6.txt PASOS-ACTUALIZAR-V4.6.txt
 git add -A
-git commit -m "Actualizar JadrixServs a V4.6"
+git commit -m "Actualizar JadrixServs a V4.7"
 git push
 ```
 
-El proceso inicia desde `src/server.js`. El archivo persistente `/data/jadrixservs-v4.json` se migra automáticamente a V4.6 y conserva clientes, fechas, mensajes, entrenamiento, conversaciones y demás datos existentes. Los contactos que ya tenían una conversación guardada se marcan como atendidos para que la actualización no les repita la bienvenida.
+El proceso inicia desde `src/server.js`. El archivo persistente `/data/jadrixservs-v4.json` se migra automáticamente a V4.7 y conserva clientes, fechas, mensajes, entrenamiento, conversaciones y demás datos existentes. Los contactos que ya tenían una conversación guardada se marcan como atendidos para que la actualización no les repita la bienvenida.
 
 ## Variables de Render
 
@@ -139,7 +159,7 @@ En un servicio existente también puedes revisarlo directamente en Render:
 5. Si tienes acceso a **Shell**, antes de actualizar puedes crear una copia adicional:
 
 ```bash
-cp /data/jadrixservs-v4.json /data/jadrixservs-v4.pre-v4.6.json
+cp /data/jadrixservs-v4.json /data/jadrixservs-v4.pre-v4.7.json
 ```
 
 Los servicios gratuitos de Render no admiten discos persistentes. Para mantener la sesión y los clientes entre reinicios o despliegues, el servicio debe usar un plan de pago compatible con disco, como Starter.
@@ -163,7 +183,7 @@ Si el celular muestra la sesión iniciada pero el panel no termina de conectar:
 
 La sesión válida se guarda en `/data/whatsapp-session`; no hace falta volver a escanear después de cada despliegue.
 
-Ningún bot basado en una conexión no oficial puede prometer una sesión literalmente ilimitada: WhatsApp puede revocarla, reemplazarla si se abre otra conexión o solicitar un nuevo QR. La V4.6 evita que un corte temporal detenga definitivamente el bot y mantiene reintentos automáticos mientras la sesión siga siendo válida.
+Ningún bot basado en una conexión no oficial puede prometer una sesión literalmente ilimitada: WhatsApp puede revocarla, reemplazarla si se abre otra conexión o solicitar un nuevo QR. La V4.7 evita que un corte temporal detenga definitivamente el bot y mantiene reintentos automáticos mientras la sesión siga siendo válida.
 
 ## Prueba recomendada
 
@@ -174,6 +194,13 @@ Desde un número que no esté registrado como cliente:
 3. Envía una segunda consulta: el bot debe permanecer en silencio y ese mensaje debe quedar sin leer.
 
 Luego registra un cliente con vencimiento dentro de 2 días, deja activo el recordatorio y pulsa **Procesar vencimientos**. Para probar la cobranza, usa un vencimiento de hoy y activa manualmente **Cobranza automática**.
+
+Para probar las funciones nuevas:
+
+1. Crea o edita un cliente para que venza hoy.
+2. Después de las 09:00, pulsa **Cobrar a los que vencen hoy** y confirma que no vuelve a cobrarlo al pulsar nuevamente.
+3. Abre **Buscar celular**, escribe su número y revisa que aparezcan el servicio y vencimiento.
+4. Activa **Modo AFK**, escribe desde otro número dos veces y confirma que recibe una sola respuesta AFK. Desactívalo al terminar.
 
 Para probar el registro rápido:
 

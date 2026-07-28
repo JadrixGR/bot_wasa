@@ -62,7 +62,7 @@ test("rechaza comandos desconocidos o días inválidos", () => {
 
 test("el archivo TXT contiene todos los comandos del catálogo", () => {
   const guide = fs.readFileSync(
-    path.resolve("public/COMANDOS-WHATSAPP-V4.6.txt"),
+    path.resolve("public/COMANDOS-WHATSAPP-V4.7.txt"),
     "utf8"
   );
   for (const item of getCommandCatalog()) {

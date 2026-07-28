@@ -48,42 +48,62 @@ class BotEngine {
       }
     };
     const now = new Date().toISOString();
+    const settings = this.store.getSettings();
     const client =
       this.store.findClientByWhatsApp?.(chatId, alternateChatId) || null;
-
-    if (client) {
-      updateConversations({
-        lastInboundAt: now,
-        lastInboundPreview: String(body || "").slice(0, 180),
-        lastInboundHadMedia: Boolean(hasMedia),
-        registeredClientId: client.id
-      });
-      return { action: "registered-client", clientId: client.id };
-    }
-
-    if (conversation.welcomeSequenceSentAt) {
-      updateConversations({
-        lastInboundAt: now,
-        lastInboundPreview: String(body || "").slice(0, 180),
-        lastInboundHadMedia: Boolean(hasMedia)
-      });
-      return { action: "welcome-already-sent" };
-    }
-
-    const settings = this.store.getSettings();
-    const messages = settings.greetingMessages.slice(0, 3);
-    const previousCount = Math.max(
-      0,
-      Math.min(3, Number(conversation.welcomeMessagesSent) || 0)
-    );
 
     updateConversations({
       firstInboundAt: conversation.firstInboundAt || now,
       lastInboundAt: now,
       lastInboundPreview: String(body || "").slice(0, 180),
       lastInboundHadMedia: Boolean(hasMedia),
-      firstInboundName: conversation.firstInboundName || fromName || ""
+      firstInboundName: conversation.firstInboundName || fromName || "",
+      ...(client ? { registeredClientId: client.id } : {})
     });
+
+    if (settings.afkEnabled) {
+      const afkSessionId = String(settings.afkSessionId || "afk-activo");
+      const alreadyAnswered = conversations.some(
+        (item) => String(item.lastAfkSessionId || "") === afkSessionId
+      );
+      if (alreadyAnswered) {
+        return {
+          action: "afk-already-sent",
+          clientId: client?.id || null
+        };
+      }
+
+      await this.sendText(chatId, settings.afkMessage);
+      updateConversations({
+        lastAfkSessionId: afkSessionId,
+        lastAfkSentAt: new Date().toISOString()
+      });
+      this.store.addLog(
+        "afk",
+        `Respuesta AFK enviada a ${fromName || chatId}`,
+        { chatId, clientId: client?.id || null }
+      );
+      this.store.save();
+      return {
+        action: "afk-reply",
+        messages: 1,
+        clientId: client?.id || null
+      };
+    }
+
+    if (client) {
+      return { action: "registered-client", clientId: client.id };
+    }
+
+    if (conversation.welcomeSequenceSentAt) {
+      return { action: "welcome-already-sent" };
+    }
+
+    const messages = settings.greetingMessages.slice(0, 3);
+    const previousCount = Math.max(
+      0,
+      Math.min(3, Number(conversation.welcomeMessagesSent) || 0)
+    );
 
     let sentNow = 0;
     for (let index = previousCount; index < messages.length; index += 1) {

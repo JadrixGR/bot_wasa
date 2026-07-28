@@ -5,11 +5,16 @@ const path = require("node:path");
 const express = require("express");
 const helmet = require("helmet");
 const cookieSession = require("cookie-session");
-const { JsonStore } = require("./store");
+const { JsonStore, normalizeWhatsAppDigits } = require("./store");
 const { AiService } = require("./ai-service");
 const { WhatsAppService } = require("./whatsapp-service");
 const { ReminderScheduler, fillTemplate } = require("./scheduler");
-const { daysBetween, todayInTimeZone } = require("./date-utils");
+const {
+  daysBetween,
+  todayInTimeZone,
+  minutesInTimeZone,
+  timeToMinutes
+} = require("./date-utils");
 
 const rootDir = path.resolve(__dirname, "..");
 const dataDir = path.resolve(process.env.DATA_DIR || path.join(rootDir, "data"));
@@ -46,7 +51,7 @@ app.use(
     }
   })
 );
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "5mb" }));
 app.use(express.urlencoded({ extended: false }));
 app.use(
   cookieSession({
@@ -71,7 +76,7 @@ function asyncRoute(handler) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.6",
+    version: "4.7",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
     storage: {
@@ -174,6 +179,16 @@ app.get("/api/clients", requireAuth, (req, res) => {
   res.json(store.listClients({ includeArchived: req.query.archived === "1" }));
 });
 
+app.get("/api/clients/lookup", requireAuth, (req, res) => {
+  const phone = normalizeWhatsAppDigits(req.query.phone);
+  if (phone.length < 9) {
+    return res.status(400).json({
+      error: "Ingresa un número de celular válido para realizar la búsqueda."
+    });
+  }
+  return res.json({ phone, clients: store.findClientsByWhatsApp(phone) });
+});
+
 app.post("/api/clients", requireAuth, (req, res) => {
   res.status(201).json(store.createClient(req.body));
 });
@@ -226,6 +241,76 @@ app.post(
     });
     store.save();
     return res.json({ ok: true });
+  })
+);
+
+app.post(
+  "/api/clients/charge-due-today",
+  requireAuth,
+  asyncRoute(async (_req, res) => {
+    if (!whatsapp.getStatus().ready) {
+      return res.status(409).json({
+        error: "WhatsApp debe estar conectado antes de enviar las cobranzas."
+      });
+    }
+
+    const timeZone = process.env.BOT_TIMEZONE || "America/Lima";
+    const settings = store.getSettings();
+    const chargeStartTime = settings.chargeStartTime || "09:00";
+    const currentMinutes = minutesInTimeZone(timeZone);
+    if (currentMinutes < timeToMinutes(chargeStartTime)) {
+      return res.status(400).json({
+        error: `Las cobranzas del día se habilitan desde las ${chargeStartTime}.`
+      });
+    }
+
+    const today = todayInTimeZone(timeZone);
+    const dueToday = store.listClients().filter(
+      (client) =>
+        !client.archived &&
+        client.status === "activo" &&
+        client.expiryDate === today
+    );
+    const pending = dueToday.filter(
+      (client) => client.lastChargeKey !== `${client.expiryDate}:charge`
+    );
+    const errors = [];
+    let sent = 0;
+
+    for (const client of pending) {
+      try {
+        await whatsapp.sendText(
+          client.whatsapp,
+          fillTemplate(settings.chargeTemplate, client)
+        );
+        store.updateClient(client.id, {
+          lastChargeKey: `${client.expiryDate}:charge`
+        });
+        store.addLog("charge", `Cobranza del día enviada a ${client.name}`, {
+          clientId: client.id,
+          batch: true
+        });
+        store.save();
+        sent += 1;
+      } catch (error) {
+        errors.push({
+          clientId: client.id,
+          name: client.name,
+          message: error.message
+        });
+      }
+    }
+
+    return res.json({
+      ok: errors.length === 0,
+      date: today,
+      chargeStartTime,
+      totalDue: dueToday.length,
+      pending: pending.length,
+      alreadyCharged: dueToday.length - pending.length,
+      sent,
+      errors
+    });
   })
 );
 
@@ -399,6 +484,11 @@ app.get("/api/backup/data.json", requireAuth, (_req, res) => {
   res.send(`${JSON.stringify(store.snapshot(), null, 2)}\n`);
 });
 
+app.post("/api/backup/restore", requireAuth, (req, res) => {
+  const result = store.restoreSnapshot(req.body);
+  res.json({ ok: true, ...result });
+});
+
 app.use(express.static(path.join(rootDir, "public"), { index: "index.html" }));
 
 app.use((error, _req, res, _next) => {
@@ -412,7 +502,7 @@ app.use((error, _req, res, _next) => {
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4.6 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V4.7 disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
   }

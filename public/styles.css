@@ -492,3 +492,72 @@ dialog form { padding: 1.4rem; }
   .attention-card { align-items: flex-start; flex-direction: column; }
   .table-panel { margin-inline: -1rem; border-radius: 0; }
 }
+
+.button.charge {
+  border-color: #efc270;
+  color: #744b05;
+  background: #fff2d8;
+}
+.button.charge:hover { background: #ffe9bd; }
+
+.lookup-panel { margin-bottom: 1.25rem; }
+.lookup-form {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) auto;
+  align-items: end;
+  gap: 0.8rem;
+}
+.lookup-form .button { min-width: 10rem; }
+.lookup-results { display: grid; gap: 1rem; }
+.lookup-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 0.15rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.lookup-summary strong { color: var(--ink); }
+.lookup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+  gap: 1rem;
+}
+.lookup-card { display: grid; align-content: start; }
+.client-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 0 0 1rem;
+}
+.client-details div {
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: #fbfcff;
+}
+.client-details dt {
+  color: var(--muted);
+  font-size: 0.63rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.client-details dd {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.afk-panel { display: grid; gap: 1.2rem; max-width: 56rem; }
+.afk-toggle span { display: grid; gap: 0.2rem; }
+.afk-toggle small { color: var(--muted); font-weight: 500; }
+
+@media (max-width: 760px) {
+  .lookup-form { grid-template-columns: 1fr; }
+  .lookup-form .button { width: 100%; }
+  .lookup-summary { align-items: flex-start; flex-direction: column; }
+  .client-details { grid-template-columns: 1fr; }
+}

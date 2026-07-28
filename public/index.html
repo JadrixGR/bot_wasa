@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0b1020">
-    <title>JadrixServs · Bot V4.6</title>
+    <title>JadrixServs · Bot V4.7</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
   </head>
@@ -36,7 +36,7 @@
           <div class="brand-mark small">J</div>
           <div>
             <strong>JadrixServs</strong>
-            <span>Bot V4.6</span>
+            <span>Bot V4.7</span>
           </div>
         </div>
         <nav aria-label="Secciones del panel">
@@ -49,8 +49,14 @@
           <button class="nav-button" data-section="clients">
             <span>♙</span> Clientes y cobros
           </button>
+          <button class="nav-button" data-section="lookup">
+            <span>⌕</span> Buscar celular
+          </button>
           <button class="nav-button" data-section="messages">
             <span>✦</span> Mensajes automáticos
+          </button>
+          <button class="nav-button" data-section="afk">
+            <span>☾</span> Modo AFK
           </button>
           <button class="nav-button" data-section="activity">
             <span>≡</span> Actividad
@@ -173,6 +179,9 @@
             <div class="button-row">
               <a class="button secondary" href="/api/export/clients.csv">Exportar CSV</a>
               <a class="button secondary" href="/api/backup/data.json">Descargar respaldo JSON</a>
+              <button id="restoreBackupButton" class="button secondary" type="button">Restaurar respaldo JSON</button>
+              <input id="restoreBackupInput" class="hidden" type="file" accept="application/json,.json">
+              <button id="chargeTodayButton" class="button charge" type="button">Cobrar a los que vencen hoy</button>
               <button id="runSchedulerButton" class="button secondary" type="button">Procesar vencimientos</button>
               <button id="newClientButton" class="button primary" type="button">+ Nuevo cliente</button>
             </div>
@@ -196,7 +205,7 @@
             <p class="microcopy">
               Si ese número ya tiene el mismo servicio, los días se agregan desde su vencimiento vigente. Los clientes no pueden ejecutar estos comandos.
             </p>
-            <a class="button secondary" href="/COMANDOS-WHATSAPP-V4.6.txt" download>Descargar todos los comandos</a>
+            <a class="button secondary" href="/COMANDOS-WHATSAPP-V4.7.txt" download>Descargar todos los comandos</a>
           </article>
           <article class="panel table-panel">
             <div class="table-tools">
@@ -232,6 +241,32 @@
           </article>
         </section>
 
+        <section id="section-lookup" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">CONSULTA RÁPIDA</p>
+              <h2>Buscar cliente por celular</h2>
+              <p class="muted">Escribe el número para ver todos los servicios registrados y sus fechas de vencimiento.</p>
+            </div>
+          </div>
+          <article class="panel lookup-panel">
+            <form id="lookupForm" class="lookup-form">
+              <label>
+                Número de celular o WhatsApp
+                <input id="lookupPhone" type="search" inputmode="tel" autocomplete="off" placeholder="Ejemplo: 921444991" required>
+              </label>
+              <button id="lookupButton" class="button primary" type="submit">Buscar cliente</button>
+            </form>
+            <p class="microcopy">Puedes escribir los 9 dígitos de Perú o el número completo con código de país.</p>
+          </article>
+          <div id="lookupResults" class="lookup-results">
+            <div class="empty-state compact">
+              <strong>La información aparecerá aquí.</strong>
+              <span>Podrás ver servicio, precio, estado y vencimiento.</span>
+            </div>
+          </div>
+        </section>
+
         <section id="section-messages" class="page-section">
           <div class="section-intro">
             <div>
@@ -265,11 +300,42 @@
                 <textarea id="chargeTemplate" rows="7"></textarea>
                 <small>Variables: {nombre}, {producto}, {cuenta}, {precio}, {fecha}</small>
               </label>
+              <label>
+                Hora mínima para iniciar cobranzas
+                <input id="chargeStartTime" type="time" value="09:00" required>
+                <small>Las cobranzas automáticas y el botón “Cobrar a los que vencen hoy” respetan esta hora de Perú.</small>
+              </label>
               <div class="notice">
                 El recordatorio queda activado al registrar un cliente. La cobranza automática permanece apagada hasta que la marques manualmente en su ficha.
               </div>
             </article>
           </div>
+        </section>
+
+        <section id="section-afk" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">FUERA DE HORARIO</p>
+              <h2>Modo AFK</h2>
+              <p class="muted">Activa una respuesta temporal cuando no estés disponible para atender.</p>
+            </div>
+            <button id="saveAfkButton" class="button primary" type="button">Guardar modo AFK</button>
+          </div>
+          <div id="afkStatusNotice" class="notice">Cargando estado del modo AFK…</div>
+          <article class="panel afk-panel">
+            <label class="toggle-row afk-toggle">
+              <input id="afkEnabled" type="checkbox">
+              <span>
+                <strong>Activar modo AFK</strong>
+                <small>Al activarlo, cada contacto recibe una sola respuesta AFK durante esta ausencia.</small>
+              </span>
+            </label>
+            <label>
+              Mensaje fuera del horario de atención
+              <textarea id="afkMessage" rows="8" placeholder="Escribe el mensaje que recibirán tus clientes"></textarea>
+              <small>El modo AFK tiene prioridad: mientras esté activo, un contacto nuevo recibe este mensaje en lugar de la bienvenida de 3 partes. Al desactivarlo, la bienvenida vuelve a funcionar normalmente.</small>
+            </label>
+          </article>
         </section>
 
         <section id="section-activity" class="page-section">

@@ -140,6 +140,16 @@ class JsonStore {
         })
       )
     };
+    migrated.settings.afkEnabled = Boolean(migrated.settings.afkEnabled);
+    migrated.settings.afkMessage =
+      String(migrated.settings.afkMessage || defaultSettings.afkMessage).trim() ||
+      defaultSettings.afkMessage;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(migrated.settings.chargeStartTime || ""))) {
+      migrated.settings.chargeStartTime = defaultSettings.chargeStartTime;
+    }
+    if (migrated.settings.afkEnabled && !migrated.settings.afkSessionId) {
+      migrated.settings.afkSessionId = crypto.randomUUID();
+    }
     return { data: migrated, isUpgrade };
   }
 
@@ -169,11 +179,59 @@ class JsonStore {
     return structuredClone(this.data);
   }
 
+  restoreSnapshot(snapshot) {
+    if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+      throw new Error("El respaldo JSON no tiene un formato válido.");
+    }
+    if (!Array.isArray(snapshot.clients)) {
+      throw new Error("El respaldo no contiene una lista válida de clientes.");
+    }
+
+    const temporaryImport = path.join(
+      this.dataDir,
+      `jadrixservs-import-${Date.now()}-${crypto.randomUUID()}.json`
+    );
+    try {
+      fs.writeFileSync(
+        temporaryImport,
+        `${JSON.stringify(snapshot, null, 2)}
+`,
+        "utf8"
+      );
+      const { data } = this.#readAndMigrate(temporaryImport);
+      data.media = Object.fromEntries(
+        Object.entries(data.media || {}).map(([kind, metadata]) => [
+          kind,
+          metadata?.path && fs.existsSync(metadata.path) ? metadata : null
+        ])
+      );
+      data.logs.unshift({
+        id: crypto.randomUUID(),
+        type: "recovery",
+        message: `Respaldo restaurado desde el panel: ${data.clients.length} clientes`,
+        metadata: {},
+        createdAt: new Date().toISOString()
+      });
+      data.logs = data.logs.slice(0, 1000);
+      this.#write(data);
+      this.data = data;
+      return {
+        clients: data.clients.length,
+        conversations: Object.keys(data.conversations || {}).length,
+        version: data.version
+      };
+    } finally {
+      fs.rmSync(temporaryImport, { force: true });
+    }
+  }
+
   getSettings() {
     return structuredClone(this.data.settings);
   }
 
   updateSettings(patch) {
+    const previousAfkEnabled = Boolean(this.data.settings.afkEnabled);
+    const previousAfkMessage = String(this.data.settings.afkMessage || "");
     const allowed = [
       "businessName",
       "inboundMode",
@@ -186,25 +244,70 @@ class JsonStore {
       "fallbackReply",
       "reminderTemplate",
       "chargeTemplate",
+      "chargeStartTime",
+      "afkEnabled",
+      "afkMessage",
       "greetingMessages"
     ];
+
     for (const key of allowed) {
-      if (patch[key] !== undefined) {
-        if (key === "greetingMessages") {
-          if (!Array.isArray(patch[key]) || patch[key].length !== 3) {
-            throw new Error("El saludo debe contener exactamente 3 mensajes.");
-          }
-          const messages = patch[key].map((message) =>
-            String(message || "").trim()
-          );
-          if (messages.some((message) => !message)) {
-            throw new Error("Los 3 mensajes de bienvenida son obligatorios.");
-          }
-          this.data.settings[key] = messages;
-        } else {
-          this.data.settings[key] = String(patch[key]);
+      if (patch[key] === undefined) continue;
+
+      if (key === "greetingMessages") {
+        if (!Array.isArray(patch[key]) || patch[key].length !== 3) {
+          throw new Error("El saludo debe contener exactamente 3 mensajes.");
         }
+        const messages = patch[key].map((message) =>
+          String(message || "").trim()
+        );
+        if (messages.some((message) => !message)) {
+          throw new Error("Los 3 mensajes de bienvenida son obligatorios.");
+        }
+        this.data.settings[key] = messages;
+        continue;
       }
+
+      if (key === "afkEnabled") {
+        this.data.settings.afkEnabled = Boolean(patch[key]);
+        continue;
+      }
+
+      if (key === "chargeStartTime") {
+        const value = String(patch[key] || "").trim();
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+          throw new Error("La hora de cobranza debe tener el formato HH:MM.");
+        }
+        this.data.settings.chargeStartTime = value;
+        continue;
+      }
+
+      const value = String(patch[key] || "").trim();
+      if (key === "afkMessage" && !value) {
+        throw new Error("El mensaje AFK no puede estar vacío.");
+      }
+      this.data.settings[key] = value;
+    }
+
+    if (this.data.settings.afkEnabled && !this.data.settings.afkMessage) {
+      throw new Error("Escribe el mensaje que se enviará durante el modo AFK.");
+    }
+
+    const afkWasActivated =
+      !previousAfkEnabled && Boolean(this.data.settings.afkEnabled);
+    const activeMessageChanged =
+      Boolean(this.data.settings.afkEnabled) &&
+      previousAfkMessage !== String(this.data.settings.afkMessage || "");
+    if (afkWasActivated || activeMessageChanged || !this.data.settings.afkSessionId) {
+      this.data.settings.afkSessionId = crypto.randomUUID();
+    }
+
+    if (patch.afkEnabled !== undefined || patch.afkMessage !== undefined) {
+      this.addLog(
+        "afk",
+        this.data.settings.afkEnabled
+          ? "Modo AFK activado o actualizado"
+          : "Modo AFK desactivado"
+      );
     }
     this.save();
     return this.getSettings();
@@ -268,16 +371,22 @@ class JsonStore {
     return this.data.clients.find((client) => client.id === id) || null;
   }
 
-  findClientByWhatsApp(...values) {
+  findClientsByWhatsApp(...values) {
     const candidates = new Set(values.map(normalizeWhatsAppDigits).filter(Boolean));
-    if (!candidates.size) return null;
-    return (
-      this.data.clients.find(
-        (client) =>
-          !client.archived &&
-          candidates.has(normalizeWhatsAppDigits(client.whatsapp))
-      ) || null
+    if (!candidates.size) return [];
+    return structuredClone(
+      this.data.clients
+        .filter(
+          (client) =>
+            !client.archived &&
+            candidates.has(normalizeWhatsAppDigits(client.whatsapp))
+        )
+        .sort((a, b) => String(a.expiryDate || "").localeCompare(String(b.expiryDate || "")))
     );
+  }
+
+  findClientByWhatsApp(...values) {
+    return this.findClientsByWhatsApp(...values)[0] || null;
   }
 
   findClientByWhatsAppAndProduct(whatsapp, product) {

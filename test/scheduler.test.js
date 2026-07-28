@@ -110,7 +110,8 @@ test("el programador envía solo el recordatorio y la cobranza que corresponden"
     store,
     whatsapp,
     timeZone: "America/Lima",
-    todayFn: () => "2026-07-24"
+    todayFn: () => "2026-07-24",
+    minutesFn: () => 10 * 60
   });
   const result = await scheduler.runOnce();
 
@@ -124,4 +125,50 @@ test("el programador envía solo el recordatorio y la cobranza que corresponden"
   assert.equal(clients[0].lastReminderKey, "2026-07-26:reminder:2");
   assert.equal(clients[1].lastChargeKey, "2026-07-24:charge");
   assert.deepEqual(logs.map((item) => item.type), ["reminder", "charge"]);
+});
+
+
+test("no envía cobranzas antes de las 9 AM, pero sí permite recordatorios", async () => {
+  const clients = [
+    {
+      ...baseClient,
+      id: "recordatorio-temprano",
+      whatsapp: "51911111111"
+    },
+    {
+      ...baseClient,
+      id: "cobro-temprano",
+      whatsapp: "51922222222",
+      expiryDate: "2026-07-24",
+      autoCharge: true
+    }
+  ];
+  const sent = [];
+  const store = {
+    listClients: () => clients.map((client) => ({ ...client })),
+    getSettings: () => ({
+      reminderTemplate: "Aviso {nombre}",
+      chargeTemplate: "Cobro {nombre}",
+      chargeStartTime: "09:00"
+    }),
+    updateClient: () => undefined,
+    addLog: () => undefined,
+    save: () => undefined
+  };
+  const whatsapp = {
+    getStatus: () => ({ ready: true }),
+    sendText: async (number, message) => sent.push({ number, message })
+  };
+  const scheduler = new ReminderScheduler({
+    store,
+    whatsapp,
+    todayFn: () => "2026-07-24",
+    minutesFn: () => 8 * 60 + 59
+  });
+
+  const result = await scheduler.runOnce();
+
+  assert.equal(result.chargeWindowOpen, false);
+  assert.equal(result.sent, 1);
+  assert.equal(sent[0].number, "51911111111");
 });

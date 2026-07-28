@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { JsonStore } = require("../src/store");
+const { createInitialData } = require("../src/defaults");
 const { addDays, todayInTimeZone } = require("../src/date-utils");
 
 function temporaryDataDir() {
@@ -17,7 +18,7 @@ function temporaryDataDir() {
   return directory;
 }
 
-test("migra datos anteriores sin perder clientes y activa el modo V4.6", () => {
+test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
   const directory = temporaryDataDir();
   try {
     fs.writeFileSync(
@@ -43,7 +44,7 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.6", () => {
     );
 
     const store = new JsonStore(directory);
-    assert.equal(store.data.version, 4.6);
+    assert.equal(store.data.version, 4.7);
     assert.equal(store.data.clients[0].id, "cliente-existente");
     assert.equal(store.data.clients[0].accountReference, "");
     assert.equal(store.data.clients[0].reminderDays, 2);
@@ -282,6 +283,87 @@ test("el mismo número puede comprar otro producto sin mezclar vencimientos", ()
       store.listClients().map((client) => client.product).sort(),
       ["HBO", "Netflix"]
     );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("buscar por celular devuelve todos los servicios del mismo cliente", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const today = todayInTimeZone("America/Lima");
+    for (const product of ["Netflix", "HBO"]) {
+      store.createClient({
+        name: "Ana",
+        whatsapp: "999888777",
+        product,
+        price: "S/10",
+        startDate: today,
+        expiryDate: addDays(today, 30),
+        autoReminder: true,
+        autoCharge: false
+      });
+    }
+
+    const matches = store.findClientsByWhatsApp("999888777");
+    assert.equal(matches.length, 2);
+    assert.deepEqual(matches.map((client) => client.product).sort(), ["HBO", "Netflix"]);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("cada nueva activación AFK crea una sesión distinta sin perder la configuración", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const first = store.updateSettings({
+      afkEnabled: true,
+      afkMessage: "Volvemos a las 9 AM."
+    });
+    store.updateSettings({ afkEnabled: false });
+    const second = store.updateSettings({ afkEnabled: true });
+
+    assert.equal(second.afkEnabled, true);
+    assert.equal(second.afkMessage, "Volvemos a las 9 AM.");
+    assert.notEqual(first.afkSessionId, second.afkSessionId);
+    assert.equal(second.chargeStartTime, "09:00");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("restaura un respaldo JSON y conserva la versión de datos actual", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const snapshot = createInitialData();
+    snapshot.version = 4.6;
+    snapshot.clients.push({
+      id: "restaurado-1",
+      name: "Cliente restaurado",
+      whatsapp: "51912345678",
+      product: "Plan Pro",
+      price: "S/60",
+      startDate: "2026-07-01",
+      expiryDate: "2026-07-31",
+      termMonths: 1,
+      status: "activo",
+      reminderDays: 2,
+      autoReminder: true,
+      autoCharge: false,
+      archived: false,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z"
+    });
+
+    const result = store.restoreSnapshot(snapshot);
+
+    assert.equal(result.clients, 1);
+    assert.equal(result.version, 4.7);
+    assert.equal(store.listClients()[0].name, "Cliente restaurado");
+    assert.ok(fs.existsSync(path.join(directory, "jadrixservs-v4.backup.json")));
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

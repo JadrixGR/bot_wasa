@@ -1,6 +1,11 @@
 "use strict";
 
-const { daysBetween, todayInTimeZone } = require("./date-utils");
+const {
+  daysBetween,
+  todayInTimeZone,
+  minutesInTimeZone,
+  timeToMinutes
+} = require("./date-utils");
 
 function fillTemplate(template, client) {
   const [year, month, day] = String(client.expiryDate || "").split("-");
@@ -19,7 +24,7 @@ function fillTemplate(template, client) {
   );
 }
 
-function reminderActionFor(client, today) {
+function reminderActionFor(client, today, { chargeAllowed = true } = {}) {
   if (client.archived || client.status !== "activo" || !client.expiryDate) return null;
   const remaining = daysBetween(today, client.expiryDate);
   if (client.autoReminder && remaining === 2) {
@@ -28,11 +33,15 @@ function reminderActionFor(client, today) {
       return { type: "reminder", key, remaining };
     }
   }
-  if (client.autoCharge && remaining === 0) {
+  if (chargeAllowed && client.autoCharge && remaining === 0) {
     const key = `${client.expiryDate}:charge`;
     if (client.lastChargeKey !== key) return { type: "charge", key, remaining };
   }
   return null;
+}
+
+function isChargeWindowOpen(startTime, currentMinutes) {
+  return Number(currentMinutes) >= timeToMinutes(startTime || "09:00");
 }
 
 class ReminderScheduler {
@@ -41,12 +50,16 @@ class ReminderScheduler {
     whatsapp,
     timeZone = "America/Lima",
     intervalMinutes = 15,
-    todayFn = todayInTimeZone
+    todayFn = todayInTimeZone,
+    minutesFn = minutesInTimeZone,
+    nowFn = () => new Date()
   }) {
     this.store = store;
     this.whatsapp = whatsapp;
     this.timeZone = timeZone;
     this.todayFn = todayFn;
+    this.minutesFn = minutesFn;
+    this.nowFn = nowFn;
     this.intervalMs = Math.max(5, Number(intervalMinutes) || 15) * 60000;
     this.timer = null;
     this.running = false;
@@ -76,12 +89,20 @@ class ReminderScheduler {
     this.running = true;
     let sent = 0;
     const errors = [];
-    const today = this.todayFn(this.timeZone);
+    const now = this.nowFn();
+    const today = this.todayFn(this.timeZone, now);
     const settings = this.store.getSettings();
+    const currentMinutes = this.minutesFn(this.timeZone, now);
+    const chargeWindowOpen = isChargeWindowOpen(
+      settings.chargeStartTime || "09:00",
+      currentMinutes
+    );
 
     try {
       for (const client of this.store.listClients()) {
-        const action = reminderActionFor(client, today);
+        const action = reminderActionFor(client, today, {
+          chargeAllowed: chargeWindowOpen
+        });
         if (!action) continue;
         try {
           const template =
@@ -106,8 +127,13 @@ class ReminderScheduler {
     } finally {
       this.running = false;
     }
-    return { sent, errors, skipped: false };
+    return { sent, errors, skipped: false, chargeWindowOpen };
   }
 }
 
-module.exports = { ReminderScheduler, reminderActionFor, fillTemplate };
+module.exports = {
+  ReminderScheduler,
+  reminderActionFor,
+  fillTemplate,
+  isChargeWindowOpen
+};

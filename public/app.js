@@ -5,6 +5,7 @@ const state = {
   settings: null,
   products: [],
   plans: [],
+  lookupClients: [],
   activeSection: "dashboard",
   poller: null
 };
@@ -86,14 +87,16 @@ function navigate(section) {
     dashboard: "Resumen",
     whatsapp: "WhatsApp",
     clients: "Clientes y cobros",
+    lookup: "Buscar celular",
     messages: "Mensajes automáticos",
+    afk: "Modo AFK",
     activity: "Actividad"
   };
   $("#pageTitle").textContent = titles[section] || "JadrixServs";
   $(".sidebar").classList.remove("open");
   if (section === "clients") loadClients();
   if (section === "activity") loadLogs();
-  if (section === "messages") loadSettings();
+  if (section === "messages" || section === "afk") loadSettings();
 }
 
 function statusPresentation(status) {
@@ -230,6 +233,66 @@ async function loadClients() {
   renderClients();
 }
 
+function clientStatusTone(status) {
+  return status === "activo" ? "green" : status === "vencido" ? "red" : "amber";
+}
+
+function renderLookupResults(clients, phone = "") {
+  state.lookupClients = clients;
+  const target = $("#lookupResults");
+  if (!clients.length) {
+    target.innerHTML = `
+      <article class="panel empty-state compact">
+        <strong>No encontramos servicios para ${escapeHtml(phone || "ese número")}.</strong>
+        <span>Revisa los dígitos o registra al cliente desde Clientes y cobros.</span>
+      </article>`;
+    return;
+  }
+
+  target.innerHTML = `
+    <div class="lookup-summary">
+      <strong>${clients.length} servicio${clients.length === 1 ? "" : "s"} encontrado${clients.length === 1 ? "" : "s"}</strong>
+      <span>${escapeHtml(clients[0].name)} · ${escapeHtml(clients[0].whatsapp)}</span>
+    </div>
+    <div class="lookup-grid">
+      ${clients.map((client) => `
+        <article class="panel lookup-card">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">SERVICIO</p>
+              <h3>${escapeHtml(client.product)}</h3>
+            </div>
+            <span class="pill ${clientStatusTone(client.status)}">${escapeHtml(client.status)}</span>
+          </div>
+          <dl class="client-details">
+            <div><dt>Vencimiento</dt><dd>${escapeHtml(formatDate(client.expiryDate))}</dd></div>
+            <div><dt>Activación</dt><dd>${escapeHtml(formatDate(client.startDate))}</dd></div>
+            <div><dt>Precio</dt><dd>${escapeHtml(client.price || "Sin registrar")}</dd></div>
+            <div><dt>Cuenta</dt><dd>${escapeHtml(client.accountReference || "Sin registrar")}</dd></div>
+          </dl>
+          <button class="button secondary wide" data-lookup-edit="${client.id}" type="button">Abrir ficha del cliente</button>
+        </article>`).join("")}
+    </div>`;
+}
+
+async function lookupClient(event) {
+  event.preventDefault();
+  const phone = $("#lookupPhone").value.trim();
+  const button = $("#lookupButton");
+  button.disabled = true;
+  button.textContent = "Buscando…";
+  try {
+    const result = await api(`/api/clients/lookup?phone=${encodeURIComponent(phone)}`);
+    renderLookupResults(result.clients, result.phone);
+  } catch (error) {
+    renderLookupResults([], phone);
+    showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Buscar cliente";
+  }
+}
+
 function renderClients() {
   const query = $("#clientSearch").value.trim().toLowerCase();
   const status = $("#clientStatusFilter").value;
@@ -245,7 +308,7 @@ function renderClients() {
       <td><strong>${escapeHtml(client.accountReference || "Sin registrar")}</strong></td>
       <td><strong>${escapeHtml(formatDate(client.expiryDate))}</strong><span>Desde ${escapeHtml(formatDate(client.startDate))}</span></td>
       <td><div class="automation-flags"><span class="mini-flag ${client.autoReminder ? "on" : ""}">Aviso 2d</span><span class="mini-flag ${client.autoCharge ? "on" : ""}">Cobro</span></div></td>
-      <td><span class="pill ${client.status === "activo" ? "green" : client.status === "vencido" ? "red" : "amber"}">${escapeHtml(client.status)}</span></td>
+      <td><span class="pill ${clientStatusTone(client.status)}">${escapeHtml(client.status)}</span></td>
       <td><div class="row-actions">
         <button data-action="remind" data-id="${client.id}" type="button">Recordar</button>
         <button data-action="charge" data-id="${client.id}" type="button">Cobrar</button>
@@ -339,6 +402,16 @@ async function saveRenewal(event) {
   }
 }
 
+function renderAfkStatus(settings) {
+  const notice = $("#afkStatusNotice");
+  if (!notice) return;
+  const enabled = Boolean(settings.afkEnabled);
+  notice.className = `notice ${enabled ? "success" : ""}`;
+  notice.innerHTML = enabled
+    ? "<strong>AFK activo:</strong> los contactos recibirán una respuesta fuera de horario una sola vez durante esta ausencia."
+    : "<strong>AFK desactivado:</strong> el bot mantiene el funcionamiento normal de bienvenida y renovaciones.";
+}
+
 async function loadSettings() {
   const payload = await api("/api/settings");
   state.settings = payload.settings;
@@ -349,6 +422,10 @@ async function loadSettings() {
   $("#greeting3").value = payload.settings.greetingMessages[2] || "";
   $("#reminderTemplate").value = payload.settings.reminderTemplate || "";
   $("#chargeTemplate").value = payload.settings.chargeTemplate || "";
+  $("#chargeStartTime").value = payload.settings.chargeStartTime || "09:00";
+  $("#afkEnabled").checked = Boolean(payload.settings.afkEnabled);
+  $("#afkMessage").value = payload.settings.afkMessage || "";
+  renderAfkStatus(payload.settings);
   $("#productOptions").innerHTML = [...payload.products, ...payload.plans]
     .map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join("");
 }
@@ -361,13 +438,37 @@ async function saveSettings() {
         inboundMode: "welcome_once",
         greetingMessages: [$("#greeting1").value, $("#greeting2").value, $("#greeting3").value],
         reminderTemplate: $("#reminderTemplate").value,
-        chargeTemplate: $("#chargeTemplate").value
+        chargeTemplate: $("#chargeTemplate").value,
+        chargeStartTime: $("#chargeStartTime").value
       }
     });
     state.settings = payload.settings;
-    showToast("Mensajes automáticos guardados.");
+    showToast("Mensajes y horario de cobranza guardados.");
   } catch (error) {
     showToast(error.message, true);
+  }
+}
+
+async function saveAfkSettings() {
+  const button = $("#saveAfkButton");
+  button.disabled = true;
+  button.textContent = "Guardando…";
+  try {
+    const payload = await api("/api/settings", {
+      method: "PUT",
+      body: {
+        afkEnabled: $("#afkEnabled").checked,
+        afkMessage: $("#afkMessage").value
+      }
+    });
+    state.settings = payload.settings;
+    renderAfkStatus(payload.settings);
+    showToast(payload.settings.afkEnabled ? "Modo AFK activado." : "Modo AFK desactivado.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Guardar modo AFK";
   }
 }
 
@@ -376,6 +477,7 @@ function logLabel(type) {
     incoming: "Mensaje recibido",
     outgoing: "Mensaje enviado",
     welcome: "Bienvenida",
+    afk: "Modo AFK",
     whatsapp: "WhatsApp",
     reminder: "Recordatorio",
     charge: "Cobranza",
@@ -451,6 +553,15 @@ function bindEvents() {
     } catch (error) { showToast(error.message, true); }
   });
   $("#newClientButton").addEventListener("click", () => openClientDialog());
+  $("#lookupForm").addEventListener("submit", lookupClient);
+  $("#lookupResults").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-lookup-edit]");
+    if (!button) return;
+    const client = state.lookupClients.find((item) => item.id === button.dataset.lookupEdit);
+    if (!client) return;
+    navigate("clients");
+    openClientDialog(client);
+  });
   $("#clientForm").addEventListener("submit", saveClient);
   $("#renewForm").addEventListener("submit", saveRenewal);
   $$(".dialog-close").forEach((button) => button.addEventListener("click", () => $("#clientDialog").close()));
@@ -486,7 +597,59 @@ function bindEvents() {
       } catch (error) { showToast(error.message, true); }
     }
   });
+  $("#restoreBackupButton").addEventListener("click", () => {
+    $("#restoreBackupInput").value = "";
+    $("#restoreBackupInput").click();
+  });
+  $("#restoreBackupInput").addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!confirm("Restaurar este respaldo reemplazará la base actual de clientes y configuración. La sesión de WhatsApp no se modifica. ¿Continuar?")) return;
+    const button = $("#restoreBackupButton");
+    button.disabled = true;
+    button.textContent = "Restaurando…";
+    try {
+      const snapshot = JSON.parse(await file.text());
+      const result = await api("/api/backup/restore", {
+        method: "POST",
+        body: snapshot
+      });
+      await refreshAll();
+      showToast(`Respaldo restaurado: ${result.clients} cliente${result.clients === 1 ? "" : "s"}.`);
+    } catch (error) {
+      showToast(error instanceof SyntaxError ? "El archivo no contiene un JSON válido." : error.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Restaurar respaldo JSON";
+    }
+  });
   $("#saveSettingsButton").addEventListener("click", saveSettings);
+  $("#saveAfkButton").addEventListener("click", saveAfkSettings);
+  $("#afkEnabled").addEventListener("change", () => {
+    renderAfkStatus({ ...state.settings, afkEnabled: $("#afkEnabled").checked });
+  });
+  $("#chargeTodayButton").addEventListener("click", async () => {
+    if (!confirm("Se enviará la cobranza a todos los clientes activos que vencen hoy y que todavía no fueron cobrados. ¿Continuar?")) return;
+    const button = $("#chargeTodayButton");
+    button.disabled = true;
+    button.textContent = "Enviando cobranzas…";
+    try {
+      const result = await api("/api/clients/charge-due-today", { method: "POST" });
+      const errorText = result.errors.length ? ` ${result.errors.length} no pudieron enviarse.` : "";
+      showToast(
+        result.totalDue === 0
+          ? "No hay clientes que venzan hoy."
+          : `${result.sent} cobranza${result.sent === 1 ? "" : "s"} enviada${result.sent === 1 ? "" : "s"}. ${result.alreadyCharged} ya estaba${result.alreadyCharged === 1 ? "" : "n"} cobrada${result.alreadyCharged === 1 ? "" : "s"}.${errorText}`,
+        result.errors.length > 0
+      );
+      await Promise.all([loadClients(), refreshDashboardOnly()]);
+    } catch (error) {
+      showToast(error.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Cobrar a los que vencen hoy";
+    }
+  });
   $("#runSchedulerButton").addEventListener("click", async () => {
     const button = $("#runSchedulerButton");
     button.disabled = true;
