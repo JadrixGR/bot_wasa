@@ -3,6 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  addDays,
   addMonthsClamped,
   calculateRenewal,
   daysBetween
@@ -30,4 +31,9 @@ test("los meses se ajustan al último día disponible", () => {
 test("calcula días usando fechas sin hora", () => {
   assert.equal(daysBetween("2026-07-23", "2026-07-25"), 2);
   assert.equal(daysBetween("2026-07-25", "2026-07-23"), -2);
+});
+
+test("agrega días exactos incluso al cambiar de mes o año", () => {
+  assert.equal(addDays("2026-07-27", 30), "2026-08-26");
+  assert.equal(addDays("2027-12-31", 60), "2028-02-29");
 });

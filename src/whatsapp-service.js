@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const QRCode = require("qrcode");
 const { BotEngine } = require("./bot-engine");
+const { parseRegistrationCommand } = require("./command-registry");
 
 const BAILEYS_VERSION = "7.0.0-rc13";
 
@@ -607,9 +608,12 @@ class WhatsAppService {
 
     for (const message of event.messages) {
       const chatId = message?.key?.remoteJid;
+      const ownerCommand =
+        Boolean(message?.key?.fromMe) &&
+        extractMessageBody(message.message).startsWith("/");
       if (
         !chatId ||
-        message.key.fromMe ||
+        (message.key.fromMe && !ownerCommand) ||
         chatId === "status@broadcast" ||
         chatId.endsWith("@g.us") ||
         chatId.endsWith("@broadcast") ||
@@ -641,6 +645,11 @@ class WhatsAppService {
   }
 
   async #handleMessage(socket, message) {
+    if (message.key.fromMe) {
+      await this.#handleOwnerCommand(socket, message);
+      return;
+    }
+
     const chatId = message.key.remoteJid;
     const content = unwrapMessageContent(message.message);
     const type = this.baileys.getContentType(content) || "";
@@ -670,6 +679,67 @@ class WhatsAppService {
       mediaType: type.replace(/Message$/, ""),
       fromName
     });
+  }
+
+  async #resolveCustomerPhone(socket, message) {
+    const candidates = [
+      message.key.remoteJidAlt,
+      message.key.remoteJid
+    ].filter(Boolean);
+    const phoneJid = candidates.find((jid) =>
+      /@(s\.whatsapp\.net|c\.us)$/.test(String(jid))
+    );
+    if (phoneJid) return extractPhone(phoneJid);
+
+    const lid = candidates.find((jid) => String(jid).endsWith("@lid"));
+    if (!lid) return null;
+    const mapped = await socket.signalRepository?.lidMapping
+      ?.getPNForLID(lid)
+      .catch(() => null);
+    return extractPhone(mapped);
+  }
+
+  async #handleOwnerCommand(socket, message) {
+    const body = extractMessageBody(message.message);
+    const parsed = parseRegistrationCommand(body);
+    if (!parsed.isCommand) return;
+
+    if (!parsed.ok) {
+      this.store.addLog(
+        "command",
+        `Comando no aplicado: ${parsed.error}`,
+        { commandText: body.slice(0, 120) }
+      );
+      this.store.save();
+      return;
+    }
+
+    const whatsapp = await this.#resolveCustomerPhone(socket, message);
+    if (!whatsapp) {
+      this.store.addLog(
+        "command",
+        `No se pudo aplicar ${parsed.command}: WhatsApp no entregó el número del cliente.`,
+        { chatId: message.key.remoteJid }
+      );
+      this.store.save();
+      return;
+    }
+
+    const result = this.store.registerClientFromCommand({
+      whatsapp,
+      item: parsed.item,
+      days: parsed.days,
+      command: parsed.command,
+      commandMessageId: message.key.id || ""
+    });
+    if (result.duplicate) {
+      this.store.addLog(
+        "command",
+        `Comando duplicado ignorado: ${parsed.command}`,
+        { commandMessageId: message.key.id || "" }
+      );
+      this.store.save();
+    }
   }
 
   async beginTyping(chatId, { recording = false } = {}) {

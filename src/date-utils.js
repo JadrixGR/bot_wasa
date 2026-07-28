@@ -35,6 +35,12 @@ function addMonthsClamped(value, months) {
   return formatDateOnly(target);
 }
 
+function addDays(value, days) {
+  const date = typeof value === "string" ? parseDateOnly(value) : new Date(value);
+  date.setUTCDate(date.getUTCDate() + Number(days));
+  return formatDateOnly(date);
+}
+
 function compareDateOnly(left, right) {
   return parseDateOnly(left).getTime() - parseDateOnly(right).getTime();
 }
@@ -68,6 +74,7 @@ module.exports = {
   parseDateOnly,
   formatDateOnly,
   addMonthsClamped,
+  addDays,
   compareDateOnly,
   daysBetween,
   todayInTimeZone,

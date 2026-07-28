@@ -352,6 +352,17 @@ td span { margin-top: 0.2rem; color: var(--muted); font-size: 0.68rem; }
 
 .settings-grid label + label { margin-top: 1rem; }
 .mode-notice { margin-bottom: 1.25rem; }
+.command-guide { margin-bottom: 1.25rem; }
+.command-guide > .button { margin-top: 0.85rem; }
+.command-examples { display: flex; flex-wrap: wrap; gap: 0.65rem; margin: 1rem 0; }
+.command-examples code {
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+  background: #f7f8fc;
+  color: var(--ink);
+  font-weight: 700;
+}
 .training-panel { margin-top: 1.25rem; }
 .training-copy { max-width: 60rem; margin: -0.2rem 0 1rem; font-size: 0.8rem; line-height: 1.55; }
 .knowledge-list { display: grid; gap: 1rem; margin-bottom: 1rem; }

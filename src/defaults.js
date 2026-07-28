@@ -385,12 +385,13 @@ const defaultSettings = {
 
 function createInitialData() {
   return {
-    version: 4.4,
+    version: 4.5,
     settings: structuredClone(defaultSettings),
     products: structuredClone(products),
     plans: structuredClone(plans),
     knowledgeBase: structuredClone(knowledgeBase),
     clients: [],
+    processedCommandIds: [],
     conversations: {},
     logs: [],
     media: {

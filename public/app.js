@@ -231,7 +231,7 @@ function renderClients() {
   table.innerHTML = clients.map((client) => `
     <tr>
       <td><strong>${escapeHtml(client.name)}</strong><span>${escapeHtml(client.whatsapp)}</span></td>
-      <td><strong>${escapeHtml(client.product)}</strong><span>${escapeHtml(client.price || "Sin precio")}</span></td>
+      <td><strong>${escapeHtml(client.product)}</strong><span>${escapeHtml(client.price || "Sin precio")}${client.durationDays ? ` · ${escapeHtml(client.durationDays)} días` : ""}</span></td>
       <td><strong>${escapeHtml(client.accountReference || "Sin registrar")}</strong></td>
       <td><strong>${escapeHtml(formatDate(client.expiryDate))}</strong><span>Desde ${escapeHtml(formatDate(client.startDate))}</span></td>
       <td><div class="automation-flags"><span class="mini-flag ${client.autoReminder ? "on" : ""}">Aviso 2d</span><span class="mini-flag ${client.autoCharge ? "on" : ""}">Cobro</span></div></td>
@@ -369,6 +369,7 @@ function logLabel(type) {
     whatsapp: "WhatsApp",
     reminder: "Recordatorio",
     charge: "Cobranza",
+    command: "Comando",
     client: "Cliente",
     security: "Seguridad",
     error: "Error"

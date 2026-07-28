@@ -60,8 +60,8 @@ test("el Super Combo IA 2026 activa la secuencia inicial", () => {
   );
 });
 
-test("la V4.4 usa el modo de bienvenida única", () => {
-  assert.equal(createInitialData().version, 4.4);
+test("la V4.5 usa el modo de bienvenida única", () => {
+  assert.equal(createInitialData().version, 4.5);
   assert.equal(defaultSettings.inboundMode, "welcome_once");
   assert.match(defaultSettings.reminderTemplate, /vence en 2 días/i);
 });

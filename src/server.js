@@ -69,7 +69,7 @@ function asyncRoute(handler) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.4",
+    version: "4.5",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
     time: new Date().toISOString()
@@ -348,6 +348,7 @@ app.get("/api/export/clients.csv", requireAuth, (_req, res) => {
     "fecha_vencimiento",
     "estado",
     "recordatorio_dias",
+    "duracion_dias",
     "recordatorio_automatico",
     "cobro_automatico",
     "notas"
@@ -365,6 +366,7 @@ app.get("/api/export/clients.csv", requireAuth, (_req, res) => {
       client.expiryDate,
       client.status,
       client.reminderDays,
+      client.durationDays,
       client.autoReminder ? "sí" : "no",
       client.autoCharge ? "sí" : "no",
       client.notes
@@ -389,7 +391,7 @@ app.use((error, _req, res, _next) => {
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4.4 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V4.5 disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
   }

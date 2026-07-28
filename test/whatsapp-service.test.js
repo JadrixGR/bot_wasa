@@ -48,6 +48,11 @@ function makeStore() {
       return { ...conversations[chatId] };
     },
     findClientByWhatsApp: () => null,
+    registerClientFromCommand: () => ({
+      client: { id: "cliente-comando" },
+      created: true,
+      duplicate: false
+    }),
     getSettings: () => ({
       shortGreeting: "Hola",
       greetingMessages: ["Catálogo", "Planes", "Ayuda"],
@@ -57,7 +62,7 @@ function makeStore() {
   };
 }
 
-function makeFakeBaileys({ registered = false } = {}) {
+function makeFakeBaileys({ registered = false, lidPhone = null } = {}) {
   const sockets = [];
   const state = { creds: { registered }, keys: {} };
 
@@ -75,6 +80,11 @@ function makeFakeBaileys({ registered = false } = {}) {
       ev,
       calls,
       user: { id: "51999888777:12@s.whatsapp.net", name: "Jadrix" },
+      signalRepository: {
+        lidMapping: {
+          getPNForLID: async () => lidPhone
+        }
+      },
       presenceSubscribe: async () => undefined,
       sendPresenceUpdate: async (type, jid) => calls.presence.push({ type, jid }),
       sendMessage: async (jid, content) => {
@@ -367,6 +377,138 @@ test("la respuesta de un cliente registrado se lee pero no activa la bienvenida"
     store.data.conversations["200000000000@lid"].registeredClientId,
     "cliente-1"
   );
+});
+
+test("un comando enviado por el propietario registra el número alternativo sin responder al chat", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  const registrations = [];
+  store.registerClientFromCommand = (payload) => {
+    registrations.push(payload);
+    return {
+      client: { id: "cliente-plan-pro" },
+      created: true,
+      duplicate: false
+    };
+  };
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "owner-command-session"),
+    mediaDir: path.join(testRuntimeDir, "owner-command-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "owner-command-1",
+          remoteJid: "300000000000@lid",
+          remoteJidAlt: "51955556666@s.whatsapp.net",
+          fromMe: true
+        },
+        message: { conversation: "/planpro 30" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(registrations.length, 1);
+  assert.equal(registrations[0].whatsapp, "51955556666");
+  assert.equal(registrations[0].item.name, "Plan Pro");
+  assert.equal(registrations[0].days, 30);
+  assert.equal(registrations[0].command, "/planpro");
+  assert.equal(registrations[0].commandMessageId, "owner-command-1");
+  assert.equal(socket.calls.sent.length, 0);
+  assert.equal(socket.calls.read.length, 0);
+});
+
+test("un cliente no puede registrarse a sí mismo con un comando", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  let registrations = 0;
+  store.registerClientFromCommand = () => {
+    registrations += 1;
+    return {
+      client: { id: "no-debe-crearse" },
+      created: true,
+      duplicate: false
+    };
+  };
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "customer-command-session"),
+    mediaDir: path.join(testRuntimeDir, "customer-command-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "customer-command-1",
+          remoteJid: "51977778888@s.whatsapp.net",
+          fromMe: false
+        },
+        message: { conversation: "/planpro 3650" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(registrations, 0);
+  assert.deepEqual(
+    socket.calls.sent.map((item) => item.content.text),
+    ["Catálogo", "Planes", "Ayuda"]
+  );
+});
+
+test("resuelve el número desde el mapa LID si WhatsApp no entrega remoteJidAlt", async () => {
+  const fake = makeFakeBaileys({
+    registered: true,
+    lidPhone: "51944445555@s.whatsapp.net"
+  });
+  const store = makeStore();
+  let registration;
+  store.registerClientFromCommand = (payload) => {
+    registration = payload;
+    return {
+      client: { id: "cliente-hbo" },
+      created: true,
+      duplicate: false
+    };
+  };
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "lid-command-session"),
+    mediaDir: path.join(testRuntimeDir, "lid-command-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "owner-command-lid",
+          remoteJid: "400000000000@lid",
+          fromMe: true
+        },
+        message: { conversation: "/hbo 30" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(registration.whatsapp, "51944445555");
+  assert.equal(registration.item.name, "HBO");
 });
 
 test("envía escribiendo, pausa y luego un solo mensaje", async () => {

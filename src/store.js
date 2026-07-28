@@ -4,7 +4,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { createInitialData, defaultSettings } = require("./defaults");
-const { calculateRenewal, todayInTimeZone } = require("./date-utils");
+const {
+  addDays,
+  calculateRenewal,
+  compareDateOnly,
+  todayInTimeZone
+} = require("./date-utils");
 
 function normalizeWhatsAppDigits(value) {
   const localPart = String(value || "")
@@ -65,8 +70,16 @@ class JsonStore {
                 client.autoReminder === undefined
                   ? true
                   : Boolean(client.autoReminder),
-              autoCharge: Boolean(client.autoCharge)
+              autoCharge: Boolean(client.autoCharge),
+              durationDays:
+                Number.isInteger(Number(client.durationDays)) &&
+                Number(client.durationDays) > 0
+                  ? Number(client.durationDays)
+                  : null
             }))
+          : [],
+        processedCommandIds: Array.isArray(parsed.processedCommandIds)
+          ? parsed.processedCommandIds.slice(0, 500).map(String)
           : [],
         logs: Array.isArray(parsed.logs) ? parsed.logs : [],
         conversations: Object.fromEntries(
@@ -225,6 +238,135 @@ class JsonStore {
     );
   }
 
+  findClientByWhatsAppAndProduct(whatsapp, product) {
+    const digits = normalizeWhatsAppDigits(whatsapp);
+    const wantedProduct = String(product || "").trim().toLowerCase();
+    if (!digits || !wantedProduct) return null;
+    return (
+      this.data.clients.find(
+        (client) =>
+          !client.archived &&
+          normalizeWhatsAppDigits(client.whatsapp) === digits &&
+          String(client.product || "").trim().toLowerCase() === wantedProduct
+      ) || null
+    );
+  }
+
+  registerClientFromCommand({
+    whatsapp,
+    item,
+    days,
+    command,
+    commandMessageId = ""
+  }) {
+    const durationDays = Number(days);
+    if (!Number.isSafeInteger(durationDays) || durationDays < 1 || durationDays > 3650) {
+      throw new Error("Los días deben ser un número entero entre 1 y 3650.");
+    }
+    if (!item?.name) throw new Error("El comando no tiene un producto asociado.");
+
+    this.data.processedCommandIds ||= [];
+    if (
+      commandMessageId &&
+      this.data.processedCommandIds.includes(commandMessageId)
+    ) {
+      const duplicate = this.findClientByWhatsAppAndProduct(
+        whatsapp,
+        item.name
+      );
+      return {
+        client: duplicate ? structuredClone(duplicate) : null,
+        created: false,
+        duplicate: true
+      };
+    }
+
+    if (commandMessageId) {
+      const duplicate = this.data.clients.find(
+        (client) => client.lastCommandMessageId === commandMessageId
+      );
+      if (duplicate) {
+        return {
+          client: structuredClone(duplicate),
+          created: false,
+          duplicate: true
+        };
+      }
+    }
+
+    const today = todayInTimeZone(
+      process.env.BOT_TIMEZONE || "America/Lima"
+    );
+    const existing = this.findClientByWhatsAppAndProduct(
+      whatsapp,
+      item.name
+    );
+    const commandFields = {
+      product: item.name,
+      price: item.price || "",
+      durationDays,
+      termMonths: Math.max(1, Math.round(durationDays / 30)),
+      status: "activo",
+      registrationSource: "whatsapp-command",
+      lastCommand: `${command} ${durationDays}`,
+      lastCommandMessageId: String(commandMessageId || ""),
+      lastCommandAt: new Date().toISOString(),
+      lastPaymentDate: today,
+      lastReminderKey: null,
+      lastChargeKey: null
+    };
+
+    let client;
+    let created;
+    if (existing) {
+      let periodStart = today;
+      try {
+        if (
+          existing.expiryDate &&
+          compareDateOnly(existing.expiryDate, today) >= 0
+        ) {
+          periodStart = existing.expiryDate;
+        }
+      } catch {
+        periodStart = today;
+      }
+      client = this.updateClient(existing.id, {
+        ...commandFields,
+        startDate: periodStart,
+        expiryDate: addDays(periodStart, durationDays)
+      });
+      created = false;
+    } else {
+      client = this.createClient({
+        ...commandFields,
+        name: "estimad@",
+        whatsapp: normalizeWhatsAppDigits(whatsapp),
+        accountReference: "",
+        paymentMethod: "",
+        startDate: today,
+        expiryDate: addDays(today, durationDays),
+        autoReminder: true,
+        autoCharge: false,
+        notes: `Registrado con ${command} ${durationDays}.`
+      });
+      created = true;
+    }
+
+    this.addLog(
+      "command",
+      `${created ? "Cliente registrado" : "Servicio renovado"} con ${command}: ${client.whatsapp} · ${client.product} · ${durationDays} días · vence ${client.expiryDate}`,
+      { clientId: client.id, command, durationDays }
+    );
+    if (commandMessageId) {
+      this.data.processedCommandIds.unshift(commandMessageId);
+      this.data.processedCommandIds = [
+        ...new Set(this.data.processedCommandIds)
+      ].slice(0, 500);
+    }
+    this.save();
+    return { client, created, duplicate: false };
+  }
+
   createClient(input) {
     const now = new Date().toISOString();
     const client = this.#normalizeClient({
@@ -282,7 +424,8 @@ class JsonStore {
       status: "activo",
       lastPaymentDate: paidOn,
       lastReminderKey: null,
-      lastChargeKey: null
+      lastChargeKey: null,
+      durationDays: null
     });
   }
 
@@ -310,6 +453,11 @@ class JsonStore {
       startDate: String(input.startDate),
       expiryDate: String(input.expiryDate),
       termMonths: Math.max(1, Number(input.termMonths) || 1),
+      durationDays:
+        Number.isInteger(Number(input.durationDays)) &&
+        Number(input.durationDays) > 0
+          ? Number(input.durationDays)
+          : null,
       status: ["activo", "pendiente", "vencido", "pausado", "archivado"].includes(input.status)
         ? input.status
         : "activo",
@@ -321,6 +469,10 @@ class JsonStore {
       lastPaymentDate: input.lastPaymentDate || null,
       lastReminderKey: input.lastReminderKey || null,
       lastChargeKey: input.lastChargeKey || null,
+      registrationSource: String(input.registrationSource || ""),
+      lastCommand: String(input.lastCommand || ""),
+      lastCommandMessageId: String(input.lastCommandMessageId || ""),
+      lastCommandAt: input.lastCommandAt || null,
       createdAt: input.createdAt || new Date().toISOString(),
       updatedAt: input.updatedAt || new Date().toISOString()
     };

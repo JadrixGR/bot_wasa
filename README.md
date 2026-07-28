@@ -1,10 +1,10 @@
-# JadrixServs Bot V4.4
+# JadrixServs Bot V4.5
 
-Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clientes y automatizar renovaciones.
+Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clientes mediante comandos y automatizar renovaciones.
 
 ## Flujo de mensajes
 
-La V4.4 funciona en modo **solo bienvenida**:
+La V4.5 funciona en modo **solo bienvenida**:
 
 1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales.
 2. Los tres se envían por separado, mostrando “escribiendo…” y una pequeña demora antes de cada envío.
@@ -13,6 +13,30 @@ La V4.4 funciona en modo **solo bienvenida**:
 5. Desde ese momento, el bot solamente envía recordatorios o cobranzas programadas desde el panel.
 
 El contenido de los tres mensajes iniciales puede editarse en **Mensajes automáticos**. Los datos antiguos de productos y entrenamiento se conservan al actualizar, pero no generan respuestas en este modo. `OPENAI_API_KEY` no es necesaria para la bienvenida ni para las renovaciones.
+
+## Registro rápido mediante comandos
+
+Puedes registrar una compra escribiendo un comando desde **tu propio WhatsApp** dentro del chat del cliente:
+
+```text
+/planpro 30
+/gptpro 30
+/geminipro 365
+```
+
+La primera parte identifica el producto o plan y el número indica los días agregados. El bot:
+
+- Obtiene automáticamente el número de WhatsApp de ese chat.
+- Crea un cliente nuevo con el nombre `estimad@`.
+- Guarda el producto, el precio del catálogo, los días y el vencimiento.
+- Activa el recordatorio de 2 días y deja apagada la cobranza automática.
+- Renueva el registro existente si el mismo número ya tiene el mismo producto.
+- Suma los días desde el vencimiento vigente para que una renovación anticipada no pierda días.
+- Crea otro registro independiente cuando el mismo número compra un producto diferente.
+- Ignora los comandos escritos por el cliente; solamente los mensajes enviados por el propietario pueden registrar o renovar.
+- Evita sumar dos veces si WhatsApp repite el mismo evento.
+
+El comando queda visible dentro del chat y el bot no envía una confirmación adicional. La lista completa está en `public/COMANDOS-WHATSAPP-V4.5.txt` y también se descarga desde **Clientes y cobros**.
 
 ## Clientes y renovaciones
 
@@ -65,13 +89,13 @@ Los mensajes de renovación admiten estas variables:
 4. Elimina los archivos antiguos de la raíz si todavía existen:
 
 ```bat
-git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt
+git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt
 git add -A
-git commit -m "Actualizar JadrixServs a V4.4"
+git commit -m "Actualizar JadrixServs a V4.5"
 git push
 ```
 
-El proceso inicia desde `src/server.js`. El archivo persistente `/data/jadrixservs-v4.json` se migra automáticamente a V4.4 y conserva clientes, fechas, mensajes, conversaciones y demás datos existentes. Los contactos que ya tenían una conversación guardada se marcan como atendidos para que la actualización no les repita la bienvenida.
+El proceso inicia desde `src/server.js`. El archivo persistente `/data/jadrixservs-v4.json` se migra automáticamente a V4.5 y conserva clientes, fechas, mensajes, conversaciones y demás datos existentes. Los contactos que ya tenían una conversación guardada se marcan como atendidos para que la actualización no les repita la bienvenida.
 
 ## Variables de Render
 
@@ -117,6 +141,13 @@ Desde un número que no esté registrado como cliente:
 3. Envía una segunda consulta: el bot debe permanecer en silencio.
 
 Luego registra un cliente con vencimiento dentro de 2 días, deja activo el recordatorio y pulsa **Procesar vencimientos**. Para probar la cobranza, usa un vencimiento de hoy y activa manualmente **Cobranza automática**.
+
+Para probar el registro rápido:
+
+1. Abre en tu WhatsApp el chat de un cliente.
+2. Envía `/planpro 30`.
+3. Abre **Clientes y cobros** en el panel.
+4. Debe aparecer `estimad@`, el número del chat, Plan Pro, 30 días y el vencimiento calculado.
 
 ## Ejecutar localmente
 
