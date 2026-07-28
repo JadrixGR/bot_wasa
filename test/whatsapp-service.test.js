@@ -64,9 +64,15 @@ function makeStore() {
   };
 }
 
-function makeFakeBaileys({ registered = false, lidPhone = null } = {}) {
+function makeFakeBaileys({
+  registered = false,
+  lidPhone = null,
+  logoutNeverResolves = false,
+  freshAuthAfterFirstLoad = false
+} = {}) {
   const sockets = [];
   const state = { creds: { registered }, keys: {} };
+  let authLoads = 0;
 
   function makeWASocket(config = {}) {
     const ev = new EventEmitter();
@@ -100,6 +106,9 @@ function makeFakeBaileys({ registered = false, lidPhone = null } = {}) {
       },
       logout: async () => {
         calls.loggedOut += 1;
+        if (logoutNeverResolves) {
+          return new Promise(() => undefined);
+        }
       }
     };
     sockets.push(socket);
@@ -124,10 +133,16 @@ function makeFakeBaileys({ registered = false, lidPhone = null } = {}) {
         unavailableService: 503,
         restartRequired: 515
       },
-      useMultiFileAuthState: async () => ({
-        state,
-        saveCreds: async () => undefined
-      }),
+      useMultiFileAuthState: async () => {
+        authLoads += 1;
+        if (freshAuthAfterFirstLoad && authLoads > 1) {
+          state.creds.registered = false;
+        }
+        return {
+          state,
+          saveCreds: async () => undefined
+        };
+      },
       jidNormalizedUser: (jid) => jid.replace(/:\d+@/, "@"),
       getContentType: (content) => Object.keys(content || {})[0]
     },
@@ -146,7 +161,8 @@ function makeService(fake, options = {}) {
     baileysLoader: async () => fake.module,
     qrEncoder: async (value) => `data:image/png;base64,${value}`,
     sleepFn: async () => undefined,
-    readyTimeoutMs: options.readyTimeoutMs
+    readyTimeoutMs: options.readyTimeoutMs,
+    logoutTimeoutMs: options.logoutTimeoutMs
   });
 }
 
@@ -326,6 +342,53 @@ test("Forzar conexión reabre el socket sin borrar las credenciales", async () =
   assert.equal(firstSocket.calls.loggedOut, 0);
   assert.equal(fake.sockets.length, 2);
   assert.equal(fake.state.creds.registered, true);
+});
+
+test("Cerrar sesión no se bloquea si logout no responde y genera un QR nuevo", async () => {
+  const dataDir = path.join(testRuntimeDir, "reset-hanging-data");
+  const sessionDir = path.join(dataDir, "whatsapp-session");
+  const databasePath = path.join(dataDir, "jadrixservs-v4.json");
+  fs.mkdirSync(sessionDir, { recursive: true });
+  fs.writeFileSync(databasePath, '{"clientes":["conservar"]}');
+  fs.writeFileSync(
+    path.join(sessionDir, "creds.json"),
+    JSON.stringify({ registered: true })
+  );
+  const fake = makeFakeBaileys({
+    registered: true,
+    logoutNeverResolves: true,
+    freshAuthAfterFirstLoad: true
+  });
+  const service = makeService(fake, {
+    sessionDir,
+    mediaDir: path.join(testRuntimeDir, "reset-hanging-media"),
+    logoutTimeoutMs: 20
+  });
+  await service.initialize();
+  const firstSocket = fake.sockets[0];
+
+  const result = await service.resetSession();
+
+  assert.equal(result.reset, true);
+  assert.equal(result.remoteLogoutCompleted, false);
+  assert.equal(firstSocket.calls.loggedOut, 1);
+  assert.equal(firstSocket.calls.ended, 1);
+  assert.deepEqual(fs.readdirSync(sessionDir), []);
+  assert.equal(
+    fs.readFileSync(databasePath, "utf8"),
+    '{"clientes":["conservar"]}'
+  );
+  assert.equal(fake.sockets.length, 2);
+
+  fake.sockets[1].ev.emit("connection.update", {
+    connection: "connecting",
+    qr: "qr-despues-del-cierre"
+  });
+  await flush();
+
+  assert.equal(service.getStatus().state, "qr");
+  assert.match(service.getStatus().qrDataUrl, /qr-despues-del-cierre/);
+  await service.shutdown();
 });
 
 test("la recuperación de una sesión vinculada continúa después de dos intentos", async () => {

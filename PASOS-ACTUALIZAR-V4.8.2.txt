@@ -1,11 +1,15 @@
-JADRIXSERVS BOT V4.8.1 - CORRECCIÓN WHATSAPP 405
-=================================================
+JADRIXSERVS BOT V4.8.2 - CIERRE, QR NUEVO Y LOGO
+==================================================
 
 QUÉ CORRIGE
-- Reemplaza el perfil Ubuntu rechazado por WhatsApp por Mac OS + Chrome.
-- Si aparece 405, reintenta sin borrar la sesión vinculada.
-- Elimina de los logs los volcados sensibles "Closing session: SessionEntry".
-- Conserva todas las funciones y el diseño profesional de V4.8.
+- "Cerrar sesión" ya no queda bloqueado si WhatsApp no responde.
+- La ruta espera el resultado real antes de mostrar que terminó.
+- Aplica un tiempo límite al cierre remoto, elimina solamente las credenciales
+  de WhatsApp y solicita un QR nuevo.
+- Evita que un reintento 405 vuelva a escribir la sesión mientras se elimina.
+- Conserva el perfil compatible Mac OS + Chrome y el filtro de logs sensibles.
+- Agrega el logo Jadrix Serv Digital Solutions al panel.
+- Conserva todas las funciones y el diseño profesional.
 - No cambia el esquema de datos, los clientes ni los mensajes configurados.
 
 ANTES DE ACTUALIZAR
@@ -28,30 +32,30 @@ ARCHIVOS QUE SE CONSERVAN EN RENDER
 - /data/media                           Archivos multimedia
 
 SUBIR A GITHUB
-1. Descomprime JadrixServs-Bot-V4.8.1-Fix-WhatsApp-405.zip.
+1. Descomprime JadrixServs-Bot-V4.8.2-Cierre-QR-Logo.zip.
 2. Copia el contenido de jadrixservs-bot-v4 sobre tu repositorio actual.
 3. Acepta reemplazar los archivos, pero NO borres la carpeta .git.
 4. Desde PowerShell ejecuta:
 
-   git rm --ignore-unmatch PASOS-ACTUALIZAR-V4.8.txt
+   git rm --ignore-unmatch PASOS-ACTUALIZAR-V4.8.txt PASOS-ACTUALIZAR-V4.8.1.txt
    git add -A
-   git commit -m "Corregir conexión WhatsApp 405 en V4.8.1"
+   git commit -m "Corregir cierre, QR y logo en V4.8.2"
    git push
 
 5. Render desplegará el cambio en el mismo servicio y reutilizará /data.
 
 DESPUÉS DEL DESPLIEGUE
-1. Abre el panel y verifica que aparezca V4.8.1 Profesional.
+1. Abre el panel y verifica que aparezca V4.8.2 Profesional.
 2. Revisa Clientes y cobros; tus registros deben continuar visibles.
-3. Abre WhatsApp y espera hasta 2 minutos para que pase a Conectado.
-4. NO pulses "Cerrar sesión" mientras indique 405 o "Aplicando perfil
-   compatible". Ese botón sí borraría la sesión y exigiría un QR nuevo.
-5. Si después de 2 minutos aún no conecta, pulsa "Forzar conexión" una vez.
-6. Prueba Modo noche, el menú y una búsqueda de cliente.
-7. Conserva el respaldo descargado hasta terminar las comprobaciones.
+3. Abre WhatsApp y pulsa "Cerrar sesión" si deseas descartar la sesión dañada.
+4. Confirma el aviso. El botón mostrará "Cerrando sesión..." mientras trabaja.
+5. Espera a que aparezca el QR nuevo y escanéalo una sola vez.
+6. Después del escaneo espera a que el panel indique "Conectado".
+7. Prueba Modo noche, el menú y una búsqueda de cliente.
+8. Conserva el respaldo descargado hasta terminar las comprobaciones.
 
 IMPORTANTE
-- La versión de la aplicación es 4.8.1.
+- La versión de la aplicación es 4.8.2.
 - La versión interna de datos continúa siendo 4.7 de forma intencional.
 - No cambies src/defaults.js a 4.8: no hace falta migrar la base para renovar
   únicamente la interfaz.

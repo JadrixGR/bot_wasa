@@ -182,6 +182,7 @@ function statusPresentation(status) {
     initializing: ["Iniciando", "neutral", status.loadingMessage || "Preparando la conexión con WhatsApp."],
     starting: ["Iniciando", "neutral", "Preparando el servicio."],
     restarting: ["Reiniciando", "neutral", "Cerrando y abriendo la conexión."],
+    resetting: ["Cerrando sesión", "amber", status.loadingMessage || "Eliminando las credenciales anteriores."],
     reset: ["Sesión cerrada", "amber", "Preparando un código QR nuevo."],
     disconnected: ["Desconectado", "red", "La sesión se desconectó. Reinicia o vincula nuevamente."],
     auth_failure: ["Error de sesión", "red", "La autenticación falló. Cierra la sesión y escanea un QR nuevo."],
@@ -697,12 +698,23 @@ function bindEvents() {
     } catch (error) { showToast(error.message, true); }
   });
   $("#resetWaButton").addEventListener("click", async () => {
-    if (!confirm("Se cerrará la sesión actual de WhatsApp y tendrás que escanear un QR nuevo. ¿Continuar?")) return;
+    if (!confirm("Se cerrará únicamente la sesión de WhatsApp y se generará un QR nuevo. Tus clientes, planes y mensajes no se eliminarán. ¿Continuar?")) return;
+    const button = $("#resetWaButton");
+    button.disabled = true;
+    button.textContent = "Cerrando sesión…";
     try {
-      await api("/api/whatsapp/reset", { method: "POST" });
-      showToast("Sesión cerrada. Esperando QR nuevo.");
-      setTimeout(refreshWhatsAppStatus, 1500);
-    } catch (error) { showToast(error.message, true); }
+      const result = await api("/api/whatsapp/reset", { method: "POST" });
+      if (result.status) renderWhatsApp(result.status);
+      showToast(result.message || "Sesión cerrada. Esperando QR nuevo.");
+      for (const delay of [500, 1500, 3000, 6000]) {
+        setTimeout(refreshWhatsAppStatus, delay);
+      }
+    } catch (error) {
+      showToast(error.message, true);
+    } finally {
+      button.disabled = false;
+      button.textContent = "Cerrar sesión";
+    }
   });
   $("#newClientButton").addEventListener("click", () => openClientDialog());
   $("#lookupForm").addEventListener("submit", lookupClient);

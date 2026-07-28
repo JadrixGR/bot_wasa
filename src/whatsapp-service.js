@@ -24,6 +24,24 @@ function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+async function withTimeout(promise, milliseconds, message) {
+  let timeout;
+  try {
+    return await Promise.race([
+      Promise.resolve(promise),
+      new Promise((_, reject) => {
+        timeout = setTimeout(() => {
+          const error = new Error(message);
+          error.code = "OPERATION_TIMEOUT";
+          reject(error);
+        }, Math.max(10, Number(milliseconds) || 10));
+      })
+    ]);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function normalizeWhatsAppId(value) {
   const raw = String(value || "").trim();
   if (raw.includes("@")) {
@@ -191,7 +209,8 @@ class WhatsAppService {
     baileysLoader = loadBaileys,
     qrEncoder = QRCode.toDataURL,
     sleepFn = sleep,
-    readyTimeoutMs
+    readyTimeoutMs,
+    logoutTimeoutMs
   }) {
     installSignalSessionLogFilter();
     this.store = store;
@@ -208,6 +227,13 @@ class WhatsAppService {
             Number(process.env.WHATSAPP_READY_TIMEOUT_MS) || 45000
           )
         : Math.max(10, Number(readyTimeoutMs) || 10);
+    this.logoutTimeoutMs =
+      logoutTimeoutMs === undefined
+        ? Math.max(
+            1000,
+            Number(process.env.WHATSAPP_LOGOUT_TIMEOUT_MS) || 4000
+          )
+        : Math.max(10, Number(logoutTimeoutMs) || 10);
     this.baileys = null;
     this.socket = null;
     this.authState = null;
@@ -216,6 +242,8 @@ class WhatsAppService {
     this.generation = 0;
     this.initializePromise = null;
     this.restartPromise = null;
+    this.resetPromise = null;
+    this.resetInProgress = false;
     this.pendingCredsSave = Promise.resolve();
     this.readyWatchdog = null;
     this.reconnectTimer = null;
@@ -322,15 +350,18 @@ class WhatsAppService {
     }
   }
 
-  async initialize() {
+  async initialize({ force = false } = {}) {
     if (process.env.DISABLE_WHATSAPP === "1") {
       this.#setStatus({ state: "disabled", ready: false });
       return;
     }
+    if (this.resetInProgress && !force) return;
     if (this.socket) return;
     if (this.initializePromise) return this.initializePromise;
 
-    this.initializePromise = this.#initializeSocket();
+    this.initializePromise = this.#initializeSocket({
+      allowDuringReset: force
+    });
     try {
       await this.initializePromise;
     } finally {
@@ -338,7 +369,7 @@ class WhatsAppService {
     }
   }
 
-  async #initializeSocket() {
+  async #initializeSocket({ allowDuringReset = false } = {}) {
     const generation = ++this.generation;
     this.#setStatus({
       state: "initializing",
@@ -360,6 +391,12 @@ class WhatsAppService {
         useMultiFileAuthState
       } = this.baileys;
       const { state, saveCreds } = await useMultiFileAuthState(this.sessionDir);
+      if (
+        this.generation !== generation ||
+        (this.resetInProgress && !allowDuringReset)
+      ) {
+        return;
+      }
       this.authState = state;
 
       const socket = makeWASocket({
@@ -392,7 +429,12 @@ class WhatsAppService {
       socket.ev.on("creds.update", (update) => {
         const saveTask = this.pendingCredsSave
           .catch(() => undefined)
-          .then(() => saveCreds());
+          .then(() => {
+            if (!this.#isCurrent(socket, generation) || this.resetInProgress) {
+              return;
+            }
+            return saveCreds();
+          });
         this.pendingCredsSave = saveTask;
         saveTask
           .then(() => {
@@ -639,7 +681,9 @@ class WhatsAppService {
   }
 
   #scheduleReconnect(delayMs) {
-    if (this.reconnectTimer || this.restartPromise) return;
+    if (this.resetInProgress || this.reconnectTimer || this.restartPromise) {
+      return;
+    }
     this.reconnectAttempts += 1;
     const exponentialDelay = Math.min(
       60000,
@@ -661,6 +705,7 @@ class WhatsAppService {
     });
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
+      if (this.resetInProgress) return;
       this.#restartInternal("reconexión automática").catch((error) => {
         this.#setStatus({
           state: "reconnecting",
@@ -918,24 +963,47 @@ class WhatsAppService {
     this.socket = null;
     this.authState = null;
     this.generation += 1;
-    if (!socket) return;
+    if (!socket) {
+      return { hadSocket: false, remoteLogoutCompleted: false };
+    }
 
+    let remoteLogoutCompleted = false;
     try {
       socket.ev?.removeAllListeners?.();
-      if (logout) await socket.logout("Sesión cerrada desde JadrixServs");
-      else await socket.end(new Error("Reinicio solicitado por JadrixServs"));
+      if (logout) {
+        await withTimeout(
+          socket.logout("Sesión cerrada desde JadrixServs"),
+          this.logoutTimeoutMs,
+          "WhatsApp no confirmó el cierre remoto a tiempo"
+        );
+        remoteLogoutCompleted = true;
+      } else {
+        await withTimeout(
+          socket.end(new Error("Reinicio solicitado por JadrixServs")),
+          this.logoutTimeoutMs,
+          "El socket de WhatsApp no se cerró a tiempo"
+        );
+      }
     } catch {
       try {
-        await socket.end(undefined);
+        await withTimeout(
+          socket.end(undefined),
+          Math.min(this.logoutTimeoutMs, 1500),
+          "El socket de WhatsApp continuó sin responder"
+        );
       } catch {
         // El socket ya estaba cerrado.
       }
     } finally {
       socket.ev?.destroy?.();
     }
+    return { hadSocket: true, remoteLogoutCompleted };
   }
 
   async #restartInternal(reason) {
+    if (this.resetInProgress) {
+      return this.resetPromise;
+    }
     if (this.restartPromise) return this.restartPromise;
     this.restartPromise = (async () => {
       await this.pendingCredsSave.catch(() => undefined);
@@ -980,31 +1048,105 @@ class WhatsAppService {
   }
 
   async resetSession() {
-    this.autoRecoveryAttempts = 0;
-    this.reconnectAttempts = 0;
-    await this.#stopSocket({ logout: true });
-    await fs.promises.rm(this.sessionDir, { recursive: true, force: true });
-    await fs.promises.mkdir(this.sessionDir, { recursive: true });
-    this.#setStatus({
-      state: "reset",
-      ready: false,
-      qrDataUrl: null,
-      qrUpdatedAt: null,
-      loadingPercent: null,
-      loadingMessage: null,
-      waState: null,
-      phone: null,
-      name: null,
-      recoveryAttempts: 0,
-      reconnectAttempts: 0,
-      error: null
-    });
-    this.store.addLog(
-      "whatsapp",
-      "Sesión de WhatsApp cerrada; se solicitará un QR nuevo"
-    );
-    this.store.save();
-    await this.initialize();
+    if (this.resetPromise) return this.resetPromise;
+
+    this.resetInProgress = true;
+    const activeRestart = this.restartPromise;
+    const activeInitialization = this.initializePromise;
+    this.resetPromise = (async () => {
+      this.autoRecoveryAttempts = 0;
+      this.reconnectAttempts = 0;
+      this.#clearReadyWatchdog();
+      this.#clearReconnectTimer();
+      this.#setStatus({
+        state: "resetting",
+        ready: false,
+        qrDataUrl: null,
+        qrUpdatedAt: null,
+        loadingPercent: 10,
+        loadingMessage: "Cerrando la sesión anterior",
+        waState: "RESETTING",
+        phone: null,
+        name: null,
+        recoveryAttempts: 0,
+        reconnectAttempts: 0,
+        error: null
+      });
+
+      const stopResult = await this.#stopSocket({ logout: true });
+      await this.pendingCredsSave.catch(() => undefined);
+      this.pendingCredsSave = Promise.resolve();
+      await activeRestart?.catch(() => undefined);
+      await activeInitialization?.catch(() => undefined);
+
+      if (this.socket) {
+        await this.#stopSocket();
+      }
+
+      await fs.promises.rm(this.sessionDir, {
+        recursive: true,
+        force: true
+      });
+      await fs.promises.mkdir(this.sessionDir, { recursive: true });
+      const remainingSessionFiles = await fs.promises.readdir(this.sessionDir);
+      if (remainingSessionFiles.length > 0) {
+        throw new Error(
+          "No se pudieron eliminar por completo las credenciales anteriores."
+        );
+      }
+
+      this.#setStatus({
+        state: "reset",
+        ready: false,
+        qrDataUrl: null,
+        qrUpdatedAt: null,
+        loadingPercent: 25,
+        loadingMessage: "Credenciales eliminadas; solicitando un QR nuevo",
+        waState: "RESET",
+        phone: null,
+        name: null,
+        recoveryAttempts: 0,
+        reconnectAttempts: 0,
+        error: null
+      });
+      this.store.addLog(
+        "whatsapp",
+        stopResult.remoteLogoutCompleted
+          ? "Sesión cerrada en WhatsApp y credenciales eliminadas; solicitando QR nuevo"
+          : "WhatsApp no confirmó el cierre remoto, pero las credenciales locales fueron eliminadas; solicitando QR nuevo"
+      );
+      this.store.save();
+
+      await this.initialize({ force: true });
+      return {
+        reset: true,
+        remoteLogoutCompleted: stopResult.remoteLogoutCompleted,
+        status: this.getStatus()
+      };
+    })();
+
+    try {
+      return await this.resetPromise;
+    } catch (error) {
+      this.#setStatus({
+        state: "error",
+        ready: false,
+        qrDataUrl: null,
+        loadingPercent: null,
+        loadingMessage: null,
+        waState: "RESET_ERROR",
+        error: `No se pudo preparar una sesión nueva: ${error.message}`
+      });
+      this.store.addLog(
+        "error",
+        `No se pudo restablecer WhatsApp: ${error.message}`
+      );
+      this.store.save();
+      throw error;
+    } finally {
+      this.resetInProgress = false;
+      this.resetPromise = null;
+    }
   }
 
   async shutdown() {

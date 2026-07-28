@@ -89,7 +89,7 @@ function clientForPanel(client) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.8.1",
+    version: "4.8.2",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
     storage: {
@@ -171,10 +171,13 @@ app.post(
   "/api/whatsapp/reset",
   requireAuth,
   asyncRoute(async (_req, res) => {
-    res.json({ ok: true, message: "Sesión cerrada. Aparecerá un QR nuevo." });
-    whatsapp.resetSession().catch((error) => {
-      store.addLog("error", `No se pudo restablecer la sesión: ${error.message}`);
-      store.save();
+    const result = await whatsapp.resetSession();
+    res.json({
+      ok: true,
+      message: result.remoteLogoutCompleted
+        ? "Sesión cerrada. Estamos generando un QR nuevo."
+        : "Credenciales anteriores eliminadas. Estamos generando un QR nuevo.",
+      ...result
     });
   })
 );
@@ -531,7 +534,7 @@ app.use((error, _req, res, _next) => {
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4.8.1 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V4.8.2 disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
   }
