@@ -1,12 +1,14 @@
-# JadrixServs Bot V4.8.2 Profesional
+# JadrixServs Bot V4.8.3 Profesional
 
-## Corrección de cierre de sesión V4.8.2
+## Corrección definitiva del 405 antes del QR · V4.8.3
 
-- El botón **Cerrar sesión** espera el resultado real y ya no informa éxito antes de completar la operación.
-- Si WhatsApp no responde al cierre remoto, aplica un tiempo límite, cierra el socket y continúa sin quedar bloqueado.
-- Elimina únicamente `/data/whatsapp-session`, comprueba que las credenciales anteriores desaparecieron y abre una sesión limpia para generar el QR.
-- Bloquea los reintentos automáticos durante el restablecimiento para impedir que una conexión antigua vuelva a escribir credenciales.
-- Conserva la corrección `405` con el perfil **Mac OS + Chrome** y el filtro de los volcados sensibles `Closing session: SessionEntry`.
+- Corrige el caso en que **Cerrar sesión** terminaba correctamente, pero la sesión nueva quedaba en `CONNECTING` sin mostrar el QR.
+- Consulta en cada inicio la revisión vigente directamente desde WhatsApp Web y la envía explícitamente a Baileys.
+- Incluye revisiones recientes de respaldo para que un fallo temporal de la consulta externa no reactive la versión antigua incluida en Baileys.
+- Ante un `405`, rota automáticamente la versión y los perfiles **Mac OS/Chrome** y **Windows/Chrome** sin volver a borrar la sesión ni tocar clientes.
+- Si `CONNECTING` no entrega un QR en 20 segundos, cambia automáticamente de candidato y vuelve a solicitarlo.
+- Mantiene el cierre con tiempo límite de V4.8.2, que elimina únicamente `/data/whatsapp-session` y nunca la base de clientes.
+- Conserva el filtro de los volcados sensibles `Closing session: SessionEntry`.
 - Integra el logo oficial **Jadrix Serv · Digital Solutions** en el acceso, la barra lateral y el icono del sitio.
 - Conserva íntegramente los clientes, mensajes, comandos, renovaciones, cobranzas, AFK, IA y configuración existentes.
 
@@ -27,7 +29,7 @@ Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clie
 
 ## Flujo de mensajes
 
-La V4.8.2 funciona en modo **solo bienvenida**:
+La V4.8.3 funciona en modo **solo bienvenida**:
 
 1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales.
 2. Los tres se envían por separado, mostrando “escribiendo…” y una pequeña demora antes de cada envío.
@@ -102,7 +104,7 @@ Al pulsar **Renovar**, el nuevo periodo comienza desde el vencimiento vigente si
 
 La base principal continúa siendo `/data/jadrixservs-v4.json`; no se cambia su nombre ni su ubicación, por lo que la actualización conserva los clientes existentes. La sesión vinculada se mantiene en `/data/whatsapp-session`.
 
-La V4.8.2 conserva estos niveles de protección:
+La V4.8.3 conserva estos niveles de protección:
 
 - Antes de reemplazar una base válida guarda `/data/jadrixservs-v4.backup.json`.
 - Si el JSON principal queda dañado, el bot recupera automáticamente la copia válida.
@@ -136,19 +138,19 @@ Los mensajes de renovación admiten estas variables:
 
 Antes de subir el código, abre el panel actual y pulsa **Clientes y cobros → Descargar respaldo JSON**. Después abre **Render → tu servicio → Disks** y confirma que ya existe el disco `jadrixservs-data` montado en `/data`.
 
-Si el disco no existe, guarda primero el respaldo JSON y después crea el disco con `Mount Path: /data` y `1 GB`. Al adjuntar el disco Render realiza un despliegue y los archivos efímeros anteriores no se copian automáticamente. Una vez instalada la V4.8.2, usa **Restaurar respaldo JSON** para recuperar la base. El respaldo recupera clientes y configuración; si la sesión de WhatsApp estaba únicamente en almacenamiento efímero, será necesario escanear el QR una vez para guardarla en el disco nuevo.
+Si el disco no existe, guarda primero el respaldo JSON y después crea el disco con `Mount Path: /data` y `1 GB`. Al adjuntar el disco Render realiza un despliegue y los archivos efímeros anteriores no se copian automáticamente. Una vez instalada la V4.8.3, usa **Restaurar respaldo JSON** para recuperar la base. El respaldo recupera clientes y configuración; si la sesión de WhatsApp estaba únicamente en almacenamiento efímero, será necesario escanear el QR una vez para guardarla en el disco nuevo.
 
 Si el disco ya aparece, continúa:
 
-1. Descomprime `JadrixServs-Bot-V4.8.2-Cierre-QR-Logo.zip`.
+1. Descomprime `JadrixServs-Bot-V4.8.3-QR-Protocolo-Actualizado.zip`.
 2. Copia el contenido de `jadrixservs-bot-v4` dentro de tu repositorio.
 3. Acepta reemplazar los archivos y no borres la carpeta `.git`.
 4. Elimina los archivos antiguos si todavía existen:
 
 ```bat
-git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt PASOS-ACTUALIZAR-V4.5.txt PASOS-ACTUALIZAR-V4.6.txt PASOS-ACTUALIZAR-V4.7.2.txt PASOS-ACTUALIZAR-V4.8.txt PASOS-ACTUALIZAR-V4.8.1.txt public/COMANDOS-WHATSAPP-V4.5.txt public/COMANDOS-WHATSAPP-V4.6.txt public/COMANDOS-WHATSAPP-V4.7.txt
+git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt PASOS-ACTUALIZAR-V4.5.txt PASOS-ACTUALIZAR-V4.6.txt PASOS-ACTUALIZAR-V4.7.2.txt PASOS-ACTUALIZAR-V4.8.txt PASOS-ACTUALIZAR-V4.8.1.txt PASOS-ACTUALIZAR-V4.8.2.txt public/COMANDOS-WHATSAPP-V4.5.txt public/COMANDOS-WHATSAPP-V4.6.txt public/COMANDOS-WHATSAPP-V4.7.txt
 git add -A
-git commit -m "Corregir cierre, QR y logo en V4.8.2"
+git commit -m "Actualizar protocolo WhatsApp y QR en V4.8.3"
 git push
 ```
 
@@ -171,6 +173,8 @@ En **Render → tu servicio → Environment** revisa:
 | `WHATSAPP_READY_TIMEOUT_MS` | `45000` |
 | `WHATSAPP_RECONNECT_DELAY_MS` | `3000` |
 | `WHATSAPP_LOGOUT_TIMEOUT_MS` | `4000` |
+| `WHATSAPP_QR_WAIT_TIMEOUT_MS` | `20000` |
+| `WHATSAPP_WEB_VERSION` | Déjala sin crear; el bot la consulta automáticamente |
 
 `render.yaml` configura un disco persistente de 1 GB montado en `/data`. Es indispensable para conservar la sesión de WhatsApp y los clientes después de cada despliegue.
 
@@ -207,7 +211,7 @@ Si el celular muestra la sesión iniciada pero el panel no termina de conectar:
 
 La sesión válida se guarda en `/data/whatsapp-session`; no hace falta volver a escanear después de cada despliegue.
 
-Ningún bot basado en una conexión no oficial puede prometer una sesión literalmente ilimitada: WhatsApp puede revocarla, reemplazarla si se abre otra conexión o solicitar un nuevo QR. La V4.8.2 evita que un corte temporal o un rechazo `405` detenga definitivamente el bot, mantiene reintentos automáticos mientras la sesión siga siendo válida y permite borrar una sesión dañada para obtener un QR nuevo.
+Ningún bot basado en una conexión no oficial puede prometer una sesión literalmente ilimitada: WhatsApp puede revocarla, reemplazarla si se abre otra conexión o solicitar un nuevo QR. La V4.8.3 actualiza la revisión Web antes de conectar, rota alternativas ante `405`, mantiene reintentos automáticos mientras la sesión siga siendo válida y permite borrar una sesión dañada para obtener un QR nuevo.
 
 ## Prueba recomendada
 

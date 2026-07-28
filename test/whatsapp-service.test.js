@@ -7,12 +7,15 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   WhatsAppService,
+  buildConnectionCandidates,
   calculateHumanDelay,
   compatibleBrowserProfile,
   extractMessageBody,
+  formatWhatsAppWebVersion,
   getDisconnectStatusCode,
   isSensitiveSignalSessionDump,
-  normalizeWhatsAppId
+  normalizeWhatsAppId,
+  parseWhatsAppWebVersion
 } = require("../src/whatsapp-service");
 
 const testRuntimeDir = path.resolve("test-runtime");
@@ -68,7 +71,9 @@ function makeFakeBaileys({
   registered = false,
   lidPhone = null,
   logoutNeverResolves = false,
-  freshAuthAfterFirstLoad = false
+  freshAuthAfterFirstLoad = false,
+  latestWaVersion = null,
+  latestWaVersionError = null
 } = {}) {
   const sockets = [];
   const state = { creds: { registered }, keys: {} };
@@ -120,7 +125,8 @@ function makeFakeBaileys({
       default: makeWASocket,
       Browsers: {
         ubuntu: (name) => ["Ubuntu", name, "1.0"],
-        macOS: (name) => ["Mac OS", name, "14.4.1"]
+        macOS: (name) => ["Mac OS", name, "14.4.1"],
+        windows: (name) => ["Windows", name, "10.0.22631"]
       },
       DisconnectReason: {
         loggedOut: 401,
@@ -133,6 +139,12 @@ function makeFakeBaileys({
         unavailableService: 503,
         restartRequired: 515
       },
+      fetchLatestWaWebVersion: latestWaVersion || latestWaVersionError
+        ? async () => {
+            if (latestWaVersionError) throw latestWaVersionError;
+            return { version: latestWaVersion, isLatest: true };
+          }
+        : undefined,
       useMultiFileAuthState: async () => {
         authLoads += 1;
         if (freshAuthAfterFirstLoad && authLoads > 1) {
@@ -162,7 +174,8 @@ function makeService(fake, options = {}) {
     qrEncoder: async (value) => `data:image/png;base64,${value}`,
     sleepFn: async () => undefined,
     readyTimeoutMs: options.readyTimeoutMs,
-    logoutTimeoutMs: options.logoutTimeoutMs
+    logoutTimeoutMs: options.logoutTimeoutMs,
+    qrWaitTimeoutMs: options.qrWaitTimeoutMs
   });
 }
 
@@ -231,6 +244,66 @@ test("usa el perfil Mac OS con Chrome compatible con WhatsApp", async () => {
   );
 });
 
+test("valida la versión de WhatsApp Web y crea perfiles alternativos", () => {
+  const fake = makeFakeBaileys();
+  assert.deepEqual(
+    parseWhatsAppWebVersion("2,3000,1044006379"),
+    [2, 3000, 1044006379]
+  );
+  assert.deepEqual(
+    parseWhatsAppWebVersion([2, 3000, 1044006379]),
+    [2, 3000, 1044006379]
+  );
+  assert.equal(parseWhatsAppWebVersion("versión inválida"), null);
+  assert.equal(
+    formatWhatsAppWebVersion([2, 3000, 1044006379]),
+    "2.3000.1044006379"
+  );
+
+  const candidates = buildConnectionCandidates({
+    Browsers: fake.module.Browsers,
+    liveVersion: [2, 3000, 1044006379]
+  });
+  assert.deepEqual(candidates[0].version, [2, 3000, 1044006379]);
+  assert.equal(candidates[0].browserLabel, "Mac OS/Chrome");
+  assert.deepEqual(candidates[1].version, [2, 3000, 1044006379]);
+  assert.equal(candidates[1].browserLabel, "Windows/Chrome");
+});
+
+test("usa la versión Web obtenida en vivo antes de solicitar el QR", async () => {
+  const fake = makeFakeBaileys({
+    latestWaVersion: [2, 3000, 1044006379]
+  });
+  const service = makeService(fake);
+  await service.initialize();
+
+  assert.deepEqual(
+    fake.sockets[0].config.version,
+    [2, 3000, 1044006379]
+  );
+  assert.match(service.getStatus().webVersion, /2\.3000\.1044006379/);
+  await service.shutdown();
+});
+
+test("usa una revisión reciente de respaldo si la consulta en vivo falla", async () => {
+  const fake = makeFakeBaileys({
+    latestWaVersionError: new Error("consulta bloqueada")
+  });
+  const service = makeService(fake);
+  await service.initialize();
+
+  assert.deepEqual(
+    fake.sockets[0].config.version,
+    [2, 3000, 1044006379]
+  );
+  assert.ok(
+    service.store.logs.some((item) =>
+      item.message.includes("respaldo compatible")
+    )
+  );
+  await service.shutdown();
+});
+
 test("identifica únicamente el volcado sensible Closing session", () => {
   assert.equal(
     isSensitiveSignalSessionDump(["Closing session:", { privateKey: "oculta" }]),
@@ -294,7 +367,10 @@ test("el reinicio requerido después del QR abre un socket nuevo y termina conec
 });
 
 test("el error 405 aplica el perfil compatible y conserva la sesión", async () => {
-  const fake = makeFakeBaileys({ registered: true });
+  const fake = makeFakeBaileys({
+    registered: true,
+    latestWaVersion: [2, 3000, 1044006379]
+  });
   const service = makeService(fake, {
     sessionDir: path.join(testRuntimeDir, "error-405-session"),
     mediaDir: path.join(testRuntimeDir, "error-405-media")
@@ -315,8 +391,8 @@ test("el error 405 aplica el perfil compatible y conserva la sesión", async () 
 
   assert.equal(service.getStatus().state, "reconnecting");
   assert.equal(service.getStatus().waState, "405");
-  assert.match(service.getStatus().loadingMessage, /Mac OS \+ Chrome/i);
-  assert.match(service.getStatus().error, /sin borrar tu sesión/i);
+  assert.match(service.getStatus().loadingMessage, /Windows\/Chrome/i);
+  assert.match(service.getStatus().error, /sin tocar tus clientes/i);
   assert.equal(fake.state.creds.registered, true);
 
   await new Promise((resolve) => setTimeout(resolve, 1100));
@@ -324,8 +400,41 @@ test("el error 405 aplica el perfil compatible y conserva la sesión", async () 
   assert.equal(firstSocket.calls.ended, 1);
   assert.equal(fake.sockets.length, 2);
   assert.deepEqual(
+    fake.sockets[1].config.version,
+    [2, 3000, 1044006379]
+  );
+  assert.deepEqual(
     fake.sockets[1].config.browser,
-    ["Mac OS", "Chrome", "14.4.1"]
+    ["Windows", "Chrome", "10.0.22631"]
+  );
+  await service.shutdown();
+});
+
+test("si CONNECTING no entrega QR, cambia de perfil automáticamente", async () => {
+  const fake = makeFakeBaileys({
+    latestWaVersion: [2, 3000, 1044006379]
+  });
+  const service = makeService(fake, {
+    sessionDir: path.join(testRuntimeDir, "qr-watchdog-session"),
+    mediaDir: path.join(testRuntimeDir, "qr-watchdog-media"),
+    qrWaitTimeoutMs: 15
+  });
+  await service.initialize();
+
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    if (fake.sockets.length >= 2) break;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  assert.ok(fake.sockets.length >= 2);
+  assert.deepEqual(
+    fake.sockets[1].config.browser,
+    ["Windows", "Chrome", "10.0.22631"]
+  );
+  assert.ok(
+    service.store.logs.some((item) =>
+      item.message.includes("no entregó el QR")
+    )
   );
   await service.shutdown();
 });

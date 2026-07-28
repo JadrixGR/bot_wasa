@@ -7,6 +7,11 @@ const { BotEngine } = require("./bot-engine");
 const { parseRegistrationCommand } = require("./command-registry");
 
 const BAILEYS_VERSION = "7.0.0-rc13";
+const FALLBACK_WA_WEB_VERSIONS = [
+  [2, 3000, 1044006379],
+  [2, 3000, 1043984129],
+  [2, 3000, 1043735639]
+];
 const SIGNAL_LOG_FILTER_MARKER = Symbol.for(
   "jadrixservs.signal-session-log-filter"
 );
@@ -113,6 +118,81 @@ function compatibleBrowserProfile(Browsers) {
   return ["Mac OS", "Chrome", "14.4.1"];
 }
 
+function parseWhatsAppWebVersion(value) {
+  const parts = Array.isArray(value)
+    ? value
+    : String(value || "")
+        .trim()
+        .split(/[.,\s]+/);
+  if (parts.length !== 3) return null;
+  const version = parts.map((part) => Number(part));
+  if (
+    version.some((part) => !Number.isSafeInteger(part) || part < 0) ||
+    version[0] !== 2 ||
+    version[1] < 1000 ||
+    version[2] < 1
+  ) {
+    return null;
+  }
+  return version;
+}
+
+function formatWhatsAppWebVersion(version) {
+  const parsed = parseWhatsAppWebVersion(version);
+  return parsed ? parsed.join(".") : "desconocida";
+}
+
+function buildConnectionCandidates({
+  Browsers,
+  liveVersion,
+  overrideVersion
+}) {
+  const versionInputs = [
+    { version: parseWhatsAppWebVersion(overrideVersion), source: "Render" },
+    {
+      version: parseWhatsAppWebVersion(liveVersion),
+      source: "WhatsApp Web"
+    },
+    ...FALLBACK_WA_WEB_VERSIONS.map((version) => ({
+      version,
+      source: "respaldo compatible"
+    }))
+  ];
+  const seenVersions = new Set();
+  const versions = versionInputs.filter(({ version }) => {
+    if (!version) return false;
+    const key = version.join(".");
+    if (seenVersions.has(key)) return false;
+    seenVersions.add(key);
+    return true;
+  });
+  const browserProfiles = [
+    {
+      browser:
+        typeof Browsers?.macOS === "function"
+          ? Browsers.macOS("Chrome")
+          : compatibleBrowserProfile(Browsers),
+      browserLabel: "Mac OS/Chrome"
+    },
+    {
+      browser:
+        typeof Browsers?.windows === "function"
+          ? Browsers.windows("Chrome")
+          : ["Windows", "Chrome", "10.0.22631"],
+      browserLabel: "Windows/Chrome"
+    }
+  ];
+
+  return versions.flatMap(({ version, source }) =>
+    browserProfiles.map(({ browser, browserLabel }) => ({
+      version: [...version],
+      versionSource: source,
+      browser: [...browser],
+      browserLabel
+    }))
+  );
+}
+
 function getDisconnectStatusCode(error) {
   const candidates = [
     error?.output?.statusCode,
@@ -210,7 +290,8 @@ class WhatsAppService {
     qrEncoder = QRCode.toDataURL,
     sleepFn = sleep,
     readyTimeoutMs,
-    logoutTimeoutMs
+    logoutTimeoutMs,
+    qrWaitTimeoutMs
   }) {
     installSignalSessionLogFilter();
     this.store = store;
@@ -234,6 +315,13 @@ class WhatsAppService {
             Number(process.env.WHATSAPP_LOGOUT_TIMEOUT_MS) || 4000
           )
         : Math.max(10, Number(logoutTimeoutMs) || 10);
+    this.qrWaitTimeoutMs =
+      qrWaitTimeoutMs === undefined
+        ? Math.max(
+            5000,
+            Number(process.env.WHATSAPP_QR_WAIT_TIMEOUT_MS) || 20000
+          )
+        : Math.max(10, Number(qrWaitTimeoutMs) || 10);
     this.baileys = null;
     this.socket = null;
     this.authState = null;
@@ -246,9 +334,14 @@ class WhatsAppService {
     this.resetInProgress = false;
     this.pendingCredsSave = Promise.resolve();
     this.readyWatchdog = null;
+    this.qrWatchdog = null;
     this.reconnectTimer = null;
     this.autoRecoveryAttempts = 0;
     this.reconnectAttempts = 0;
+    this.connectionCandidates = null;
+    this.connectionCandidateIndex = 0;
+    this.connectionCompatibilityCycles = 0;
+    this.activeConnectionCandidate = null;
     this.status = {
       state: "starting",
       ready: false,
@@ -259,7 +352,9 @@ class WhatsAppService {
       waState: null,
       phone: null,
       name: null,
-      webVersion: `Baileys ${BAILEYS_VERSION} · Mac OS/Chrome`,
+      webVersion: `Baileys ${BAILEYS_VERSION} · comprobando WhatsApp Web`,
+      protocolVersion: null,
+      browserProfile: null,
       transport: "websocket",
       recoveryAttempts: 0,
       reconnectAttempts: 0,
@@ -295,9 +390,124 @@ class WhatsAppService {
     this.readyWatchdog = null;
   }
 
+  #clearQrWatchdog() {
+    if (this.qrWatchdog) clearTimeout(this.qrWatchdog);
+    this.qrWatchdog = null;
+  }
+
   #clearReconnectTimer() {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+  }
+
+  async #resolveConnectionCandidates() {
+    if (this.connectionCandidates?.length) {
+      return this.connectionCandidates;
+    }
+
+    let liveVersion = null;
+    if (typeof this.baileys?.fetchLatestWaWebVersion === "function") {
+      try {
+        const options =
+          typeof globalThis.AbortSignal?.timeout === "function"
+            ? { signal: globalThis.AbortSignal.timeout(5000) }
+            : {};
+        const result = await withTimeout(
+          this.baileys.fetchLatestWaWebVersion(options),
+          5500,
+          "WhatsApp Web no respondió al consultar su versión"
+        );
+        if (result?.isLatest) {
+          liveVersion = parseWhatsAppWebVersion(result.version);
+        }
+      } catch (error) {
+        this.store.addLog(
+          "whatsapp",
+          `No se pudo consultar la versión Web en vivo; se usará el respaldo compatible: ${error.message}`
+        );
+        this.store.save();
+      }
+    }
+
+    this.connectionCandidates = buildConnectionCandidates({
+      Browsers: this.baileys?.Browsers,
+      liveVersion,
+      overrideVersion: process.env.WHATSAPP_WEB_VERSION
+    });
+    this.connectionCandidateIndex = Math.min(
+      this.connectionCandidateIndex,
+      Math.max(0, this.connectionCandidates.length - 1)
+    );
+    return this.connectionCandidates;
+  }
+
+  #advanceConnectionCandidate() {
+    if (!this.connectionCandidates?.length) return null;
+    this.connectionCandidateIndex += 1;
+    if (this.connectionCandidateIndex >= this.connectionCandidates.length) {
+      this.connectionCandidateIndex = 0;
+      this.connectionCompatibilityCycles += 1;
+      this.connectionCandidates = null;
+      this.activeConnectionCandidate = null;
+      return null;
+    }
+    return this.connectionCandidates[this.connectionCandidateIndex];
+  }
+
+  #scheduleQrWatchdog(socket, generation) {
+    if (
+      !this.#isCurrent(socket, generation) ||
+      this.status.ready ||
+      this.authState?.creds?.registered
+    ) {
+      return;
+    }
+    if (this.qrWatchdog) return;
+    this.qrWatchdog = setTimeout(() => {
+      this.qrWatchdog = null;
+      if (
+        !this.#isCurrent(socket, generation) ||
+        this.status.ready ||
+        this.status.qrDataUrl ||
+        this.authState?.creds?.registered ||
+        this.resetInProgress
+      ) {
+        return;
+      }
+
+      const rejected = this.activeConnectionCandidate;
+      const next = this.#advanceConnectionCandidate();
+      const rejectedLabel = rejected
+        ? `WA ${formatWhatsAppWebVersion(rejected.version)} · ${rejected.browserLabel}`
+        : "el perfil actual";
+      const nextLabel = next
+        ? `WA ${formatWhatsAppWebVersion(next.version)} · ${next.browserLabel}`
+        : "una versión Web actualizada";
+      this.#setStatus({
+        state: "reconnecting",
+        ready: false,
+        loadingPercent: 30,
+        loadingMessage: `El QR tardó demasiado; probando ${nextLabel}`,
+        waState: "QR_TIMEOUT",
+        error: `WhatsApp no entregó el QR con ${rejectedLabel}. El bot cambiará automáticamente de protocolo.`
+      });
+      this.store.addLog(
+        "whatsapp",
+        `WhatsApp no entregó el QR con ${rejectedLabel}; probando ${nextLabel}`
+      );
+      this.store.save();
+      this.#restartInternal("rotación automática para obtener el QR").catch(
+        (error) => {
+          this.#setStatus({
+            state: "reconnecting",
+            ready: false,
+            error: `No se pudo cambiar el perfil para generar el QR: ${error.message}`
+          });
+          this.#scheduleReconnect(1500, { compatibilityRetry: true });
+        }
+      );
+    }, this.qrWaitTimeoutMs);
+    this.qrWatchdog.unref();
   }
 
   #scheduleReadyWatchdog(socket, generation) {
@@ -387,7 +597,6 @@ class WhatsAppService {
       this.baileys = await this.baileysLoader();
       const {
         default: makeWASocket,
-        Browsers,
         useMultiFileAuthState
       } = this.baileys;
       const { state, saveCreds } = await useMultiFileAuthState(this.sessionDir);
@@ -398,10 +607,39 @@ class WhatsAppService {
         return;
       }
       this.authState = state;
+      this.#setStatus({
+        loadingPercent: 15,
+        loadingMessage: "Comprobando compatibilidad con WhatsApp Web"
+      });
+      const connectionCandidates =
+        await this.#resolveConnectionCandidates();
+      if (
+        this.generation !== generation ||
+        (this.resetInProgress && !allowDuringReset)
+      ) {
+        return;
+      }
+      const connectionCandidate =
+        connectionCandidates[this.connectionCandidateIndex] ||
+        connectionCandidates[0];
+      this.activeConnectionCandidate = connectionCandidate;
+      const protocolVersion = formatWhatsAppWebVersion(
+        connectionCandidate.version
+      );
+      this.#setStatus({
+        webVersion: `Baileys ${BAILEYS_VERSION} · WA ${protocolVersion} · ${connectionCandidate.browserLabel}`,
+        protocolVersion,
+        browserProfile: connectionCandidate.browserLabel,
+        loadingPercent: 20,
+        loadingMessage: state.creds.registered
+          ? "Validando la sesión con el protocolo actualizado"
+          : "Solicitando un código QR nuevo"
+      });
 
       const socket = makeWASocket({
         auth: state,
-        browser: compatibleBrowserProfile(Browsers),
+        version: connectionCandidate.version,
+        browser: connectionCandidate.browser,
         logger: createSilentLogger(),
         printQRInTerminal: false,
         markOnlineOnConnect: false,
@@ -440,6 +678,7 @@ class WhatsAppService {
           .then(() => {
             if (!this.#isCurrent(socket, generation)) return;
             if (state.creds.registered || update?.registered) {
+              this.#clearQrWatchdog();
               this.#setStatus({
                 state: "authenticated",
                 ready: false,
@@ -481,6 +720,7 @@ class WhatsAppService {
       });
 
       if (state.creds.registered) {
+        this.#clearQrWatchdog();
         this.#setStatus({
           state: "authenticated",
           ready: false,
@@ -489,6 +729,8 @@ class WhatsAppService {
           waState: "AUTHENTICATED"
         });
         this.#scheduleReadyWatchdog(socket, generation);
+      } else {
+        this.#scheduleQrWatchdog(socket, generation);
       }
     } catch (error) {
       if (this.generation !== generation) return;
@@ -515,7 +757,9 @@ class WhatsAppService {
       if (!this.#isCurrent(socket, generation)) return;
       this.autoRecoveryAttempts = 0;
       this.reconnectAttempts = 0;
+      this.connectionCompatibilityCycles = 0;
       this.#clearReadyWatchdog();
+      this.#clearQrWatchdog();
       this.#setStatus({
         state: "qr",
         ready: false,
@@ -533,6 +777,7 @@ class WhatsAppService {
     }
 
     if (update.isNewLogin && !this.status.ready) {
+      this.#clearQrWatchdog();
       this.#setStatus({
         state: "authenticated",
         ready: false,
@@ -557,13 +802,16 @@ class WhatsAppService {
         waState: "CONNECTING",
         error: null
       });
+      if (!registered) this.#scheduleQrWatchdog(socket, generation);
     }
 
     if (update.connection === "open") {
       this.#clearReadyWatchdog();
+      this.#clearQrWatchdog();
       this.#clearReconnectTimer();
       this.autoRecoveryAttempts = 0;
       this.reconnectAttempts = 0;
+      this.connectionCompatibilityCycles = 0;
       const normalizedJid = this.baileys.jidNormalizedUser(
         socket.user?.id || ""
       );
@@ -600,6 +848,7 @@ class WhatsAppService {
   async #handleConnectionClose(socket, generation, error) {
     if (!this.#isCurrent(socket, generation)) return;
     this.#clearReadyWatchdog();
+    this.#clearQrWatchdog();
     const statusCode = getDisconnectStatusCode(error);
     const { DisconnectReason } = this.baileys;
     const detail = String(error?.message || "Conexión cerrada");
@@ -647,6 +896,18 @@ class WhatsAppService {
 
     const restartRequired = statusCode === DisconnectReason.restartRequired;
     const rejectedClientProfile = statusCode === 405;
+    const rejectedCandidate = rejectedClientProfile
+      ? this.activeConnectionCandidate
+      : null;
+    const nextCandidate = rejectedClientProfile
+      ? this.#advanceConnectionCandidate()
+      : null;
+    const rejectedProtocol = rejectedCandidate
+      ? formatWhatsAppWebVersion(rejectedCandidate.version)
+      : "desconocido";
+    const nextCandidateLabel = nextCandidate
+      ? `WA ${formatWhatsAppWebVersion(nextCandidate.version)} · ${nextCandidate.browserLabel}`
+      : "una versión Web recién consultada";
     const reconnectPresentation = restartRequired
       ? {
           loadingPercent: 85,
@@ -656,9 +917,9 @@ class WhatsAppService {
       : rejectedClientProfile
         ? {
             loadingPercent: 35,
-            loadingMessage: "Aplicando perfil compatible Mac OS + Chrome",
+            loadingMessage: `405 detectado; probando ${nextCandidateLabel}`,
             error:
-              "WhatsApp rechazó el intento anterior (405). Reintentando con el perfil compatible sin borrar tu sesión…"
+              `WhatsApp rechazó el protocolo WA ${rejectedProtocol} (405) antes del QR. El bot está cambiándolo automáticamente sin tocar tus clientes.`
           }
         : {
             loadingPercent: null,
@@ -673,14 +934,21 @@ class WhatsAppService {
       phone: null,
       ...reconnectPresentation
     });
+    const compatibilityDelay = Math.min(
+      30000,
+      1000 * 2 ** Math.min(this.connectionCompatibilityCycles, 5)
+    );
     this.#scheduleReconnect(
-      restartRequired || rejectedClientProfile
-        ? 1000
-        : Number(process.env.WHATSAPP_RECONNECT_DELAY_MS) || 3000
+      rejectedClientProfile
+        ? compatibilityDelay
+        : restartRequired
+          ? 1000
+          : Number(process.env.WHATSAPP_RECONNECT_DELAY_MS) || 3000,
+      { compatibilityRetry: rejectedClientProfile }
     );
   }
 
-  #scheduleReconnect(delayMs) {
+  #scheduleReconnect(delayMs, { compatibilityRetry = false } = {}) {
     if (this.resetInProgress || this.reconnectTimer || this.restartPromise) {
       return;
     }
@@ -689,7 +957,9 @@ class WhatsAppService {
       60000,
       1000 * 2 ** Math.min(this.reconnectAttempts - 1, 6)
     );
-    const scheduledDelay = Math.max(100, Number(delayMs) || 0, exponentialDelay);
+    const scheduledDelay = compatibilityRetry
+      ? Math.max(250, Number(delayMs) || 1000)
+      : Math.max(100, Number(delayMs) || 0, exponentialDelay);
     const preservingConnectionGuidance =
       this.status.loadingPercent === 85 || this.status.waState === "405";
     this.#setStatus({
@@ -958,6 +1228,7 @@ class WhatsAppService {
 
   async #stopSocket({ logout = false } = {}) {
     this.#clearReadyWatchdog();
+    this.#clearQrWatchdog();
     this.#clearReconnectTimer();
     const socket = this.socket;
     this.socket = null;
@@ -1095,6 +1366,10 @@ class WhatsAppService {
         );
       }
 
+      this.connectionCandidates = null;
+      this.connectionCandidateIndex = 0;
+      this.connectionCompatibilityCycles = 0;
+      this.activeConnectionCandidate = null;
       this.#setStatus({
         state: "reset",
         ready: false,
@@ -1152,6 +1427,7 @@ class WhatsAppService {
   async shutdown() {
     await this.pendingCredsSave.catch(() => undefined);
     await this.#stopSocket();
+    this.#clearQrWatchdog();
     this.#setStatus({
       state: "stopped",
       ready: false,
@@ -1165,10 +1441,13 @@ class WhatsAppService {
 
 module.exports = {
   WhatsAppService,
+  buildConnectionCandidates,
   normalizeWhatsAppId,
   calculateHumanDelay,
   compatibleBrowserProfile,
   extractMessageBody,
+  formatWhatsAppWebVersion,
   getDisconnectStatusCode,
-  isSensitiveSignalSessionDump
+  isSensitiveSignalSessionDump,
+  parseWhatsAppWebVersion
 };
