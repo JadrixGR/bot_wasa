@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#0b1020">
-    <title>JadrixServs · Bot V4.7</title>
+    <title>JadrixServs · Bot V4.7.1</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
   </head>
@@ -36,7 +36,7 @@
           <div class="brand-mark small">J</div>
           <div>
             <strong>JadrixServs</strong>
-            <span>Bot V4.7</span>
+            <span>Bot V4.7.1</span>
           </div>
         </div>
         <nav aria-label="Secciones del panel">
@@ -203,7 +203,7 @@
               <code>/geminipro 365</code>
             </div>
             <p class="microcopy">
-              Si ese número ya tiene el mismo servicio, los días se agregan desde su vencimiento vigente. Los clientes no pueden ejecutar estos comandos.
+              Si ese número ya tiene el mismo servicio, los días se agregan desde su vencimiento vigente. Cada número puede tener hasta 2 compras o servicios registrados. Los clientes no pueden ejecutar estos comandos.
             </p>
             <a class="button secondary" href="/COMANDOS-WHATSAPP-V4.7.txt" download>Descargar todos los comandos</a>
           </article>
@@ -218,17 +218,24 @@
                 <option value="pausado">Pausados</option>
               </select>
             </div>
+            <div class="client-color-legend" aria-label="Colores de vencimiento">
+              <span><i class="legend-dot green"></i> De 3 a 30 días</span>
+              <span><i class="legend-dot yellow"></i> De 0 a 2 días</span>
+              <span><i class="legend-dot red"></i> Vencido</span>
+              <span><i class="legend-dot neutral"></i> Más de 30 días</span>
+            </div>
             <div class="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Cliente</th>
+                    <th>WhatsApp</th>
                     <th>Servicio o plan</th>
                     <th>Cuenta asociada</th>
                     <th>Vencimiento</th>
+                    <th>Días restantes</th>
                     <th>Automatización</th>
                     <th>Estado</th>
-                    <th></th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="clientsTable"></tbody>

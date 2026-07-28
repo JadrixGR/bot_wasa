@@ -11,6 +11,8 @@ const {
   todayInTimeZone
 } = require("./date-utils");
 
+const MAX_PURCHASES_PER_PHONE = 2;
+
 function normalizeWhatsAppDigits(value) {
   const localPart = String(value || "")
     .split("@")[0]
@@ -28,8 +30,29 @@ class JsonStore {
       this.dataDir,
       "jadrixservs-v4.backup.json"
     );
+    this.preUpdateBackupFilePath = path.join(
+      this.dataDir,
+      "jadrixservs-v4.pre-v4.7.1.json"
+    );
     fs.mkdirSync(this.dataDir, { recursive: true });
+    this.#createPreUpdateBackup();
     this.data = this.#load();
+  }
+
+
+  #createPreUpdateBackup() {
+    if (
+      !fs.existsSync(this.filePath) ||
+      fs.existsSync(this.preUpdateBackupFilePath)
+    ) {
+      return;
+    }
+    try {
+      JSON.parse(fs.readFileSync(this.filePath, "utf8"));
+      fs.copyFileSync(this.filePath, this.preUpdateBackupFilePath);
+    } catch {
+      // No se crea una copia permanente desde una base ilegible.
+    }
   }
 
   #load() {
@@ -519,6 +542,18 @@ class JsonStore {
   }
 
   createClient(input) {
+    const whatsappDigits = normalizeWhatsAppDigits(input.whatsapp);
+    const purchases = this.data.clients.filter(
+      (client) =>
+        !client.archived &&
+        normalizeWhatsAppDigits(client.whatsapp) === whatsappDigits
+    );
+    if (whatsappDigits && purchases.length >= MAX_PURCHASES_PER_PHONE) {
+      throw new Error(
+        `Este número ya tiene ${MAX_PURCHASES_PER_PHONE} compras registradas. Elimina un registro o renueva uno de los servicios existentes.`
+      );
+    }
+
     const now = new Date().toISOString();
     const client = this.#normalizeClient({
       id: crypto.randomUUID(),
@@ -540,8 +575,28 @@ class JsonStore {
   updateClient(id, input) {
     const index = this.data.clients.findIndex((client) => client.id === id);
     if (index === -1) throw new Error("Cliente no encontrado.");
+
+    const current = this.data.clients[index];
+    const currentDigits = normalizeWhatsAppDigits(current.whatsapp);
+    const targetDigits = normalizeWhatsAppDigits(
+      input.whatsapp === undefined ? current.whatsapp : input.whatsapp
+    );
+    if (targetDigits && targetDigits !== currentDigits) {
+      const targetPurchases = this.data.clients.filter(
+        (client) =>
+          client.id !== id &&
+          !client.archived &&
+          normalizeWhatsAppDigits(client.whatsapp) === targetDigits
+      );
+      if (targetPurchases.length >= MAX_PURCHASES_PER_PHONE) {
+        throw new Error(
+          `Ese número ya tiene ${MAX_PURCHASES_PER_PHONE} compras registradas.`
+        );
+      }
+    }
+
     const updated = this.#normalizeClient({
-      ...this.data.clients[index],
+      ...current,
       ...input,
       id,
       updatedAt: new Date().toISOString()
@@ -554,6 +609,39 @@ class JsonStore {
 
   archiveClient(id) {
     return this.updateClient(id, { archived: true, status: "archivado" });
+  }
+
+  deleteClient(id) {
+    const index = this.data.clients.findIndex((client) => client.id === id);
+    if (index === -1) throw new Error("Cliente no encontrado.");
+    const [deleted] = this.data.clients.splice(index, 1);
+    this.addLog(
+      "client-delete",
+      `Registro eliminado: ${deleted.whatsapp} · ${deleted.product}`,
+      { clientId: deleted.id, whatsapp: deleted.whatsapp, product: deleted.product }
+    );
+    this.save();
+    return structuredClone(deleted);
+  }
+
+  deleteClientsByWhatsApp(whatsapp) {
+    const digits = normalizeWhatsAppDigits(whatsapp);
+    if (!digits) throw new Error("Ingresa un número de WhatsApp válido.");
+    const deleted = this.data.clients.filter(
+      (client) => normalizeWhatsAppDigits(client.whatsapp) === digits
+    );
+    if (!deleted.length) throw new Error("No encontramos registros para ese número.");
+    const deletedIds = new Set(deleted.map((client) => client.id));
+    this.data.clients = this.data.clients.filter(
+      (client) => !deletedIds.has(client.id)
+    );
+    this.addLog(
+      "client-delete",
+      `Cliente eliminado por completo: ${digits} · ${deleted.length} registro(s)`,
+      { whatsapp: digits, count: deleted.length, clientIds: [...deletedIds] }
+    );
+    this.save();
+    return structuredClone(deleted);
   }
 
   renewClient(
@@ -683,4 +771,4 @@ class JsonStore {
   }
 }
 
-module.exports = { JsonStore, normalizeWhatsAppDigits };
+module.exports = { JsonStore, normalizeWhatsAppDigits, MAX_PURCHASES_PER_PHONE };

@@ -73,10 +73,23 @@ function asyncRoute(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
+function clientForPanel(client) {
+  let daysRemaining = null;
+  try {
+    daysRemaining = daysBetween(
+      todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima"),
+      client.expiryDate
+    );
+  } catch {
+    // Una fecha inválida se muestra sin cálculo y puede corregirse desde Editar.
+  }
+  return { ...client, daysRemaining };
+}
+
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.7",
+    version: "4.7.1",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
     storage: {
@@ -176,7 +189,11 @@ app.post(
 );
 
 app.get("/api/clients", requireAuth, (req, res) => {
-  res.json(store.listClients({ includeArchived: req.query.archived === "1" }));
+  res.json(
+    store
+      .listClients({ includeArchived: req.query.archived === "1" })
+      .map(clientForPanel)
+  );
 });
 
 app.get("/api/clients/lookup", requireAuth, (req, res) => {
@@ -186,7 +203,10 @@ app.get("/api/clients/lookup", requireAuth, (req, res) => {
       error: "Ingresa un número de celular válido para realizar la búsqueda."
     });
   }
-  return res.json({ phone, clients: store.findClientsByWhatsApp(phone) });
+  return res.json({
+    phone,
+    clients: store.findClientsByWhatsApp(phone).map(clientForPanel)
+  });
 });
 
 app.post("/api/clients", requireAuth, (req, res) => {
@@ -199,6 +219,15 @@ app.put("/api/clients/:id", requireAuth, (req, res) => {
 
 app.post("/api/clients/:id/archive", requireAuth, (req, res) => {
   res.json(store.archiveClient(req.params.id));
+});
+
+app.delete("/api/clients/by-phone/:phone", requireAuth, (req, res) => {
+  const deleted = store.deleteClientsByWhatsApp(req.params.phone);
+  res.json({ ok: true, deleted: deleted.length, phone: normalizeWhatsAppDigits(req.params.phone) });
+});
+
+app.delete("/api/clients/:id", requireAuth, (req, res) => {
+  res.json({ ok: true, client: store.deleteClient(req.params.id) });
 });
 
 app.post("/api/clients/:id/renew", requireAuth, (req, res) => {
@@ -502,7 +531,7 @@ app.use((error, _req, res, _next) => {
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4.7 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V4.7.1 disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
   }

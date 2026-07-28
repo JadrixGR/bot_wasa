@@ -368,3 +368,129 @@ test("restaura un respaldo JSON y conserva la versión de datos actual", () => {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+
+test("limita a dos compras nuevas por número sin borrar las existentes", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const base = {
+      name: "estimad@",
+      whatsapp: "999888777",
+      startDate: "2026-07-28",
+      expiryDate: "2026-08-27",
+      status: "activo"
+    };
+    store.createClient({ ...base, product: "ChatGPT Plus" });
+    store.createClient({ ...base, product: "Netflix" });
+    assert.equal(store.findClientsByWhatsApp("51999888777").length, 2);
+    assert.throws(
+      () => store.createClient({ ...base, product: "HBO" }),
+      /2 compras registradas/
+    );
+    assert.equal(store.findClientsByWhatsApp("999888777").length, 2);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("elimina un registro sin borrar la segunda compra del mismo número", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const first = store.createClient({
+      name: "estimad@",
+      whatsapp: "999888777",
+      product: "ChatGPT Plus",
+      startDate: "2026-07-28",
+      expiryDate: "2026-08-27",
+      status: "activo"
+    });
+    store.createClient({
+      name: "estimad@",
+      whatsapp: "999888777",
+      product: "Netflix",
+      startDate: "2026-07-28",
+      expiryDate: "2026-08-27",
+      status: "activo"
+    });
+    store.deleteClient(first.id);
+    const remaining = store.findClientsByWhatsApp("999888777");
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0].product, "Netflix");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("elimina por completo todas las compras del mismo número", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const base = {
+      name: "estimad@",
+      whatsapp: "999888777",
+      startDate: "2026-07-28",
+      expiryDate: "2026-08-27",
+      status: "activo"
+    };
+    store.createClient({ ...base, product: "ChatGPT Plus" });
+    store.createClient({ ...base, product: "Netflix" });
+    const deleted = store.deleteClientsByWhatsApp("51999888777");
+    assert.equal(deleted.length, 2);
+    assert.equal(store.findClientsByWhatsApp("999888777").length, 0);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+
+test("crea una copia previa a V4.7.1 sin alterar los clientes existentes", () => {
+  const directory = temporaryDataDir();
+  try {
+    const existing = createInitialData();
+    existing.clients.push({
+      id: "cliente-previo",
+      name: "Cliente previo",
+      whatsapp: "51999888777",
+      product: "Netflix",
+      price: "S/10",
+      paymentMethod: "Yape",
+      accountReference: "perfil-1",
+      startDate: "2026-07-01",
+      expiryDate: "2026-08-01",
+      termMonths: 1,
+      durationDays: 30,
+      status: "activo",
+      reminderDays: 2,
+      autoReminder: true,
+      autoCharge: false,
+      notes: "",
+      archived: false,
+      lastPaymentDate: null,
+      lastReminderKey: null,
+      lastChargeKey: null,
+      registrationSource: "",
+      lastCommand: "",
+      lastCommandMessageId: "",
+      lastCommandAt: null,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-01T00:00:00.000Z"
+    });
+    const mainPath = path.join(directory, "jadrixservs-v4.json");
+    fs.writeFileSync(mainPath, JSON.stringify(existing), "utf8");
+
+    const store = new JsonStore(directory);
+    const preUpdatePath = path.join(
+      directory,
+      "jadrixservs-v4.pre-v4.7.1.json"
+    );
+    assert.equal(fs.existsSync(preUpdatePath), true);
+    assert.equal(store.listClients().length, 1);
+    assert.equal(store.listClients()[0].id, "cliente-previo");
+    const backup = JSON.parse(fs.readFileSync(preUpdatePath, "utf8"));
+    assert.equal(backup.clients[0].id, "cliente-previo");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

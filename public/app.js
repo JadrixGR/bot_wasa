@@ -237,6 +237,53 @@ function clientStatusTone(status) {
   return status === "activo" ? "green" : status === "vencido" ? "red" : "amber";
 }
 
+function daysRemainingPresentation(client) {
+  const days = Number(client.daysRemaining);
+  if (!Number.isFinite(days)) {
+    return { tone: "neutral", label: "Sin cálculo", detail: "Revisa la fecha" };
+  }
+  if (client.status === "vencido" || days < 0) {
+    const overdue = Math.abs(days);
+    return {
+      tone: "red",
+      label: "Vencido",
+      detail: overdue === 1 ? "Hace 1 día" : `Hace ${overdue} días`
+    };
+  }
+  if (days === 0) {
+    return { tone: "yellow", label: "Vence hoy", detail: "Cobrar hoy" };
+  }
+  if (days === 1) {
+    return { tone: "yellow", label: "1 día", detail: "Falta 1 día" };
+  }
+  if (days === 2) {
+    return { tone: "yellow", label: "2 días", detail: "Faltan 2 días" };
+  }
+  if (days >= 3 && days <= 30) {
+    return { tone: "green", label: `${days} días`, detail: `Faltan ${days} días` };
+  }
+  return { tone: "neutral", label: `${days} días`, detail: `Faltan ${days} días` };
+}
+
+async function copyPhoneToClipboard(phone) {
+  const value = String(phone || "").trim();
+  if (!value) throw new Error("No hay un número para copiar.");
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const input = document.createElement("textarea");
+  input.value = value;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  const copied = document.execCommand("copy");
+  input.remove();
+  if (!copied) throw new Error("No se pudo copiar el número.");
+}
+
 function renderLookupResults(clients, phone = "") {
   state.lookupClients = clients;
   const target = $("#lookupResults");
@@ -266,6 +313,7 @@ function renderLookupResults(clients, phone = "") {
           </div>
           <dl class="client-details">
             <div><dt>Vencimiento</dt><dd>${escapeHtml(formatDate(client.expiryDate))}</dd></div>
+            <div><dt>Días restantes</dt><dd>${escapeHtml(daysRemainingPresentation(client).detail)}</dd></div>
             <div><dt>Activación</dt><dd>${escapeHtml(formatDate(client.startDate))}</dd></div>
             <div><dt>Precio</dt><dd>${escapeHtml(client.price || "Sin registrar")}</dd></div>
             <div><dt>Cuenta</dt><dd>${escapeHtml(client.accountReference || "Sin registrar")}</dd></div>
@@ -297,16 +345,24 @@ function renderClients() {
   const query = $("#clientSearch").value.trim().toLowerCase();
   const status = $("#clientStatusFilter").value;
   const clients = state.clients.filter((client) => {
-    const haystack = `${client.name} ${client.whatsapp} ${client.product} ${client.accountReference || ""}`.toLowerCase();
+    const haystack = `${client.whatsapp} ${client.product} ${client.accountReference || ""}`.toLowerCase();
     return (!query || haystack.includes(query)) && (!status || client.status === status);
   });
   const table = $("#clientsTable");
-  table.innerHTML = clients.map((client) => `
-    <tr>
-      <td><strong>${escapeHtml(client.name)}</strong><span>${escapeHtml(client.whatsapp)}</span></td>
+  table.innerHTML = clients.map((client) => {
+    const remaining = daysRemainingPresentation(client);
+    return `
+    <tr class="client-row tone-${remaining.tone}">
+      <td>
+        <button class="phone-copy" data-action="copy-phone" data-id="${client.id}" type="button" title="Copiar número al portapapeles">
+          ${escapeHtml(client.whatsapp)}
+          <span>Haz clic para copiar</span>
+        </button>
+      </td>
       <td><strong>${escapeHtml(client.product)}</strong><span>${escapeHtml(client.price || "Sin precio")}${client.durationDays ? ` · ${escapeHtml(client.durationDays)} días` : ""}</span></td>
       <td><strong>${escapeHtml(client.accountReference || "Sin registrar")}</strong></td>
       <td><strong>${escapeHtml(formatDate(client.expiryDate))}</strong><span>Desde ${escapeHtml(formatDate(client.startDate))}</span></td>
+      <td><span class="days-badge ${remaining.tone}">${escapeHtml(remaining.label)}</span><span>${escapeHtml(remaining.detail)}</span></td>
       <td><div class="automation-flags"><span class="mini-flag ${client.autoReminder ? "on" : ""}">Aviso 2d</span><span class="mini-flag ${client.autoCharge ? "on" : ""}">Cobro</span></div></td>
       <td><span class="pill ${clientStatusTone(client.status)}">${escapeHtml(client.status)}</span></td>
       <td><div class="row-actions">
@@ -314,9 +370,11 @@ function renderClients() {
         <button data-action="charge" data-id="${client.id}" type="button">Cobrar</button>
         <button data-action="renew" data-id="${client.id}" type="button">Renovar</button>
         <button data-action="edit" data-id="${client.id}" type="button">Editar</button>
+        <button class="danger" data-action="delete-record" data-id="${client.id}" type="button">Eliminar registro</button>
+        <button class="danger" data-action="delete-client" data-id="${client.id}" type="button">Eliminar cliente</button>
       </div></td>
-    </tr>
-  `).join("");
+    </tr>`;
+  }).join("");
   $("#clientsEmpty").classList.toggle("hidden", clients.length > 0);
   $(".table-wrap").classList.toggle("hidden", clients.length === 0);
 }
@@ -579,8 +637,36 @@ function bindEvents() {
     if (!button) return;
     const client = state.clients.find((item) => item.id === button.dataset.id);
     if (!client) return;
+    if (button.dataset.action === "copy-phone") {
+      try {
+        await copyPhoneToClipboard(client.whatsapp);
+        showToast(`Número ${client.whatsapp} copiado.`);
+      } catch (error) {
+        showToast(error.message, true);
+      }
+      return;
+    }
     if (button.dataset.action === "edit") openClientDialog(client);
     if (button.dataset.action === "renew") openRenewDialog(client);
+    if (button.dataset.action === "delete-record") {
+      if (!confirm(`¿Eliminar solo el registro “${client.product}” del número ${client.whatsapp}? Esta acción no elimina sus otras compras.`)) return;
+      try {
+        await api(`/api/clients/${client.id}`, { method: "DELETE" });
+        await Promise.all([loadClients(), refreshDashboardOnly()]);
+        showToast("Registro eliminado. La copia automática conserva el estado anterior.");
+      } catch (error) { showToast(error.message, true); }
+      return;
+    }
+    if (button.dataset.action === "delete-client") {
+      const purchases = state.clients.filter((item) => item.whatsapp === client.whatsapp).length;
+      if (!confirm(`¿Eliminar por completo al número ${client.whatsapp} y sus ${purchases} compra${purchases === 1 ? "" : "s"}? Esta acción elimina todos sus registros.`)) return;
+      try {
+        const result = await api(`/api/clients/by-phone/${encodeURIComponent(client.whatsapp)}`, { method: "DELETE" });
+        await Promise.all([loadClients(), refreshDashboardOnly()]);
+        showToast(`Cliente eliminado: ${result.deleted} registro${result.deleted === 1 ? "" : "s"}.`);
+      } catch (error) { showToast(error.message, true); }
+      return;
+    }
     if (button.dataset.action === "remind") {
       try {
         await api(`/api/clients/${client.id}/reminder`, { method: "POST" });
