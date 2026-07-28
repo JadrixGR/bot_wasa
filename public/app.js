@@ -212,6 +212,16 @@ function renderDashboard(dashboard) {
   $("#statDue").textContent = dashboard.stats.dueSoon;
   $("#statToday").textContent = dashboard.stats.dueToday;
   $("#statExpired").textContent = dashboard.stats.expired;
+  const storageNotice = $("#storageNotice");
+  if (storageNotice) {
+    const protectedStorage = Boolean(
+      dashboard.storage?.persistentDiskConfigured
+    );
+    storageNotice.className = `notice ${protectedStorage ? "success" : "error"}`;
+    storageNotice.innerHTML = protectedStorage
+      ? "<strong>Datos protegidos:</strong> la sesión de WhatsApp, los clientes y la copia automática se guardan en el disco persistente <code>/data</code>."
+      : "<strong>Atención:</strong> DATA_DIR no apunta a <code>/data</code>. Corrígelo en Render antes de actualizar para no perder la sesión ni los clientes al reiniciar.";
+  }
   renderLogs(dashboard.recentLogs, $("#recentLogs"), true);
 }
 

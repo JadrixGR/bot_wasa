@@ -17,7 +17,7 @@ function temporaryDataDir() {
   return directory;
 }
 
-test("migra datos anteriores sin perder clientes y activa el modo V4.5", () => {
+test("migra datos anteriores sin perder clientes y activa el modo V4.6", () => {
   const directory = temporaryDataDir();
   try {
     fs.writeFileSync(
@@ -43,7 +43,7 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.5", () => {
     );
 
     const store = new JsonStore(directory);
-    assert.equal(store.data.version, 4.5);
+    assert.equal(store.data.version, 4.6);
     assert.equal(store.data.clients[0].id, "cliente-existente");
     assert.equal(store.data.clients[0].accountReference, "");
     assert.equal(store.data.clients[0].reminderDays, 2);
@@ -69,6 +69,69 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.5", () => {
       3
     );
     assert.ok(store.getKnowledgeBase().length >= 14);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("mantiene una copia automática de la base principal", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    store.createClient({
+      name: "Cliente respaldado",
+      whatsapp: "999 888 777",
+      product: "Plan Pro",
+      startDate: "2026-07-27",
+      expiryDate: "2026-08-27",
+      status: "activo"
+    });
+    store.save();
+
+    const backupPath = path.join(
+      directory,
+      "jadrixservs-v4.backup.json"
+    );
+    assert.equal(fs.existsSync(backupPath), true);
+    const backup = JSON.parse(fs.readFileSync(backupPath, "utf8"));
+    assert.equal(backup.clients[0].name, "Cliente respaldado");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("recupera los clientes desde la copia automática si la base se daña", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const client = store.createClient({
+      name: "Cliente recuperado",
+      whatsapp: "999 777 666",
+      product: "ChatGPT Pro",
+      startDate: "2026-07-27",
+      expiryDate: "2026-08-27",
+      status: "activo"
+    });
+    store.save();
+    fs.writeFileSync(
+      path.join(directory, "jadrixservs-v4.json"),
+      "{base dañada",
+      "utf8"
+    );
+
+    const recovered = new JsonStore(directory);
+    assert.equal(recovered.getClient(client.id).name, "Cliente recuperado");
+    assert.ok(
+      recovered.listLogs().some((log) => log.type === "recovery")
+    );
+    assert.doesNotThrow(() =>
+      JSON.parse(
+        fs.readFileSync(
+          path.join(directory, "jadrixservs-v4.json"),
+          "utf8"
+        )
+      )
+    );
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

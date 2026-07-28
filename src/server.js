@@ -18,6 +18,8 @@ const sessionDir = path.join(dataDir, "whatsapp-session");
 const port = Number(process.env.PORT) || 3000;
 const adminPassword = process.env.ADMIN_PASSWORD || "Jadrix2026!";
 const cookieSecret = process.env.COOKIE_SECRET || "cambia-este-secreto-jadrixservs-v4";
+const persistentDiskConfigured =
+  dataDir === "/data" || dataDir.startsWith(`/data${path.sep}`);
 
 fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(mediaDir, { recursive: true });
@@ -69,9 +71,13 @@ function asyncRoute(handler) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.5",
+    version: "4.6",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
+    storage: {
+      persistentDiskConfigured,
+      automaticBackup: true
+    },
     time: new Date().toISOString()
   });
 });
@@ -112,6 +118,10 @@ app.get("/api/dashboard", requireAuth, (req, res) => {
   ).length;
   res.json({
     whatsapp: whatsapp.getStatus(),
+    storage: {
+      persistentDiskConfigured,
+      automaticBackup: true
+    },
     stats: {
       active: activeClients.length,
       dueSoon,
@@ -378,6 +388,17 @@ app.get("/api/export/clients.csv", requireAuth, (_req, res) => {
   res.send(`\uFEFF${csv}`);
 });
 
+app.get("/api/backup/data.json", requireAuth, (_req, res) => {
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="respaldo-jadrixservs-${date}.json"`
+  );
+  res.setHeader("Cache-Control", "no-store");
+  res.send(`${JSON.stringify(store.snapshot(), null, 2)}\n`);
+});
+
 app.use(express.static(path.join(rootDir, "public"), { index: "index.html" }));
 
 app.use((error, _req, res, _next) => {
@@ -391,9 +412,14 @@ app.use((error, _req, res, _next) => {
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4.5 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V4.6 disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
+  }
+  if (process.env.NODE_ENV === "production" && !persistentDiskConfigured) {
+    console.warn(
+      "DATA_DIR no apunta a /data. La sesión de WhatsApp y los clientes podrían perderse al reiniciar Render."
+    );
   }
   scheduler.start();
   whatsapp.initialize().catch((error) => {

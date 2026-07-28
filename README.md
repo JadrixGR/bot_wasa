@@ -1,14 +1,14 @@
-# JadrixServs Bot V4.5
+# JadrixServs Bot V4.6
 
 Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clientes mediante comandos y automatizar renovaciones.
 
 ## Flujo de mensajes
 
-La V4.5 funciona en modo **solo bienvenida**:
+La V4.6 funciona en modo **solo bienvenida**:
 
 1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales.
 2. Los tres se envían por separado, mostrando “escribiendo…” y una pequeña demora antes de cada envío.
-3. Después de completar esa secuencia, el bot no vuelve a responder los mensajes entrantes de ese contacto.
+3. Después de completar esa secuencia, el bot no vuelve a responder los mensajes entrantes de ese contacto y los deja sin leer para que aparezcan pendientes de atención manual.
 4. Si el número ya está registrado como cliente, sus respuestas tampoco activan la bienvenida.
 5. Desde ese momento, el bot solamente envía recordatorios o cobranzas programadas desde el panel.
 
@@ -36,7 +36,7 @@ La primera parte identifica el producto o plan y el número indica los días agr
 - Ignora los comandos escritos por el cliente; solamente los mensajes enviados por el propietario pueden registrar o renovar.
 - Evita sumar dos veces si WhatsApp repite el mismo evento.
 
-El comando queda visible dentro del chat y el bot no envía una confirmación adicional. La lista completa está en `public/COMANDOS-WHATSAPP-V4.5.txt` y también se descarga desde **Clientes y cobros**.
+El comando queda visible dentro del chat y el bot no envía una confirmación adicional. La lista completa está en `public/COMANDOS-WHATSAPP-V4.6.txt` y también se descarga desde **Clientes y cobros**.
 
 ## Clientes y renovaciones
 
@@ -63,6 +63,18 @@ El programador revisa los vencimientos cada 15 minutos mientras WhatsApp está c
 
 Al pulsar **Renovar**, el nuevo periodo comienza desde el vencimiento vigente si el cliente pagó antes; así no pierde días. También puedes actualizar la cuenta asociada durante la renovación.
 
+## Protección de clientes y sesión
+
+La base principal continúa siendo `/data/jadrixservs-v4.json`; no se cambia su nombre ni su ubicación, por lo que la actualización conserva los clientes existentes. La sesión vinculada se mantiene en `/data/whatsapp-session`.
+
+La V4.6 agrega dos niveles de protección:
+
+- Antes de reemplazar una base válida guarda `/data/jadrixservs-v4.backup.json`.
+- Si el JSON principal queda dañado, el bot recupera automáticamente la copia válida.
+- En **Clientes y cobros → Descargar respaldo JSON** puedes guardar una copia completa en tu computadora.
+
+No elimines el disco persistente, no cambies su punto de montaje y no crees otro servicio de Render para hacer la actualización. El disco debe seguir unido al mismo servicio.
+
 ## Editar los mensajes
 
 En **Mensajes automáticos** puedes editar:
@@ -83,19 +95,21 @@ Los mensajes de renovación admiten estas variables:
 
 ## Actualizar una instalación existente
 
-1. Descomprime `JadrixServs-Bot-V4.zip`.
+Antes de subir el código, abre **Render → tu servicio → Disks** y confirma que ya existe el disco `jadrixservs-data` montado en `/data`. Si no aparece, **detente y no hagas `git push` todavía**: un despliegue sobre almacenamiento efímero puede borrar la base actual. Primero debe extraerse una copia de los datos del servicio en ejecución. Si el disco sí aparece, continúa:
+
+1. Descomprime `JadrixServs-Bot-V4.6.zip`.
 2. Copia el contenido de `jadrixservs-bot-v4` dentro de tu repositorio.
 3. Acepta reemplazar los archivos y no borres la carpeta `.git`.
-4. Elimina los archivos antiguos de la raíz si todavía existen:
+4. Elimina los archivos antiguos si todavía existen:
 
 ```bat
-git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt
+git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt PASOS-ACTUALIZAR-V4.5.txt public/COMANDOS-WHATSAPP-V4.5.txt
 git add -A
-git commit -m "Actualizar JadrixServs a V4.5"
+git commit -m "Actualizar JadrixServs a V4.6"
 git push
 ```
 
-El proceso inicia desde `src/server.js`. El archivo persistente `/data/jadrixservs-v4.json` se migra automáticamente a V4.5 y conserva clientes, fechas, mensajes, conversaciones y demás datos existentes. Los contactos que ya tenían una conversación guardada se marcan como atendidos para que la actualización no les repita la bienvenida.
+El proceso inicia desde `src/server.js`. El archivo persistente `/data/jadrixservs-v4.json` se migra automáticamente a V4.6 y conserva clientes, fechas, mensajes, entrenamiento, conversaciones y demás datos existentes. Los contactos que ya tenían una conversación guardada se marcan como atendidos para que la actualización no les repita la bienvenida.
 
 ## Variables de Render
 
@@ -116,6 +130,22 @@ En **Render → tu servicio → Environment** revisa:
 
 `render.yaml` configura un disco persistente de 1 GB montado en `/data`. Es indispensable para conservar la sesión de WhatsApp y los clientes después de cada despliegue.
 
+En un servicio existente también puedes revisarlo directamente en Render:
+
+1. Abre **Dashboard → jadrixservs-bot-v4 → Disks**.
+2. Confirma `Mount Path: /data` y al menos `1 GB`.
+3. En **Environment**, confirma `DATA_DIR=/data` y `MEDIA_DIR=/data/media`.
+4. No pulses **Delete Disk**, no cambies el punto de montaje y no crees un servicio nuevo.
+5. Si tienes acceso a **Shell**, antes de actualizar puedes crear una copia adicional:
+
+```bash
+cp /data/jadrixservs-v4.json /data/jadrixservs-v4.pre-v4.6.json
+```
+
+Los servicios gratuitos de Render no admiten discos persistentes. Para mantener la sesión y los clientes entre reinicios o despliegues, el servicio debe usar un plan de pago compatible con disco, como Starter.
+
+Render también crea una instantánea diaria del disco persistente y permite restaurar instantáneas recientes desde **Disks**. Esta protección pertenece al disco completo; el respaldo JSON del panel sigue siendo útil como copia independiente de clientes y configuración.
+
 ## Vincular WhatsApp
 
 1. Espera a que Render termine el despliegue.
@@ -126,11 +156,14 @@ En **Render → tu servicio → Environment** revisa:
 
 Si el celular muestra la sesión iniciada pero el panel no termina de conectar:
 
-1. Espera 45 segundos.
-2. Pulsa **Forzar conexión** una sola vez.
-3. Si continúa detenido, pulsa **Cerrar sesión**, elimina también ese dispositivo desde el celular y escanea el QR nuevo.
+1. Espera: cada 45 segundos el bot vuelve a abrir la conexión sin borrar las credenciales.
+2. Los reintentos continúan sin un límite de dos intentos y se espacian hasta un máximo de 60 segundos para evitar saturar WhatsApp.
+3. Puedes pulsar **Forzar conexión** si deseas iniciar un intento inmediato.
+4. Usa **Cerrar sesión** solamente si WhatsApp revocó la sesión o el panel indica **Error de sesión**; ese botón sí elimina las credenciales guardadas y requiere un QR nuevo.
 
 La sesión válida se guarda en `/data/whatsapp-session`; no hace falta volver a escanear después de cada despliegue.
+
+Ningún bot basado en una conexión no oficial puede prometer una sesión literalmente ilimitada: WhatsApp puede revocarla, reemplazarla si se abre otra conexión o solicitar un nuevo QR. La V4.6 evita que un corte temporal detenga definitivamente el bot y mantiene reintentos automáticos mientras la sesión siga siendo válida.
 
 ## Prueba recomendada
 
@@ -138,7 +171,7 @@ Desde un número que no esté registrado como cliente:
 
 1. Envía cualquier mensaje.
 2. Debes recibir tres mensajes separados.
-3. Envía una segunda consulta: el bot debe permanecer en silencio.
+3. Envía una segunda consulta: el bot debe permanecer en silencio y ese mensaje debe quedar sin leer.
 
 Luego registra un cliente con vencimiento dentro de 2 días, deja activo el recordatorio y pulsa **Procesar vencimientos**. Para probar la cobranza, usa un vencimiento de hoy y activa manualmente **Cobranza automática**.
 

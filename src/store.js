@@ -24,98 +24,140 @@ class JsonStore {
   constructor(dataDir) {
     this.dataDir = path.resolve(dataDir);
     this.filePath = path.join(this.dataDir, "jadrixservs-v4.json");
+    this.backupFilePath = path.join(
+      this.dataDir,
+      "jadrixservs-v4.backup.json"
+    );
     fs.mkdirSync(this.dataDir, { recursive: true });
     this.data = this.#load();
   }
 
   #load() {
-    if (!fs.existsSync(this.filePath)) {
-      const initial = createInitialData();
-      this.#write(initial);
-      return initial;
+    if (fs.existsSync(this.filePath)) {
+      try {
+        const { data, isUpgrade } = this.#readAndMigrate(this.filePath);
+        if (isUpgrade) this.#write(data);
+        return data;
+      } catch {
+        const corruptCopy = `${this.filePath}.corrupt-${Date.now()}`;
+        fs.copyFileSync(this.filePath, corruptCopy);
+      }
     }
 
-    try {
-      const parsed = JSON.parse(fs.readFileSync(this.filePath, "utf8"));
-      const initial = createInitialData();
-      const isPreTrainingVersion = Number(parsed.version || 0) < 4.3;
-      const isUpgrade = Number(parsed.version || 0) < initial.version;
-      const migratedAt = new Date().toISOString();
-      const previousConversations = parsed.conversations || {};
-      const migrated = {
-        ...initial,
-        ...parsed,
-        version: initial.version,
-        settings: {
-          ...defaultSettings,
-          ...(parsed.settings || {}),
-          ...(isPreTrainingVersion
-            ? {
-                welcomeTriggers: defaultSettings.welcomeTriggers,
-                greetingMessages: structuredClone(defaultSettings.greetingMessages)
-              }
-            : {}),
-          inboundMode: "welcome_once"
-        },
-        media: { ...initial.media, ...(parsed.media || {}) },
-        knowledgeBase: Array.isArray(parsed.knowledgeBase)
-          ? parsed.knowledgeBase
-          : initial.knowledgeBase,
-        clients: Array.isArray(parsed.clients)
-          ? parsed.clients.map((client) => ({
-              ...client,
-              accountReference: String(client.accountReference || ""),
-              reminderDays: 2,
-              autoReminder:
-                client.autoReminder === undefined
-                  ? true
-                  : Boolean(client.autoReminder),
-              autoCharge: Boolean(client.autoCharge),
-              durationDays:
-                Number.isInteger(Number(client.durationDays)) &&
-                Number(client.durationDays) > 0
-                  ? Number(client.durationDays)
-                  : null
-            }))
-          : [],
-        processedCommandIds: Array.isArray(parsed.processedCommandIds)
-          ? parsed.processedCommandIds.slice(0, 500).map(String)
-          : [],
-        logs: Array.isArray(parsed.logs) ? parsed.logs : [],
-        conversations: Object.fromEntries(
-          Object.entries(previousConversations).map(([chatId, value]) => {
-            const conversation =
-              value && typeof value === "object" ? value : {};
-            return [
-              chatId,
-              isUpgrade && !conversation.welcomeSequenceSentAt
-                ? {
-                    ...conversation,
-                    welcomeMessagesSent: 3,
-                    welcomeSequenceSentAt:
-                      conversation.lastInboundAt ||
-                      conversation.updatedAt ||
-                      migratedAt
-                  }
-                : conversation
-            ];
-          })
-        )
-      };
-      if (isUpgrade) this.#write(migrated);
-      return migrated;
-    } catch (error) {
-      const backup = `${this.filePath}.corrupt-${Date.now()}`;
-      fs.copyFileSync(this.filePath, backup);
-      const initial = createInitialData();
-      this.#write(initial);
-      return initial;
+    if (fs.existsSync(this.backupFilePath)) {
+      try {
+        const { data } = this.#readAndMigrate(this.backupFilePath);
+        data.logs.unshift({
+          id: crypto.randomUUID(),
+          type: "recovery",
+          message:
+            "La base principal no se pudo leer y fue recuperada desde la copia automática.",
+          metadata: {},
+          createdAt: new Date().toISOString()
+        });
+        data.logs = data.logs.slice(0, 1000);
+        this.#write(data, { backupCurrent: false });
+        return data;
+      } catch {
+        // La copia automática tampoco era legible; se inicia una base nueva.
+      }
     }
+
+    const initial = createInitialData();
+    this.#write(initial, { backupCurrent: false });
+    return initial;
   }
 
-  #write(data) {
+  #readAndMigrate(filePath) {
+    const parsed = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("La base de datos no contiene un objeto válido.");
+    }
+    const initial = createInitialData();
+    const isPreTrainingVersion = Number(parsed.version || 0) < 4.3;
+    const isUpgrade = Number(parsed.version || 0) < initial.version;
+    const migratedAt = new Date().toISOString();
+    const previousConversations =
+      parsed.conversations && typeof parsed.conversations === "object"
+        ? parsed.conversations
+        : {};
+    const migrated = {
+      ...initial,
+      ...parsed,
+      version: initial.version,
+      settings: {
+        ...defaultSettings,
+        ...(parsed.settings || {}),
+        ...(isPreTrainingVersion
+          ? {
+              welcomeTriggers: defaultSettings.welcomeTriggers,
+              greetingMessages: structuredClone(defaultSettings.greetingMessages)
+            }
+          : {}),
+        inboundMode: "welcome_once"
+      },
+      media: { ...initial.media, ...(parsed.media || {}) },
+      knowledgeBase: Array.isArray(parsed.knowledgeBase)
+        ? parsed.knowledgeBase
+        : initial.knowledgeBase,
+      clients: Array.isArray(parsed.clients)
+        ? parsed.clients.map((client) => ({
+            ...client,
+            accountReference: String(client.accountReference || ""),
+            reminderDays: 2,
+            autoReminder:
+              client.autoReminder === undefined
+                ? true
+                : Boolean(client.autoReminder),
+            autoCharge: Boolean(client.autoCharge),
+            durationDays:
+              Number.isInteger(Number(client.durationDays)) &&
+              Number(client.durationDays) > 0
+                ? Number(client.durationDays)
+                : null
+          }))
+        : [],
+      processedCommandIds: Array.isArray(parsed.processedCommandIds)
+        ? parsed.processedCommandIds.slice(0, 500).map(String)
+        : [],
+      logs: Array.isArray(parsed.logs) ? parsed.logs : [],
+      conversations: Object.fromEntries(
+        Object.entries(previousConversations).map(([chatId, value]) => {
+          const conversation = value && typeof value === "object" ? value : {};
+          return [
+            chatId,
+            isUpgrade && !conversation.welcomeSequenceSentAt
+              ? {
+                  ...conversation,
+                  welcomeMessagesSent: 3,
+                  welcomeSequenceSentAt:
+                    conversation.lastInboundAt ||
+                    conversation.updatedAt ||
+                    migratedAt
+                }
+              : conversation
+          ];
+        })
+      )
+    };
+    return { data: migrated, isUpgrade };
+  }
+
+  #write(data, { backupCurrent = true } = {}) {
     const temporary = `${this.filePath}.tmp`;
     fs.writeFileSync(temporary, `${JSON.stringify(data, null, 2)}\n`, "utf8");
+
+    if (backupCurrent && fs.existsSync(this.filePath)) {
+      try {
+        JSON.parse(fs.readFileSync(this.filePath, "utf8"));
+        const backupTemporary = `${this.backupFilePath}.tmp`;
+        fs.copyFileSync(this.filePath, backupTemporary);
+        fs.renameSync(backupTemporary, this.backupFilePath);
+      } catch {
+        // Nunca se reemplaza una copia válida con una base principal dañada.
+      }
+    }
+
     fs.renameSync(temporary, this.filePath);
   }
 

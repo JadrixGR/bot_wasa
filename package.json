@@ -1,6 +1,6 @@
 {
   "name": "jadrixservs-bot-v4",
-  "version": "4.5.0",
+  "version": "4.6.0",
   "private": true,
   "description": "Bot de WhatsApp con registro por comandos y panel de renovaciones de JadrixServs",
   "main": "src/server.js",

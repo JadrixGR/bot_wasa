@@ -139,7 +139,8 @@ function makeService(fake, options = {}) {
     ai: null,
     baileysLoader: async () => fake.module,
     qrEncoder: async (value) => `data:image/png;base64,${value}`,
-    sleepFn: async () => undefined
+    sleepFn: async () => undefined,
+    readyTimeoutMs: options.readyTimeoutMs
   });
 }
 
@@ -258,6 +259,26 @@ test("Forzar conexión reabre el socket sin borrar las credenciales", async () =
   assert.equal(fake.state.creds.registered, true);
 });
 
+test("la recuperación de una sesión vinculada continúa después de dos intentos", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake, {
+    sessionDir: path.join(testRuntimeDir, "unlimited-recovery-session"),
+    mediaDir: path.join(testRuntimeDir, "unlimited-recovery-media"),
+    readyTimeoutMs: 15
+  });
+  await service.initialize();
+
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (service.getStatus().recoveryAttempts >= 3) break;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  assert.ok(service.getStatus().recoveryAttempts >= 3);
+  assert.ok(fake.sockets.length >= 4);
+  assert.notEqual(service.getStatus().state, "stalled");
+  await service.shutdown();
+});
+
 test("descarta sincronizaciones solicitadas y no las trata como mensajes nuevos", async () => {
   const fake = makeFakeBaileys({ registered: true });
   const service = makeService(fake);
@@ -330,11 +351,11 @@ test("un mensaje entrante real envía la bienvenida una sola vez en tres mensaje
     socket.calls.presence.filter((item) => item.type === "composing").length,
     3
   );
-  assert.equal(socket.calls.read.length, 2);
+  assert.equal(socket.calls.read.length, 1);
   assert.equal(socket.calls.sent.length, 3);
 });
 
-test("la respuesta de un cliente registrado se lee pero no activa la bienvenida", async () => {
+test("la respuesta de un cliente registrado queda sin leer y no activa la bienvenida", async () => {
   const fake = makeFakeBaileys({ registered: true });
   const store = makeStore();
   let identifiers = [];
@@ -371,7 +392,7 @@ test("la respuesta de un cliente registrado se lee pero no activa la bienvenida"
     "200000000000@lid",
     "51933334444@s.whatsapp.net"
   ]);
-  assert.equal(socket.calls.read.length, 1);
+  assert.equal(socket.calls.read.length, 0);
   assert.equal(socket.calls.sent.length, 0);
   assert.equal(
     store.data.conversations["200000000000@lid"].registeredClientId,

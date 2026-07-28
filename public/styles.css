@@ -141,6 +141,16 @@ label small { color: var(--muted); font-weight: 500; }
   line-height: 1.5;
 }
 .warning { margin: 1rem 0 0; }
+.notice.success {
+  border-color: #a8dfc2;
+  color: #17663d;
+  background: #effcf5;
+}
+.notice.error {
+  border-color: #efb8c0;
+  color: #9b2638;
+  background: #fff5f6;
+}
 .notice + .button { margin-top: 0.85rem; }
 .billing-link { margin-bottom: 0.65rem; }
 

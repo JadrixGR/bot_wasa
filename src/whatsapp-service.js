@@ -162,7 +162,8 @@ class WhatsAppService {
     ai,
     baileysLoader = loadBaileys,
     qrEncoder = QRCode.toDataURL,
-    sleepFn = sleep
+    sleepFn = sleep,
+    readyTimeoutMs
   }) {
     this.store = store;
     this.sessionDir = path.resolve(sessionDir);
@@ -171,6 +172,13 @@ class WhatsAppService {
     this.baileysLoader = baileysLoader;
     this.qrEncoder = qrEncoder;
     this.sleepFn = sleepFn;
+    this.readyTimeoutMs =
+      readyTimeoutMs === undefined
+        ? Math.max(
+            10000,
+            Number(process.env.WHATSAPP_READY_TIMEOUT_MS) || 45000
+          )
+        : Math.max(10, Number(readyTimeoutMs) || 10);
     this.baileys = null;
     this.socket = null;
     this.authState = null;
@@ -183,6 +191,7 @@ class WhatsAppService {
     this.readyWatchdog = null;
     this.reconnectTimer = null;
     this.autoRecoveryAttempts = 0;
+    this.reconnectAttempts = 0;
     this.status = {
       state: "starting",
       ready: false,
@@ -196,6 +205,7 @@ class WhatsAppService {
       webVersion: `Baileys ${BAILEYS_VERSION}`,
       transport: "websocket",
       recoveryAttempts: 0,
+      reconnectAttempts: 0,
       error: null,
       updatedAt: new Date().toISOString()
     };
@@ -236,7 +246,6 @@ class WhatsAppService {
   #scheduleReadyWatchdog(socket, generation) {
     if (!this.#isCurrent(socket, generation) || this.status.ready) return;
     this.#clearReadyWatchdog();
-    const configured = Number(process.env.WHATSAPP_READY_TIMEOUT_MS) || 45000;
     this.readyWatchdog = setTimeout(() => {
       this.#recoverStalledConnection(socket, generation).catch((error) => {
         if (!this.#isCurrent(socket, generation)) return;
@@ -246,7 +255,7 @@ class WhatsAppService {
           error: `La sesión fue aceptada, pero no terminó de abrir: ${error.message}`
         });
       });
-    }, Math.max(10000, configured));
+    }, this.readyTimeoutMs);
     this.readyWatchdog.unref();
   }
 
@@ -256,31 +265,32 @@ class WhatsAppService {
     }
 
     this.#clearReadyWatchdog();
-    if (this.autoRecoveryAttempts >= 2) {
-      this.#setStatus({
-        state: "stalled",
-        ready: false,
-        recoveryAttempts: this.autoRecoveryAttempts,
-        error:
-          "La sesión fue vinculada, pero WhatsApp no respondió. Pulsa “Cerrar sesión”, elimina el dispositivo vinculado en tu celular y escanea un QR nuevo."
-      });
-      return { recovered: false, stalled: true };
-    }
-
     this.autoRecoveryAttempts += 1;
     this.#setStatus({
       state: "recovering",
       ready: false,
       recoveryAttempts: this.autoRecoveryAttempts,
-      error: "La sesión ya fue aceptada. Reiniciando la conexión sin borrar tus credenciales…"
+      error: `La sesión ya fue aceptada. Reintentando la conexión sin borrar tus credenciales (intento ${this.autoRecoveryAttempts})…`
     });
     this.store.addLog(
       "whatsapp",
-      `Recuperación posterior al QR (${this.autoRecoveryAttempts}/2)`
+      `Recuperación posterior al QR (intento ${this.autoRecoveryAttempts})`
     );
     this.store.save();
-    await this.#restartInternal("recuperación posterior al QR");
-    return { recovered: false, restarted: true };
+    try {
+      await this.#restartInternal("recuperación posterior al QR");
+      return { recovered: false, restarted: true };
+    } catch (error) {
+      this.#setStatus({
+        state: "reconnecting",
+        ready: false,
+        error: `WhatsApp no abrió todavía: ${error.message}. Se volverá a intentar automáticamente.`
+      });
+      this.#scheduleReconnect(
+        Number(process.env.WHATSAPP_RECONNECT_DELAY_MS) || 3000
+      );
+      return { recovered: false, retryScheduled: true };
+    }
   }
 
   async initialize() {
@@ -433,6 +443,7 @@ class WhatsAppService {
       const qrDataUrl = await this.qrEncoder(update.qr, { width: 420, margin: 2 });
       if (!this.#isCurrent(socket, generation)) return;
       this.autoRecoveryAttempts = 0;
+      this.reconnectAttempts = 0;
       this.#clearReadyWatchdog();
       this.#setStatus({
         state: "qr",
@@ -443,6 +454,7 @@ class WhatsAppService {
         loadingMessage: "Escanea el QR desde Dispositivos vinculados",
         waState: "QR",
         recoveryAttempts: 0,
+        reconnectAttempts: 0,
         error: null
       });
       this.store.addLog("whatsapp", "Nuevo código QR disponible");
@@ -480,6 +492,7 @@ class WhatsAppService {
       this.#clearReadyWatchdog();
       this.#clearReconnectTimer();
       this.autoRecoveryAttempts = 0;
+      this.reconnectAttempts = 0;
       const normalizedJid = this.baileys.jidNormalizedUser(
         socket.user?.id || ""
       );
@@ -493,6 +506,7 @@ class WhatsAppService {
         phone: extractPhone(normalizedJid),
         name: socket.user?.name || null,
         recoveryAttempts: 0,
+        reconnectAttempts: 0,
         error: null
       });
       await socket.sendPresenceUpdate("unavailable").catch(() => undefined);
@@ -582,16 +596,37 @@ class WhatsAppService {
 
   #scheduleReconnect(delayMs) {
     if (this.reconnectTimer || this.restartPromise) return;
+    this.reconnectAttempts += 1;
+    const exponentialDelay = Math.min(
+      60000,
+      1000 * 2 ** Math.min(this.reconnectAttempts - 1, 6)
+    );
+    const scheduledDelay = Math.max(100, Number(delayMs) || 0, exponentialDelay);
+    const completingLogin = this.status.loadingPercent === 85;
+    this.#setStatus({
+      state: "reconnecting",
+      ready: false,
+      reconnectAttempts: this.reconnectAttempts,
+      loadingMessage: completingLogin
+        ? this.status.loadingMessage
+        : `Reconexión automática ${this.reconnectAttempts}`,
+      error: completingLogin
+        ? null
+        : `La conexión se interrumpió. Nuevo intento automático en ${Math.ceil(scheduledDelay / 1000)} segundos.`
+    });
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       this.#restartInternal("reconexión automática").catch((error) => {
         this.#setStatus({
-          state: "error",
+          state: "reconnecting",
           ready: false,
-          error: `No se pudo reconectar: ${error.message}`
+          error: `No se pudo reconectar: ${error.message}. Se volverá a intentar automáticamente.`
         });
+        this.#scheduleReconnect(
+          Number(process.env.WHATSAPP_RECONNECT_DELAY_MS) || 3000
+        );
       });
-    }, Math.max(100, delayMs));
+    }, scheduledDelay);
     this.reconnectTimer.unref();
   }
 
@@ -663,7 +698,6 @@ class WhatsAppService {
     const body = extractMessageBody(message.message);
     if (!body && !hasMedia) return;
 
-    await socket.readMessages([message.key]).catch(() => undefined);
     const fromName = String(message.pushName || "");
     this.store.addLog("incoming", `Mensaje de ${fromName || chatId}`, {
       chatId,
@@ -671,7 +705,7 @@ class WhatsAppService {
     });
     this.store.save();
 
-    await this.engine.handleIncoming({
+    const result = await this.engine.handleIncoming({
       chatId,
       alternateChatId: message.key.remoteJidAlt || "",
       body,
@@ -679,6 +713,13 @@ class WhatsAppService {
       mediaType: type.replace(/Message$/, ""),
       fromName
     });
+
+    if (
+      Number(result?.messages || 0) > 0 &&
+      ["welcome-sequence", "welcome-resumed"].includes(result?.action)
+    ) {
+      await socket.readMessages([message.key]).catch(() => undefined);
+    }
   }
 
   async #resolveCustomerPhone(socket, message) {
@@ -874,6 +915,7 @@ class WhatsAppService {
 
   async restart() {
     this.autoRecoveryAttempts = 0;
+    this.reconnectAttempts = 0;
     return this.#restartInternal("solicitud manual");
   }
 
@@ -894,6 +936,7 @@ class WhatsAppService {
 
   async resetSession() {
     this.autoRecoveryAttempts = 0;
+    this.reconnectAttempts = 0;
     await this.#stopSocket({ logout: true });
     await fs.promises.rm(this.sessionDir, { recursive: true, force: true });
     await fs.promises.mkdir(this.sessionDir, { recursive: true });
@@ -908,6 +951,7 @@ class WhatsAppService {
       phone: null,
       name: null,
       recoveryAttempts: 0,
+      reconnectAttempts: 0,
       error: null
     });
     this.store.addLog(
