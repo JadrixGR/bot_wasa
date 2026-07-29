@@ -396,6 +396,7 @@ function createInitialData() {
     plans: structuredClone(plans),
     knowledgeBase: structuredClone(knowledgeBase),
     clients: [],
+    authenticatorAccounts: [],
     processedCommandIds: [],
     conversations: {},
     logs: [],

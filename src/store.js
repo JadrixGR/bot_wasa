@@ -140,6 +140,25 @@ class JsonStore {
                 : null
           }))
         : [],
+      authenticatorAccounts: Array.isArray(parsed.authenticatorAccounts)
+        ? parsed.authenticatorAccounts
+            .filter(
+              (account) =>
+                account &&
+                typeof account === "object" &&
+                !Array.isArray(account)
+            )
+            .map((account) => ({
+              ...account,
+              name: String(account.name || "").trim(),
+              service: String(account.service || "").trim(),
+              email: String(account.email || "").trim(),
+              encryptedSecret: String(account.encryptedSecret || ""),
+              algorithm: String(account.algorithm || "SHA1").toUpperCase(),
+              digits: Number(account.digits) || 6,
+              period: Number(account.period) || 30
+            }))
+        : [],
       processedCommandIds: Array.isArray(parsed.processedCommandIds)
         ? parsed.processedCommandIds.slice(0, 500).map(String)
         : [],
@@ -380,6 +399,134 @@ class JsonStore {
     );
     this.save();
     return this.getKnowledgeBase();
+  }
+
+  listAuthenticatorAccounts() {
+    return structuredClone(
+      (this.data.authenticatorAccounts || [])
+        .slice()
+        .sort((a, b) => {
+          const serviceOrder = String(a.service || "").localeCompare(
+            String(b.service || ""),
+            "es",
+            { sensitivity: "base" }
+          );
+          return (
+            serviceOrder ||
+            String(a.name || "").localeCompare(String(b.name || ""), "es", {
+              sensitivity: "base"
+            })
+          );
+        })
+    );
+  }
+
+  getAuthenticatorAccount(id) {
+    const account = (this.data.authenticatorAccounts || []).find(
+      (item) => item.id === id
+    );
+    return account ? structuredClone(account) : null;
+  }
+
+  createAuthenticatorAccount(input) {
+    this.data.authenticatorAccounts ||= [];
+    const now = new Date().toISOString();
+    const account = this.#normalizeAuthenticatorAccount({
+      ...input,
+      id: crypto.randomUUID(),
+      createdAt: now,
+      updatedAt: now
+    });
+    this.data.authenticatorAccounts.push(account);
+    this.addLog(
+      "authenticator",
+      `Cuenta 2FA agregada: ${account.service} · ${account.name}`,
+      { authenticatorId: account.id }
+    );
+    this.save();
+    return structuredClone(account);
+  }
+
+  updateAuthenticatorAccount(id, input) {
+    this.data.authenticatorAccounts ||= [];
+    const index = this.data.authenticatorAccounts.findIndex(
+      (account) => account.id === id
+    );
+    if (index === -1) {
+      throw new Error("Cuenta del Autenticador no encontrada.");
+    }
+
+    const current = this.data.authenticatorAccounts[index];
+    const updated = this.#normalizeAuthenticatorAccount({
+      ...current,
+      ...input,
+      id,
+      createdAt: current.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+    this.data.authenticatorAccounts[index] = updated;
+    this.addLog(
+      "authenticator",
+      `Cuenta 2FA actualizada: ${updated.service} · ${updated.name}`,
+      { authenticatorId: id }
+    );
+    this.save();
+    return structuredClone(updated);
+  }
+
+  deleteAuthenticatorAccount(id) {
+    this.data.authenticatorAccounts ||= [];
+    const index = this.data.authenticatorAccounts.findIndex(
+      (account) => account.id === id
+    );
+    if (index === -1) {
+      throw new Error("Cuenta del Autenticador no encontrada.");
+    }
+    const [deleted] = this.data.authenticatorAccounts.splice(index, 1);
+    this.addLog(
+      "authenticator",
+      `Cuenta 2FA eliminada: ${deleted.service} · ${deleted.name}`,
+      { authenticatorId: id }
+    );
+    this.save();
+    return structuredClone(deleted);
+  }
+
+  #normalizeAuthenticatorAccount(input) {
+    const name = String(input.name || "").trim();
+    const service = String(input.service || "").trim();
+    const email = String(input.email || "").trim();
+    const encryptedSecret = String(input.encryptedSecret || "");
+    const algorithm = String(input.algorithm || "SHA1").toUpperCase();
+    const digits = Number(input.digits || 6);
+    const period = Number(input.period || 30);
+
+    if (!name) throw new Error("Ingresa el nombre de la cuenta 2FA.");
+    if (!service) throw new Error("Ingresa el servicio de la cuenta 2FA.");
+    if (!email) throw new Error("Ingresa el correo o usuario de la cuenta 2FA.");
+    if (!encryptedSecret) throw new Error("La cuenta 2FA no tiene una clave cifrada.");
+    if (!["SHA1", "SHA256", "SHA512"].includes(algorithm)) {
+      throw new Error("El algoritmo de la cuenta 2FA no es compatible.");
+    }
+    if (!Number.isSafeInteger(digits) || digits < 6 || digits > 8) {
+      throw new Error("La cantidad de dígitos de la cuenta 2FA no es válida.");
+    }
+    if (!Number.isSafeInteger(period) || period < 15 || period > 120) {
+      throw new Error("El intervalo de la cuenta 2FA no es válido.");
+    }
+
+    return {
+      id: String(input.id),
+      name: name.slice(0, 120),
+      service: service.slice(0, 120),
+      email: email.slice(0, 240),
+      encryptedSecret,
+      algorithm,
+      digits,
+      period,
+      createdAt: input.createdAt || new Date().toISOString(),
+      updatedAt: input.updatedAt || new Date().toISOString()
+    };
   }
 
   listClients({ includeArchived = false } = {}) {

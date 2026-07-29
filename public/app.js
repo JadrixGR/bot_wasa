@@ -8,8 +8,12 @@ const state = {
   products: [],
   plans: [],
   lookupClients: [],
+  authenticatorAccounts: [],
+  authenticatorSecurity: null,
   activeSection: "dashboard",
-  poller: null
+  poller: null,
+  authenticatorTicker: null,
+  authenticatorRefreshPending: false
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -119,6 +123,7 @@ function showLogin() {
   document.body.classList.remove("app-active", "menu-open");
   setSidebarOpen(false);
   clearInterval(state.poller);
+  clearInterval(state.authenticatorTicker);
 }
 
 async function showApp() {
@@ -157,6 +162,7 @@ function navigate(section) {
     lookup: "Buscar celular",
     messages: "Mensajes automáticos",
     afk: "Modo AFK",
+    authenticator: "Autenticador",
     activity: "Actividad"
   };
   $("#pageTitle").textContent = titles[section] || "JadrixServs";
@@ -168,6 +174,11 @@ function navigate(section) {
   if (section === "clients") loadClients();
   if (section === "activity") loadLogs();
   if (section === "messages" || section === "afk") loadSettings();
+  if (section === "authenticator") {
+    loadAuthenticator().catch((error) => showToast(error.message, true));
+  } else {
+    clearInterval(state.authenticatorTicker);
+  }
 }
 
 function statusPresentation(status) {
@@ -355,15 +366,15 @@ function daysRemainingPresentation(client) {
   return { tone: "neutral", label: `${days} días`, detail: `Faltan ${days} días` };
 }
 
-async function copyPhoneToClipboard(phone) {
-  const value = String(phone || "").trim();
-  if (!value) throw new Error("No hay un número para copiar.");
+async function copyTextToClipboard(value) {
+  const text = String(value || "").trim();
+  if (!text) throw new Error("No hay contenido para copiar.");
   if (navigator.clipboard && window.isSecureContext) {
-    await navigator.clipboard.writeText(value);
+    await navigator.clipboard.writeText(text);
     return;
   }
   const input = document.createElement("textarea");
-  input.value = value;
+  input.value = text;
   input.setAttribute("readonly", "");
   input.style.position = "fixed";
   input.style.opacity = "0";
@@ -371,7 +382,222 @@ async function copyPhoneToClipboard(phone) {
   input.select();
   const copied = document.execCommand("copy");
   input.remove();
-  if (!copied) throw new Error("No se pudo copiar el número.");
+  if (!copied) throw new Error("No se pudo copiar el contenido.");
+}
+
+async function copyPhoneToClipboard(phone) {
+  const value = String(phone || "").trim();
+  if (!value) throw new Error("No hay un número para copiar.");
+  await copyTextToClipboard(value);
+}
+
+function formatAuthenticatorCode(code) {
+  const value = String(code || "");
+  if (value.length === 6) return `${value.slice(0, 3)} ${value.slice(3)}`;
+  if (value.length === 8) return `${value.slice(0, 4)} ${value.slice(4)}`;
+  return value.replace(/(\d{3})(?=\d)/g, "$1 ");
+}
+
+function authenticatorInitials(account) {
+  const source = String(account.service || account.name || "2FA").trim();
+  return source
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0))
+    .join("")
+    .toUpperCase() || "2F";
+}
+
+function renderAuthenticator() {
+  const search = $("#authenticatorSearch").value.trim().toLowerCase();
+  const accounts = state.authenticatorAccounts.filter((account) =>
+    `${account.name} ${account.service} ${account.email}`
+      .toLowerCase()
+      .includes(search)
+  );
+  const total = state.authenticatorAccounts.length;
+  $("#authenticatorCount").textContent =
+    `${total} cuenta${total === 1 ? "" : "s"}`;
+
+  const grid = $("#authenticatorGrid");
+  const empty = $("#authenticatorEmpty");
+  empty.classList.toggle("hidden", total > 0);
+
+  if (total > 0 && accounts.length === 0) {
+    grid.innerHTML = `
+      <article class="panel empty-state authenticator-no-results">
+        <strong>No hay coincidencias.</strong>
+        <span>Prueba con otro nombre, servicio o correo.</span>
+      </article>`;
+    return;
+  }
+
+  grid.innerHTML = accounts.map((account, index) => {
+    const code = account.available
+      ? formatAuthenticatorCode(account.code)
+      : "No disponible";
+    const remaining = Number(account.secondsRemaining) || 0;
+    return `
+      <article class="authenticator-card ${account.available ? "" : "has-error"}" style="--auth-index:${index}">
+        <div class="authenticator-card-heading">
+          <span class="authenticator-avatar">${escapeHtml(authenticatorInitials(account))}</span>
+          <div>
+            <span class="pill blue">${escapeHtml(account.service)}</span>
+            <h3>${escapeHtml(account.name)}</h3>
+            <p>${escapeHtml(account.email)}</p>
+          </div>
+          <button class="authenticator-menu-button" data-auth-action="edit" data-id="${escapeHtml(account.id)}" type="button" title="Editar cuenta" aria-label="Editar ${escapeHtml(account.name)}">•••</button>
+        </div>
+        <div class="authenticator-code-panel">
+          <div class="authenticator-code-label">
+            <span>CÓDIGO ACTUAL</span>
+            ${account.available
+              ? `<span class="authenticator-live"><i></i> En vivo</span>`
+              : `<span class="pill red">Revisar clave</span>`}
+          </div>
+          <div class="authenticator-code-row">
+            <strong class="authenticator-code" data-auth-code="${escapeHtml(account.id)}">${escapeHtml(code)}</strong>
+            <button class="authenticator-copy" data-auth-action="copy" data-id="${escapeHtml(account.id)}" type="button" ${account.available ? "" : "disabled"} aria-label="Copiar código">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+            </button>
+          </div>
+          ${account.available
+            ? `<div class="authenticator-timer">
+                <progress data-auth-progress="${escapeHtml(account.id)}" max="${escapeHtml(account.period)}" value="${escapeHtml(remaining)}"></progress>
+                <span>Nuevo código en <strong data-auth-seconds="${escapeHtml(account.id)}">${escapeHtml(remaining)} s</strong></span>
+              </div>`
+            : `<p class="authenticator-error">${escapeHtml(account.error || "No se pudo generar el código.")}</p>`}
+        </div>
+        <div class="authenticator-card-footer">
+          <span>${escapeHtml(account.algorithm)} · ${escapeHtml(account.digits)} dígitos · ${escapeHtml(account.period)} s</span>
+          <div>
+            <button data-auth-action="edit" data-id="${escapeHtml(account.id)}" type="button">Editar</button>
+            <button class="danger" data-auth-action="delete" data-id="${escapeHtml(account.id)}" type="button">Eliminar</button>
+          </div>
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function updateAuthenticatorCountdowns() {
+  if (state.activeSection !== "authenticator") return;
+  let expired = false;
+
+  for (const account of state.authenticatorAccounts) {
+    if (!account.available || !account.expiresAt) continue;
+    const seconds = Math.max(
+      0,
+      Math.ceil((new Date(account.expiresAt).getTime() - Date.now()) / 1000)
+    );
+    const secondsElement = $(`[data-auth-seconds="${account.id}"]`);
+    const progress = $(`[data-auth-progress="${account.id}"]`);
+    if (secondsElement) secondsElement.textContent = `${seconds} s`;
+    if (progress) progress.value = seconds;
+    if (seconds === 0) expired = true;
+  }
+
+  if (expired && !state.authenticatorRefreshPending) {
+    state.authenticatorRefreshPending = true;
+    loadAuthenticator({ silent: true })
+      .catch((error) => showToast(error.message, true))
+      .finally(() => {
+        state.authenticatorRefreshPending = false;
+      });
+  }
+}
+
+function startAuthenticatorTicker() {
+  clearInterval(state.authenticatorTicker);
+  state.authenticatorTicker = setInterval(updateAuthenticatorCountdowns, 1000);
+}
+
+async function loadAuthenticator({ silent = false } = {}) {
+  const button = $("#refreshAuthenticatorButton");
+  if (!silent) {
+    button.disabled = true;
+    button.textContent = "Actualizando…";
+  }
+  try {
+    const payload = await api("/api/authenticator");
+    state.authenticatorAccounts = payload.accounts || [];
+    state.authenticatorSecurity = payload.security || null;
+    const securityPill = $("#authenticatorSecurityPill");
+    securityPill.textContent = payload.security?.dedicatedKeyConfigured
+      ? "Clave dedicada activa"
+      : "Cifrado con clave del panel";
+    securityPill.className = "pill green";
+    const keyNotice = $("#authenticatorKeyNotice");
+    const dedicatedKey = Boolean(
+      payload.security?.dedicatedKeyConfigured
+    );
+    keyNotice.classList.toggle("hidden", dedicatedKey);
+    keyNotice.innerHTML = dedicatedKey
+      ? ""
+      : "<strong>Recomendación para Render:</strong> agrega una variable estable llamada <code>AUTHENTICATOR_ENCRYPTION_KEY</code> antes de guardar cuentas. Si no la agregas, el cifrado utiliza tu <code>COOKIE_SECRET</code> actual; no debes cambiarlo después.";
+    renderAuthenticator();
+    startAuthenticatorTicker();
+  } finally {
+    if (!silent) {
+      button.disabled = false;
+      button.textContent = "Actualizar códigos";
+    }
+  }
+}
+
+function openAuthenticatorDialog(account = null) {
+  const secretInput = $("#authenticatorSecret");
+  $("#authenticatorDialogTitle").textContent = account
+    ? "Editar cuenta 2FA"
+    : "Nueva cuenta 2FA";
+  $("#authenticatorId").value = account?.id || "";
+  $("#authenticatorName").value = account?.name || "";
+  $("#authenticatorService").value = account?.service || "";
+  $("#authenticatorEmail").value = account?.email || "";
+  secretInput.value = "";
+  secretInput.type = "password";
+  secretInput.required = !account;
+  secretInput.placeholder = account
+    ? "Déjala vacía para conservar la clave actual"
+    : "Pega la clave Base32 o el enlace otpauth://";
+  $("#authenticatorSecretHelp").textContent = account
+    ? "Déjala vacía para conservar la clave actual. Pega una nueva solo si deseas reemplazarla."
+    : "Usa la clave de configuración que entrega el servicio, no el código temporal de 6 dígitos.";
+  $("#toggleAuthenticatorSecret").textContent = "Mostrar";
+  $("#toggleAuthenticatorSecret").setAttribute(
+    "aria-label",
+    "Mostrar clave secreta"
+  );
+  $("#authenticatorDialog").showModal();
+}
+
+async function saveAuthenticator(event) {
+  event.preventDefault();
+  const id = $("#authenticatorId").value;
+  const button = $("#saveAuthenticatorButton");
+  const payload = {
+    name: $("#authenticatorName").value,
+    service: $("#authenticatorService").value,
+    email: $("#authenticatorEmail").value
+  };
+  const secret = $("#authenticatorSecret").value.trim();
+  if (secret) payload.secret = secret;
+
+  button.disabled = true;
+  button.textContent = "Guardando…";
+  try {
+    await api(id ? `/api/authenticator/${id}` : "/api/authenticator", {
+      method: id ? "PUT" : "POST",
+      body: payload
+    });
+    $("#authenticatorDialog").close();
+    await loadAuthenticator({ silent: true });
+    showToast(id ? "Cuenta 2FA actualizada." : "Cuenta 2FA protegida y agregada.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Guardar cuenta";
+  }
 }
 
 function renderLookupResults(clients, phone = "") {
@@ -631,6 +857,7 @@ function logLabel(type) {
     charge: "Cobranza",
     command: "Comando",
     client: "Cliente",
+    authenticator: "Autenticador",
     security: "Seguridad",
     error: "Error"
   }[type] || type;
@@ -717,6 +944,75 @@ function bindEvents() {
     }
   });
   $("#newClientButton").addEventListener("click", () => openClientDialog());
+  $("#newAuthenticatorButton").addEventListener("click", () =>
+    openAuthenticatorDialog()
+  );
+  $$("[data-authenticator-new]").forEach((button) =>
+    button.addEventListener("click", () => openAuthenticatorDialog())
+  );
+  $("#refreshAuthenticatorButton").addEventListener("click", async () => {
+    try {
+      await loadAuthenticator();
+      showToast("Códigos 2FA actualizados.");
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
+  $("#authenticatorSearch").addEventListener("input", renderAuthenticator);
+  $("#authenticatorForm").addEventListener("submit", saveAuthenticator);
+  $$(".authenticator-close").forEach((button) =>
+    button.addEventListener("click", () => $("#authenticatorDialog").close())
+  );
+  $("#toggleAuthenticatorSecret").addEventListener("click", () => {
+    const input = $("#authenticatorSecret");
+    const showing = input.type === "text";
+    input.type = showing ? "password" : "text";
+    $("#toggleAuthenticatorSecret").textContent = showing ? "Mostrar" : "Ocultar";
+    $("#toggleAuthenticatorSecret").setAttribute(
+      "aria-label",
+      showing ? "Mostrar clave secreta" : "Ocultar clave secreta"
+    );
+  });
+  $("#authenticatorGrid").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-auth-action]");
+    if (!button) return;
+    const account = state.authenticatorAccounts.find(
+      (item) => item.id === button.dataset.id
+    );
+    if (!account) return;
+
+    if (button.dataset.authAction === "copy") {
+      try {
+        await copyTextToClipboard(account.code);
+        showToast(`Código de ${account.service} copiado.`);
+      } catch (error) {
+        showToast(error.message, true);
+      }
+      return;
+    }
+
+    if (button.dataset.authAction === "edit") {
+      openAuthenticatorDialog(account);
+      return;
+    }
+
+    if (button.dataset.authAction === "delete") {
+      if (
+        !confirm(
+          `¿Eliminar la cuenta 2FA “${account.name}” de ${account.service}? Esta acción elimina su clave cifrada del Autenticador.`
+        )
+      ) {
+        return;
+      }
+      try {
+        await api(`/api/authenticator/${account.id}`, { method: "DELETE" });
+        await loadAuthenticator({ silent: true });
+        showToast("Cuenta 2FA eliminada.");
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    }
+  });
   $("#lookupForm").addEventListener("submit", lookupClient);
   $("#lookupResults").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-lookup-edit]");

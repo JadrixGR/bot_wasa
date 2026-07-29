@@ -7,6 +7,7 @@ const helmet = require("helmet");
 const cookieSession = require("cookie-session");
 const { JsonStore, normalizeWhatsAppDigits } = require("./store");
 const { AiService } = require("./ai-service");
+const { AuthenticatorService } = require("./authenticator-service");
 const { WhatsAppService } = require("./whatsapp-service");
 const { ReminderScheduler, fillTemplate } = require("./scheduler");
 const {
@@ -23,6 +24,11 @@ const sessionDir = path.join(dataDir, "whatsapp-session");
 const port = Number(process.env.PORT) || 3000;
 const adminPassword = process.env.ADMIN_PASSWORD || "Jadrix2026!";
 const cookieSecret = process.env.COOKIE_SECRET || "cambia-este-secreto-jadrixservs-v4";
+const dedicatedAuthenticatorKeyConfigured = Boolean(
+  process.env.AUTHENTICATOR_ENCRYPTION_KEY
+);
+const authenticatorEncryptionKey =
+  process.env.AUTHENTICATOR_ENCRYPTION_KEY || cookieSecret;
 const persistentDiskConfigured =
   dataDir === "/data" || dataDir.startsWith(`/data${path.sep}`);
 
@@ -31,6 +37,10 @@ fs.mkdirSync(mediaDir, { recursive: true });
 
 const store = new JsonStore(dataDir);
 const ai = new AiService({ store });
+const authenticator = new AuthenticatorService({
+  store,
+  encryptionKey: authenticatorEncryptionKey
+});
 const whatsapp = new WhatsAppService({ store, sessionDir, mediaDir, ai });
 const scheduler = new ReminderScheduler({
   store,
@@ -73,6 +83,12 @@ function asyncRoute(handler) {
   return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 }
 
+function noStore(_req, res, next) {
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  next();
+}
+
 function clientForPanel(client) {
   let daysRemaining = null;
   try {
@@ -89,9 +105,13 @@ function clientForPanel(client) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.8.3",
+    version: "4.9.0",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
+    authenticator: {
+      encryptedAtRest: true,
+      dedicatedKeyConfigured: dedicatedAuthenticatorKeyConfigured
+    },
     storage: {
       persistentDiskConfigured,
       automaticBackup: true
@@ -118,6 +138,32 @@ app.post("/api/auth/login", (req, res) => {
 app.post("/api/auth/logout", requireAuth, (req, res) => {
   req.session = null;
   res.json({ ok: true });
+});
+
+app.get("/api/authenticator", requireAuth, noStore, (_req, res) => {
+  res.json({
+    accounts: authenticator.listAccounts(),
+    security: {
+      encryptedAtRest: true,
+      dedicatedKeyConfigured: dedicatedAuthenticatorKeyConfigured
+    },
+    generatedAt: new Date().toISOString()
+  });
+});
+
+app.post("/api/authenticator", requireAuth, noStore, (req, res) => {
+  res.status(201).json(authenticator.createAccount(req.body));
+});
+
+app.put("/api/authenticator/:id", requireAuth, noStore, (req, res) => {
+  res.json(authenticator.updateAccount(req.params.id, req.body));
+});
+
+app.delete("/api/authenticator/:id", requireAuth, noStore, (req, res) => {
+  res.json({
+    ok: true,
+    account: authenticator.deleteAccount(req.params.id)
+  });
 });
 
 app.get("/api/dashboard", requireAuth, (req, res) => {
@@ -534,13 +580,18 @@ app.use((error, _req, res, _next) => {
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4.8.3 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V4.9.0 disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
   }
   if (process.env.NODE_ENV === "production" && !persistentDiskConfigured) {
     console.warn(
       "DATA_DIR no apunta a /data. La sesión de WhatsApp y los clientes podrían perderse al reiniciar Render."
+    );
+  }
+  if (!dedicatedAuthenticatorKeyConfigured) {
+    console.warn(
+      "AUTHENTICATOR_ENCRYPTION_KEY no está configurada; las claves 2FA se cifrarán usando COOKIE_SECRET."
     );
   }
   scheduler.start();
@@ -567,4 +618,4 @@ async function shutdown() {
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
-module.exports = { app, store, whatsapp, scheduler };
+module.exports = { app, store, whatsapp, scheduler, authenticator };

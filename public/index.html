@@ -17,7 +17,7 @@
         }
       })();
     </script>
-    <title>JadrixServs · Panel Profesional V4.8.3</title>
+    <title>JadrixServs · Panel Profesional V4.9.0</title>
     <link rel="icon" type="image/jpeg" href="/jadrixservs-logo.jpg">
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
@@ -61,7 +61,7 @@
               <div><strong>Atención automatizada</strong><small>Bienvenidas, AFK y cobranzas programadas.</small></div>
             </article>
           </div>
-          <p class="showcase-footnote"><span>●</span> Panel privado · V4.8.3 Profesional</p>
+          <p class="showcase-footnote"><span>●</span> Panel privado · V4.9.0 Profesional</p>
         </section>
 
         <section class="login-card">
@@ -109,7 +109,7 @@
           </span>
           <div>
             <strong>JadrixServs</strong>
-            <span>Panel Profesional V4.8.3</span>
+            <span>Panel Profesional V4.9.0</span>
           </div>
         </div>
         <nav aria-label="Secciones del panel">
@@ -144,6 +144,12 @@
             <span class="nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z"/></svg>
             </span><span>Modo AFK</span>
+          </button>
+          <p class="nav-caption nav-caption-secondary">SEGURIDAD</p>
+          <button class="nav-button" data-section="authenticator" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.7 2.8 8.1 7 10 4.2-1.9 7-5.3 7-10V6l-7-3Z"/><path d="M9.5 12.2 11.2 14l3.6-4"/></svg>
+            </span><span>Autenticador</span>
           </button>
           <button class="nav-button" data-section="activity" type="button">
             <span class="nav-icon" aria-hidden="true">
@@ -467,6 +473,58 @@
           </article>
         </section>
 
+        <section id="section-authenticator" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">SEGURIDAD 2FA</p>
+              <h2>Autenticador</h2>
+              <p class="muted">Guarda tus cuentas y genera sus códigos temporales desde el panel privado.</p>
+            </div>
+            <div class="button-row">
+              <button id="refreshAuthenticatorButton" class="button secondary" type="button">Actualizar códigos</button>
+              <button id="newAuthenticatorButton" class="button primary" type="button">+ Nueva cuenta</button>
+            </div>
+          </div>
+
+          <article class="authenticator-hero">
+            <span class="authenticator-hero-glow" aria-hidden="true"></span>
+            <div class="authenticator-shield" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.7 2.8 8.1 7 10 4.2-1.9 7-5.3 7-10V6l-7-3Z"/><path d="M9.5 12.2 11.2 14l3.6-4"/></svg>
+            </div>
+            <div class="authenticator-hero-copy">
+              <span id="authenticatorSecurityPill" class="pill green">Cifrado activo</span>
+              <h3>Claves protegidas, códigos siempre disponibles.</h3>
+              <p>Las claves secretas se cifran antes de guardarse en <code>/data</code>. Después de registrar una cuenta, el panel solo muestra el código temporal y nunca vuelve a revelar la clave original.</p>
+            </div>
+            <div class="authenticator-security-points">
+              <span><i></i>Cifrado AES-256-GCM</span>
+              <span><i></i>Códigos TOTP locales</span>
+              <span><i></i>Sin servicios externos</span>
+            </div>
+          </article>
+
+          <div class="notice authenticator-warning">
+            <strong>Información sensible:</strong> usa esta sección únicamente desde tu panel de administrador y con HTTPS. No compartas las claves secretas ni los códigos temporales.
+          </div>
+          <div id="authenticatorKeyNotice" class="notice hidden"></div>
+
+          <article class="panel authenticator-toolbar">
+            <div>
+              <label for="authenticatorSearch">Buscar cuenta</label>
+              <input id="authenticatorSearch" type="search" autocomplete="off" placeholder="Nombre, servicio o correo…">
+            </div>
+            <span id="authenticatorCount" class="pill blue">0 cuentas</span>
+          </article>
+
+          <div id="authenticatorGrid" class="authenticator-grid"></div>
+          <article id="authenticatorEmpty" class="panel empty-state authenticator-empty">
+            <span class="authenticator-empty-icon" aria-hidden="true">•••</span>
+            <strong>Aún no hay cuentas en el Autenticador.</strong>
+            <span>Agrega una con su nombre, servicio, correo y clave secreta 2FA.</span>
+            <button class="button primary" data-authenticator-new type="button">Agregar primera cuenta</button>
+          </article>
+        </section>
+
         <section id="section-activity" class="page-section">
           <div class="section-intro">
             <div>
@@ -558,6 +616,48 @@
         <div class="dialog-actions">
           <button class="button secondary renew-close" type="button">Cancelar</button>
           <button class="button primary" type="submit">Registrar renovación</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="authenticatorDialog">
+      <form id="authenticatorForm">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">AUTENTICADOR</p>
+            <h2 id="authenticatorDialogTitle">Nueva cuenta 2FA</h2>
+          </div>
+          <button class="icon-button authenticator-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="authenticatorId" type="hidden">
+        <div class="form-grid">
+          <label>
+            Nombre
+            <input id="authenticatorName" type="text" maxlength="120" autocomplete="off" placeholder="Ejemplo: Cuenta principal" required>
+          </label>
+          <label>
+            Servicio
+            <input id="authenticatorService" type="text" maxlength="120" autocomplete="off" placeholder="Google, ChatGPT, Binance…" required>
+          </label>
+          <label class="span-2">
+            Correo o usuario
+            <input id="authenticatorEmail" type="text" maxlength="240" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="cuenta@correo.com" required>
+          </label>
+          <label class="span-2">
+            Clave secreta 2FA
+            <span class="secret-input-shell">
+              <input id="authenticatorSecret" type="password" maxlength="4096" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="Pega la clave Base32 o el enlace otpauth://">
+              <button id="toggleAuthenticatorSecret" class="secret-toggle" type="button" aria-label="Mostrar clave secreta">Mostrar</button>
+            </span>
+            <small id="authenticatorSecretHelp">Usa la clave de configuración que entrega el servicio, no el código temporal de 6 dígitos.</small>
+          </label>
+        </div>
+        <div class="notice authenticator-dialog-notice">
+          La clave se cifra al guardar. Por seguridad, no podrá consultarse nuevamente desde el panel; para cambiarla deberás pegar una nueva.
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary authenticator-close" type="button">Cancelar</button>
+          <button id="saveAuthenticatorButton" class="button primary" type="submit">Guardar cuenta</button>
         </div>
       </form>
     </dialog>

@@ -62,6 +62,7 @@ test("el Super Combo IA 2026 activa la secuencia inicial", () => {
 
 test("la V4.7 usa el modo de bienvenida única", () => {
   assert.equal(createInitialData().version, 4.7);
+  assert.deepEqual(createInitialData().authenticatorAccounts, []);
   assert.equal(defaultSettings.inboundMode, "welcome_once");
   assert.match(defaultSettings.reminderTemplate, /vence en 2 días/i);
   assert.equal(defaultSettings.chargeStartTime, "09:00");

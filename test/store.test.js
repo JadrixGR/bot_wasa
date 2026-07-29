@@ -50,6 +50,7 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
     assert.equal(store.data.clients[0].reminderDays, 2);
     assert.equal(store.data.clients[0].autoReminder, true);
     assert.equal(store.data.clients[0].autoCharge, false);
+    assert.deepEqual(store.data.authenticatorAccounts, []);
     assert.deepEqual(store.data.processedCommandIds, []);
     assert.equal(store.getSettings().inboundMode, "welcome_once");
     assert.match(

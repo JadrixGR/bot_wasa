@@ -1,0 +1,81 @@
+JADRIXSERVS BOT V4.9.0 - AUTENTICADOR 2FA PROTEGIDO
+====================================================
+
+QUÉ AGREGA
+- Nuevo apartado "Autenticador" dentro del panel.
+- Guarda nombre, servicio, correo o usuario y clave secreta 2FA.
+- Acepta claves Base32 y enlaces otpauth://totp completos.
+- Genera y actualiza códigos TOTP con contador visual.
+- Permite copiar el código, buscar, editar y eliminar cuentas.
+- Cifra las claves con AES-256-GCM antes de guardarlas.
+- Nunca devuelve la clave secreta original al navegador.
+- Conserva la conexión de WhatsApp y todas las funciones de V4.8.3.
+
+ANTES DE ACTUALIZAR
+1. En el panel actual abre Clientes y cobros.
+2. Pulsa "Descargar respaldo JSON" y guarda el archivo en tu computadora.
+3. En Render abre tu MISMO servicio y entra a Disks.
+4. Confirma:
+   - Disk: jadrixservs-data
+   - Mount Path: /data
+   - DATA_DIR=/data
+   - MEDIA_DIR=/data/media
+5. No elimines, reemplaces ni desconectes el disco.
+6. No crees otro servicio de Render para esta actualización.
+
+ARCHIVOS QUE SE CONSERVAN EN RENDER
+- /data/jadrixservs-v4.json             Base principal
+- /data/jadrixservs-v4.backup.json      Copia automática
+- /data/jadrixservs-v4.pre-v4.7.2.json  Copia fija existente
+- /data/whatsapp-session                Sesión de WhatsApp
+- /data/media                           Archivos multimedia
+
+CONFIGURAR LA PROTECCIÓN DEL AUTENTICADOR
+1. En Render abre Environment.
+2. Agrega esta variable:
+
+   AUTHENTICATOR_ENCRYPTION_KEY
+
+3. Como valor coloca una clave larga, aleatoria y privada.
+4. Guarda el valor y no lo cambies ni lo elimines después de registrar
+   cuentas 2FA.
+
+Si no configuras esta variable, el Autenticador usa COOKIE_SECRET. Funciona,
+pero deberás mantener también ese valor sin cambios. Cambiar la clave de
+cifrado impide abrir las cuentas 2FA ya guardadas.
+
+SUBIR A GITHUB
+1. Descomprime JadrixServs-Bot-V4.9.0-Autenticador-2FA.zip.
+2. Copia el contenido de jadrixservs-bot-v4 sobre tu repositorio actual.
+3. Acepta reemplazar los archivos, pero NO borres la carpeta .git.
+4. Desde PowerShell ejecuta:
+
+   git rm --ignore-unmatch PASOS-ACTUALIZAR-V4.8.txt PASOS-ACTUALIZAR-V4.8.1.txt PASOS-ACTUALIZAR-V4.8.2.txt PASOS-ACTUALIZAR-V4.8.3.txt
+   git add -A
+   git commit -m "Agregar Autenticador 2FA cifrado en V4.9.0"
+   git push
+
+5. Render desplegará el cambio en el mismo servicio y reutilizará /data.
+
+DESPUÉS DEL DESPLIEGUE
+1. Abre el panel y verifica que aparezca V4.9.0 Profesional.
+2. Revisa Clientes y cobros; tus registros deben continuar visibles.
+3. Revisa WhatsApp; la sesión guardada debe continuar intacta.
+4. Abre Autenticador y pulsa "+ Nueva cuenta".
+5. Escribe nombre, servicio y correo o usuario.
+6. Pega la clave Base32 o el enlace otpauth:// que entrega el servicio.
+7. No pegues el código temporal de 6 dígitos.
+8. Guarda y confirma que el código cambia al terminar el contador.
+9. Conserva el respaldo descargado hasta terminar las comprobaciones.
+
+IMPORTANTE
+- La versión de la aplicación es 4.9.0.
+- La versión interna de datos continúa siendo 4.7 de forma intencional.
+- La actualización agrega authenticatorAccounts sin renombrar ni reemplazar
+  la base existente.
+- El respaldo JSON contiene las cuentas 2FA únicamente cifradas.
+- Para restaurar esos códigos debes conservar también la misma
+  AUTHENTICATOR_ENCRYPTION_KEY.
+- El Autenticador funciona sin OpenAI y sin servicios externos.
+- La conexión de WhatsApp, el cierre de sesión y el QR mantienen las
+  correcciones de V4.8.3.
