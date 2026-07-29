@@ -10,6 +10,31 @@ const ENCRYPTION_AAD = Buffer.from(
   "utf8"
 );
 
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+function deriveAuthenticatorCommand(value) {
+  const slug = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 32);
+  return `/${slug.length >= 2 ? slug : "2fa"}`;
+}
+
+function normalizeAuthenticatorCommand(value) {
+  let command = String(value || "").trim().toLowerCase();
+  if (command && !command.startsWith("/")) command = `/${command}`;
+  if (!/^\/[a-z0-9][a-z0-9_-]{1,31}$/.test(command)) {
+    throw new Error(
+      "El comando 2FA debe empezar con / y contener entre 2 y 32 letras, números, guiones o guiones bajos. Ejemplo: /gpt01."
+    );
+  }
+  return command;
+}
+
 function normalizeBase32Secret(value) {
   const normalized = String(value || "")
     .trim()
@@ -254,11 +279,17 @@ function normalizeText(value, label, maxLength) {
 }
 
 class AuthenticatorService {
-  constructor({ store, encryptionKey, clock = () => Date.now() }) {
+  constructor({
+    store,
+    encryptionKey,
+    clock = () => Date.now(),
+    sleepFn = wait
+  }) {
     if (!store) throw new Error("El Autenticador necesita acceso a la base de datos.");
     this.store = store;
     this.encryptionKey = deriveEncryptionKey(encryptionKey);
     this.clock = clock;
+    this.sleepFn = sleepFn;
   }
 
   listAccounts() {
@@ -288,7 +319,11 @@ class AuthenticatorService {
     const patch = this.#normalizeMetadata({
       name: input?.name ?? current.name,
       service: input?.service ?? current.service,
-      email: input?.email ?? current.email
+      email: input?.email ?? current.email,
+      command:
+        input?.command ??
+        current.command ??
+        deriveAuthenticatorCommand(current.name)
     });
     const nextSecret = String(input?.secret || "").trim();
     if (nextSecret) {
@@ -311,15 +346,136 @@ class AuthenticatorService {
       id: deleted.id,
       name: deleted.name,
       service: deleted.service,
-      email: deleted.email
+      email: deleted.email,
+      command: deleted.command
     };
   }
 
-  #normalizeMetadata(input) {
+  findAccountByCommand(command) {
+    const account = this.store.findAuthenticatorAccountByCommand(command);
+    if (!account) return null;
     return {
-      name: normalizeText(input?.name, "el nombre", 120),
+      id: account.id,
+      name: account.name,
+      service: account.service,
+      email: account.email,
+      command: account.command,
+      period: account.period,
+      digits: account.digits,
+      algorithm: account.algorithm
+    };
+  }
+
+  async getFreshCodeByCommand(
+    command,
+    {
+      minimumSeconds = 20,
+      maximumSeconds = 30,
+      safetyMilliseconds = 750
+    } = {}
+  ) {
+    const normalizedCommand = normalizeAuthenticatorCommand(command);
+    const minimum = Number(minimumSeconds);
+    const maximum = Number(maximumSeconds);
+    const safety = Math.max(0, Number(safetyMilliseconds) || 0);
+    if (
+      !Number.isFinite(minimum) ||
+      !Number.isFinite(maximum) ||
+      minimum < 1 ||
+      maximum < minimum ||
+      maximum > 120
+    ) {
+      throw new Error("La ventana de validez solicitada para el código 2FA no es válida.");
+    }
+
+    let waitedMilliseconds = 0;
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const account =
+        this.store.findAuthenticatorAccountByCommand(normalizedCommand);
+      if (!account) return null;
+
+      const nowValue = this.clock();
+      const now =
+        nowValue instanceof Date ? nowValue.getTime() : Number(nowValue);
+      const presented = this.#toPublicAccount(account, now);
+      if (!presented.available || !presented.expiresAt) {
+        const error = new Error(
+          presented.error || "No se pudo generar el código 2FA."
+        );
+        error.code = "AUTHENTICATOR_UNAVAILABLE";
+        throw error;
+      }
+
+      const periodMilliseconds = presented.period * 1000;
+      const minimumWindow = minimum * 1000 + safety;
+      const maximumWindow = maximum * 1000;
+      if (periodMilliseconds < minimumWindow) {
+        const error = new Error(
+          `La cuenta ${presented.name} usa códigos de ${presented.period} segundos y no puede garantizar ${minimum} segundos de vigencia.`
+        );
+        error.code = "AUTHENTICATOR_WINDOW_UNAVAILABLE";
+        throw error;
+      }
+
+      const remainingMilliseconds =
+        new Date(presented.expiresAt).getTime() - now;
+      if (
+        remainingMilliseconds >= minimumWindow &&
+        remainingMilliseconds <= maximumWindow
+      ) {
+        return {
+          ...presented,
+          secondsRemaining: Math.min(
+            maximum,
+            Math.floor(remainingMilliseconds / 1000)
+          ),
+          waitedMilliseconds
+        };
+      }
+
+      const upperTarget = Math.max(
+        minimumWindow,
+        maximumWindow - 350
+      );
+      const waitMilliseconds =
+        remainingMilliseconds > maximumWindow
+          ? remainingMilliseconds - upperTarget + 100
+          : remainingMilliseconds +
+            Math.max(0, periodMilliseconds - upperTarget) +
+            100;
+      if (
+        !Number.isFinite(waitMilliseconds) ||
+        waitMilliseconds < 0 ||
+        waitMilliseconds > 130000
+      ) {
+        const error = new Error(
+          "No se pudo obtener una ventana segura para enviar el código 2FA."
+        );
+        error.code = "AUTHENTICATOR_WINDOW_UNAVAILABLE";
+        throw error;
+      }
+
+      const delay = Math.ceil(waitMilliseconds);
+      waitedMilliseconds += delay;
+      await this.sleepFn(delay);
+    }
+
+    const error = new Error(
+      "El código 2FA no alcanzó la vigencia mínima para enviarse."
+    );
+    error.code = "AUTHENTICATOR_WINDOW_UNAVAILABLE";
+    throw error;
+  }
+
+  #normalizeMetadata(input) {
+    const name = normalizeText(input?.name, "el nombre", 120);
+    return {
+      name,
       service: normalizeText(input?.service, "el servicio", 120),
-      email: normalizeText(input?.email, "el correo o usuario", 240)
+      email: normalizeText(input?.email, "el correo o usuario", 240),
+      command: normalizeAuthenticatorCommand(
+        input?.command || deriveAuthenticatorCommand(name)
+      )
     };
   }
 
@@ -343,6 +499,8 @@ class AuthenticatorService {
       name: account.name,
       service: account.service,
       email: account.email,
+      command:
+        account.command || deriveAuthenticatorCommand(account.name),
       algorithm,
       digits,
       period,
@@ -384,11 +542,13 @@ class AuthenticatorService {
 
 module.exports = {
   AuthenticatorService,
+  deriveAuthenticatorCommand,
   decodeBase32,
   deriveEncryptionKey,
   encryptSecret,
   decryptSecret,
   generateTotp,
+  normalizeAuthenticatorCommand,
   normalizeBase32Secret,
   parseTotpSecret
 };

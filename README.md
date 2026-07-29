@@ -1,12 +1,35 @@
-# JadrixServs Bot V4.9.0 Profesional
+# JadrixServs Bot V4.9.1 Profesional
 
-## Autenticador 2FA protegido · V4.9.0
+## Comandos 2FA seguros por WhatsApp · V4.9.1
+
+- Cada cuenta del Autenticador tiene un comando único y editable, por ejemplo `/gpt01`.
+- Las cuentas ya guardadas reciben el comando automáticamente según su nombre: `GPT01` pasa a `/gpt01` y `GROK01` a `/grok01`.
+- El comando solo se ejecuta cuando lo escribes desde el WhatsApp propietario dentro del chat del cliente.
+- Si un cliente escribe `/gpt01`, el bot nunca genera ni envía el código 2FA.
+- Si quedan menos de 20 segundos, el bot espera silenciosamente el siguiente código.
+- El mensaje se envía únicamente cuando el código conserva entre 20 y 30 segundos útiles.
+- Antes de enviarlo aparece “escribiendo…” y el cliente recibe solo el servicio, el código y su vigencia.
+- El código numérico y el correo asociado nunca se copian a los registros de actividad.
+- Los comandos de clientes como `/gptpro 30` siguen funcionando y no pueden repetirse como comandos 2FA.
+- Los eventos duplicados de WhatsApp se detectan para no reenviar el mismo código.
+
+### Cómo enviar un código al chat de un cliente
+
+1. Abre **Autenticador** y revisa el comando de la cuenta.
+2. Puedes copiarlo desde la tarjeta o editarlo, por ejemplo `/gpt01`.
+3. En tu propio WhatsApp abre el chat del cliente.
+4. Envía únicamente `/gpt01`.
+5. El bot espera una ventana segura si hace falta y manda el código en ese mismo chat.
+
+Los códigos TOTP normales duran 30 segundos. Una cuenta configurada con un periodo inferior al necesario no se enviará, porque no puede garantizar 20 segundos de vigencia.
+
+## Autenticador 2FA protegido
 
 - Agrega una sección nueva llamada **Autenticador** al panel privado.
 - Permite registrar nombre, servicio, correo o usuario y la clave secreta 2FA.
 - Acepta una clave Base32 o el enlace completo `otpauth://totp/...`.
 - Genera códigos TOTP de 6, 7 u 8 dígitos y los renueva automáticamente según el intervalo de cada servicio.
-- Muestra el tiempo restante, permite copiar el código y buscar cuentas por nombre, servicio o correo.
+- Muestra el tiempo restante, permite copiar el código y buscar cuentas por nombre, servicio, correo o comando.
 - Permite editar los datos sin volver a escribir la clave; una clave nueva solo se guarda cuando se desea reemplazar.
 - Cifra cada clave con AES-256-GCM antes de guardarla en `/data/jadrixservs-v4.json`.
 - La clave 2FA original nunca se devuelve al navegador ni se muestra después de guardarla.
@@ -20,8 +43,9 @@
 2. Elige configurar una aplicación de autenticación y busca la **clave de configuración**, **setup key** o el enlace `otpauth://`.
 3. En JadrixServs abre **Autenticador → Nueva cuenta**.
 4. Escribe un nombre, el servicio y el correo o usuario asociado.
-5. Pega la clave Base32 o el enlace `otpauth://` completo y guarda.
-6. Usa el código temporal que aparece en la tarjeta para completar la activación en el servicio.
+5. Revisa el comando privado sugerido o escribe uno único, como `/gpt01`.
+6. Pega la clave Base32 o el enlace `otpauth://` completo y guarda.
+7. Usa el código temporal que aparece en la tarjeta para completar la activación en el servicio.
 
 No pegues un código temporal de seis dígitos en el campo **Clave secreta 2FA**. Ese campo necesita la clave de configuración permanente que entrega el servicio al activar el autenticador.
 
@@ -47,7 +71,7 @@ El panel muestra los códigos únicamente después de iniciar sesión como admin
 - Mantiene el cierre con tiempo límite de V4.8.2, que elimina únicamente `/data/whatsapp-session` y nunca la base de clientes.
 - Conserva el filtro de los volcados sensibles `Closing session: SessionEntry`.
 - Integra el logo oficial **Jadrix Serv · Digital Solutions** en el acceso, la barra lateral y el icono del sitio.
-- V4.9.0 conserva íntegramente estas correcciones junto con los clientes, mensajes, comandos, renovaciones, cobranzas, AFK, IA y configuración existentes.
+- V4.9.1 conserva íntegramente estas correcciones junto con los clientes, mensajes, comandos, renovaciones, cobranzas, AFK, IA y configuración existentes.
 
 ## Diseño profesional de V4.8
 
@@ -66,7 +90,7 @@ Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clie
 
 ## Flujo de mensajes
 
-La V4.9.0 funciona en modo **solo bienvenida**:
+La V4.9.1 funciona en modo **solo bienvenida**:
 
 1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales.
 2. Los tres se envían por separado, mostrando “escribiendo…” y una pequeña demora antes de cada envío.
@@ -141,7 +165,7 @@ Al pulsar **Renovar**, el nuevo periodo comienza desde el vencimiento vigente si
 
 La base principal continúa siendo `/data/jadrixservs-v4.json`; no se cambia su nombre ni su ubicación, por lo que la actualización conserva los clientes existentes. La sesión vinculada se mantiene en `/data/whatsapp-session`.
 
-La V4.9.0 conserva estos niveles de protección:
+La V4.9.1 conserva estos niveles de protección:
 
 - Antes de reemplazar una base válida guarda `/data/jadrixservs-v4.backup.json`.
 - Si el JSON principal queda dañado, el bot recupera automáticamente la copia válida.
@@ -176,19 +200,19 @@ Los mensajes de renovación admiten estas variables:
 
 Antes de subir el código, abre el panel actual y pulsa **Clientes y cobros → Descargar respaldo JSON**. Después abre **Render → tu servicio → Disks** y confirma que ya existe el disco `jadrixservs-data` montado en `/data`.
 
-Si el disco no existe, guarda primero el respaldo JSON y después crea el disco con `Mount Path: /data` y `1 GB`. Al adjuntar el disco Render realiza un despliegue y los archivos efímeros anteriores no se copian automáticamente. Una vez instalada la V4.9.0, usa **Restaurar respaldo JSON** para recuperar la base. El respaldo recupera clientes y configuración; si la sesión de WhatsApp estaba únicamente en almacenamiento efímero, será necesario escanear el QR una vez para guardarla en el disco nuevo.
+Si el disco no existe, guarda primero el respaldo JSON y después crea el disco con `Mount Path: /data` y `1 GB`. Al adjuntar el disco Render realiza un despliegue y los archivos efímeros anteriores no se copian automáticamente. Una vez instalada la V4.9.1, usa **Restaurar respaldo JSON** para recuperar la base. El respaldo recupera clientes y configuración; si la sesión de WhatsApp estaba únicamente en almacenamiento efímero, será necesario escanear el QR una vez para guardarla en el disco nuevo.
 
 Si el disco ya aparece, continúa:
 
-1. Descomprime `JadrixServs-Bot-V4.9.0-Autenticador-2FA.zip`.
+1. Descomprime `JadrixServs-Bot-V4.9.1-Comandos-2FA-WhatsApp.zip`.
 2. Copia el contenido de `jadrixservs-bot-v4` dentro de tu repositorio.
 3. Acepta reemplazar los archivos y no borres la carpeta `.git`.
 4. Elimina los archivos antiguos si todavía existen:
 
 ```bat
-git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt PASOS-ACTUALIZAR-V4.5.txt PASOS-ACTUALIZAR-V4.6.txt PASOS-ACTUALIZAR-V4.7.2.txt PASOS-ACTUALIZAR-V4.8.txt PASOS-ACTUALIZAR-V4.8.1.txt PASOS-ACTUALIZAR-V4.8.2.txt PASOS-ACTUALIZAR-V4.8.3.txt public/COMANDOS-WHATSAPP-V4.5.txt public/COMANDOS-WHATSAPP-V4.6.txt public/COMANDOS-WHATSAPP-V4.7.txt
+git rm --ignore-unmatch server.js seed-data.js ACTUALIZAR-A-V3.txt ACTUALIZAR-A-V4.txt INSTRUCCIONES-ACTUALIZACION.txt INSTRUCCIONES-RAPIDAS.txt PASOS-ACTUALIZAR-V4.3.txt PASOS-ACTUALIZAR-V4.4.txt PASOS-ACTUALIZAR-V4.5.txt PASOS-ACTUALIZAR-V4.6.txt PASOS-ACTUALIZAR-V4.7.2.txt PASOS-ACTUALIZAR-V4.8.txt PASOS-ACTUALIZAR-V4.8.1.txt PASOS-ACTUALIZAR-V4.8.2.txt PASOS-ACTUALIZAR-V4.8.3.txt PASOS-ACTUALIZAR-V4.9.0.txt public/COMANDOS-WHATSAPP-V4.5.txt public/COMANDOS-WHATSAPP-V4.6.txt public/COMANDOS-WHATSAPP-V4.7.txt
 git add -A
-git commit -m "Agregar Autenticador 2FA cifrado en V4.9.0"
+git commit -m "Agregar comandos 2FA seguros en V4.9.1"
 git push
 ```
 
@@ -250,7 +274,7 @@ Si el celular muestra la sesión iniciada pero el panel no termina de conectar:
 
 La sesión válida se guarda en `/data/whatsapp-session`; no hace falta volver a escanear después de cada despliegue.
 
-Ningún bot basado en una conexión no oficial puede prometer una sesión literalmente ilimitada: WhatsApp puede revocarla, reemplazarla si se abre otra conexión o solicitar un nuevo QR. La V4.9.0 conserva la actualización de la revisión Web antes de conectar, rota alternativas ante `405`, mantiene reintentos automáticos mientras la sesión siga siendo válida y permite borrar una sesión dañada para obtener un QR nuevo.
+Ningún bot basado en una conexión no oficial puede prometer una sesión literalmente ilimitada: WhatsApp puede revocarla, reemplazarla si se abre otra conexión o solicitar un nuevo QR. La V4.9.1 conserva la actualización de la revisión Web antes de conectar, rota alternativas ante `405`, mantiene reintentos automáticos mientras la sesión siga siendo válida y permite borrar una sesión dañada para obtener un QR nuevo.
 
 ## Prueba recomendada
 
@@ -261,6 +285,9 @@ Para probar el Autenticador:
 3. Agrega una cuenta de prueba con la clave de configuración que entrega el servicio.
 4. Confirma que aparece un código, que el contador disminuye y que al llegar a cero se genera uno nuevo.
 5. Pulsa **Copiar**, edita solo el nombre y verifica que la clave continúa funcionando sin volver a pegarla.
+6. Revisa que la tarjeta muestre un comando como `/gpt01`.
+7. Desde tu WhatsApp propietario, envíalo en un chat y confirma que el código recibido indica entre 20 y 30 segundos.
+8. Repite la prueba cuando al código actual le queden menos de 20 segundos: el bot debe esperar el siguiente antes de enviarlo.
 
 Desde un número que no esté registrado como cliente:
 

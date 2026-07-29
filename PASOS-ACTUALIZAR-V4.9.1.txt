@@ -1,0 +1,84 @@
+JADRIXSERVS BOT V4.9.1 - COMANDOS 2FA SEGUROS POR WHATSAPP
+================================================================
+
+QUÉ AGREGA
+- Cada cuenta del Autenticador tiene un comando único y editable.
+- Ejemplos: GPT01 usa /gpt01 y GROK01 usa /grok01.
+- Las cuentas 2FA ya guardadas reciben su comando automáticamente.
+- Solo el WhatsApp propietario puede activar un comando 2FA.
+- Si un cliente escribe el comando, el bot nunca entrega el código.
+- Si quedan menos de 20 segundos, espera el código siguiente.
+- Solo envía códigos con una vigencia de 20 a 30 segundos.
+- Muestra "escribiendo..." antes de enviar el código.
+- No guarda el código numérico ni el correo en los registros.
+- Evita reenvíos si WhatsApp repite el mismo evento.
+
+ANTES DE ACTUALIZAR
+1. En el panel actual abre Clientes y cobros.
+2. Pulsa "Descargar respaldo JSON" y guárdalo en tu computadora.
+3. En Render abre tu MISMO servicio y entra a Disks.
+4. Confirma:
+   - Disk: jadrixservs-data
+   - Mount Path: /data
+   - DATA_DIR=/data
+   - MEDIA_DIR=/data/media
+5. No elimines, reemplaces ni desconectes el disco.
+6. No crees otro servicio de Render para esta actualización.
+
+ARCHIVOS QUE SE CONSERVAN EN RENDER
+- /data/jadrixservs-v4.json             Base principal
+- /data/jadrixservs-v4.backup.json      Copia automática
+- /data/jadrixservs-v4.pre-v4.7.2.json  Copia fija existente
+- /data/whatsapp-session                Sesión de WhatsApp
+- /data/media                           Archivos multimedia
+
+PROTECCIÓN DEL AUTENTICADOR
+- Conserva exactamente el mismo valor de AUTHENTICATOR_ENCRYPTION_KEY.
+- Si no usas esa variable, conserva exactamente el mismo COOKIE_SECRET.
+- Cambiar la clave de cifrado impide abrir las cuentas 2FA existentes.
+- Nunca pegues estas claves secretas en un chat de WhatsApp.
+
+SUBIR A GITHUB
+1. Descomprime JadrixServs-Bot-V4.9.1-Comandos-2FA-WhatsApp.zip.
+2. Copia el contenido de jadrixservs-bot-v4 sobre tu repositorio actual.
+3. Acepta reemplazar los archivos, pero NO borres la carpeta .git.
+4. Desde PowerShell ejecuta:
+
+   git rm --ignore-unmatch PASOS-ACTUALIZAR-V4.9.0.txt
+   git add -A
+   git commit -m "Agregar comandos 2FA seguros en V4.9.1"
+   git push
+
+5. Render desplegará el cambio en el mismo servicio y reutilizará /data.
+
+DESPUÉS DEL DESPLIEGUE
+1. Abre el panel y verifica que aparezca V4.9.1 Profesional.
+2. Revisa Clientes y cobros; tus registros deben continuar visibles.
+3. Revisa WhatsApp; la sesión guardada debe continuar intacta.
+4. Abre Autenticador.
+5. Cada cuenta existente debe mostrar un comando privado.
+6. Si deseas, pulsa Editar y cambia el comando por uno único.
+7. No uses comandos reservados como /gptpro o /planpro.
+
+PRUEBA DEL COMANDO
+1. Abre en TU WhatsApp el chat de un cliente.
+2. Envía únicamente el comando, por ejemplo:
+
+   /gpt01
+
+3. El bot debe mostrar "escribiendo..." y enviar un único mensaje.
+4. El mensaje debe indicar una vigencia entre 20 y 30 segundos.
+5. Si al código actual le quedan menos de 20 segundos, el envío demora hasta
+   que aparezca el código siguiente. Eso es intencional.
+6. Prueba el comando desde el WhatsApp del cliente: no debe recibir ningún
+   código 2FA.
+
+IMPORTANTE
+- La versión de la aplicación es 4.9.1.
+- La versión interna de datos continúa siendo 4.7 intencionalmente.
+- La migración solo agrega el campo command a authenticatorAccounts.
+- No renombra ni reemplaza la base existente.
+- Los comandos de registro con días, como /planpro 30, siguen funcionando.
+- Los comandos 2FA no llevan días ni texto adicional.
+- El Autenticador funciona sin OpenAI y sin servicios externos.
+- La conexión, el cierre de sesión y el QR conservan las correcciones previas.

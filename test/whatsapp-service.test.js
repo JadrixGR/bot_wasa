@@ -11,6 +11,7 @@ const {
   calculateHumanDelay,
   compatibleBrowserProfile,
   extractMessageBody,
+  formatAuthenticatorCodeMessage,
   formatWhatsAppWebVersion,
   getDisconnectStatusCode,
   isSensitiveSignalSessionDump,
@@ -39,9 +40,10 @@ async function settleMessageQueue(service) {
 function makeStore() {
   const logs = [];
   const conversations = {};
+  const processedCommandIds = [];
   return {
     logs,
-    data: { conversations },
+    data: { conversations, processedCommandIds },
     addLog: (type, message, details) => logs.push({ type, message, details }),
     save: () => undefined,
     getConversation: (chatId) => ({ ...(conversations[chatId] || {}) }),
@@ -53,6 +55,14 @@ function makeStore() {
       return { ...conversations[chatId] };
     },
     findClientByWhatsApp: () => null,
+    isCommandMessageProcessed: (id) =>
+      processedCommandIds.includes(String(id || "")),
+    markCommandMessageProcessed: (id) => {
+      const value = String(id || "");
+      if (!value || processedCommandIds.includes(value)) return false;
+      processedCommandIds.unshift(value);
+      return true;
+    },
     registerClientFromCommand: () => ({
       client: { id: "cliente-comando" },
       created: true,
@@ -170,6 +180,7 @@ function makeService(fake, options = {}) {
       options.sessionDir || path.join(testRuntimeDir, "whatsapp-session"),
     mediaDir: options.mediaDir || path.join(testRuntimeDir, "media"),
     ai: null,
+    authenticator: options.authenticator || null,
     baileysLoader: async () => fake.module,
     qrEncoder: async (value) => `data:image/png;base64,${value}`,
     sleepFn: async () => undefined,
@@ -219,6 +230,19 @@ test("extrae texto aunque WhatsApp lo envíe como mensaje efímero", () => {
     }),
     "¿Cuánto cuesta Claude?"
   );
+});
+
+test("formatea el código 2FA sin incluir el correo ni datos innecesarios", () => {
+  const message = formatAuthenticatorCodeMessage({
+    service: "ChatGPT Plus",
+    email: "privado@correo.test",
+    code: "177525",
+    secondsRemaining: 27
+  });
+  assert.match(message, /Código de ChatGPT Plus/);
+  assert.match(message, /177525/);
+  assert.match(message, /27 segundos/);
+  assert.doesNotMatch(message, /privado@correo\.test/);
 });
 
 test("lee el código de desconexión que entrega WhatsApp", () => {
@@ -685,6 +709,181 @@ test("un comando enviado por el propietario registra el número alternativo sin 
   assert.equal(registrations[0].commandMessageId, "owner-command-1");
   assert.equal(socket.calls.sent.length, 0);
   assert.equal(socket.calls.read.length, 0);
+});
+
+test("el propietario envía un código 2FA con su comando y vigencia segura", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  const account = {
+    id: "auth-gpt01",
+    name: "GPT01",
+    service: "ChatGPT Plus",
+    email: "privado@correo.test",
+    command: "/gpt01"
+  };
+  let requests = 0;
+  const requestedWindows = [];
+  const authenticator = {
+    findAccountByCommand: (command) =>
+      String(command).toLowerCase() === "/gpt01" ? account : null,
+    getFreshCodeByCommand: async (_command, options) => {
+      requests += 1;
+      requestedWindows.push(options);
+      return {
+        ...account,
+        code: "177525",
+        secondsRemaining: 26,
+        waitedMilliseconds: 0
+      };
+    }
+  };
+  const service = makeService(fake, {
+    store,
+    authenticator,
+    sessionDir: path.join(testRuntimeDir, "owner-2fa-session"),
+    mediaDir: path.join(testRuntimeDir, "owner-2fa-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "owner-2fa-1",
+          remoteJid: "51955556666@s.whatsapp.net",
+          fromMe: true
+        },
+        message: { conversation: "/GPT01" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(requests, 2);
+  assert.ok(
+    requestedWindows.every(
+      (window) =>
+        window.minimumSeconds === 20 &&
+        window.maximumSeconds === 30 &&
+        window.safetyMilliseconds === 2000
+    )
+  );
+  assert.equal(socket.calls.sent.length, 1);
+  assert.match(socket.calls.sent[0].content.text, /177525/);
+  assert.match(socket.calls.sent[0].content.text, /26 segundos/);
+  assert.doesNotMatch(socket.calls.sent[0].content.text, /privado@correo/);
+  assert.deepEqual(
+    socket.calls.presence.map((item) => item.type),
+    ["unavailable", "composing", "paused"]
+  );
+  assert.equal(store.isCommandMessageProcessed("owner-2fa-1"), true);
+  assert.doesNotMatch(JSON.stringify(store.logs), /177525/);
+});
+
+test("un evento repetido no vuelve a enviar el mismo código 2FA", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  const account = {
+    id: "auth-gpt01",
+    name: "GPT01",
+    service: "ChatGPT Plus",
+    command: "/gpt01"
+  };
+  const authenticator = {
+    findAccountByCommand: () => account,
+    getFreshCodeByCommand: async () => ({
+      ...account,
+      code: "794522",
+      secondsRemaining: 25,
+      waitedMilliseconds: 0
+    })
+  };
+  const service = makeService(fake, {
+    store,
+    authenticator,
+    sessionDir: path.join(testRuntimeDir, "duplicate-2fa-session"),
+    mediaDir: path.join(testRuntimeDir, "duplicate-2fa-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+  const message = {
+    key: {
+      id: "owner-2fa-repeated",
+      remoteJid: "51955556666@s.whatsapp.net",
+      fromMe: true
+    },
+    message: { conversation: "/gpt01" }
+  };
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [message]
+  });
+  await settleMessageQueue(service);
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [message]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(socket.calls.sent.length, 1);
+  assert.match(
+    store.logs.at(-1).message,
+    /duplicado ignorado/i
+  );
+});
+
+test("un cliente no puede solicitar un código 2FA con el comando privado", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  let requestedCodes = 0;
+  const authenticator = {
+    findAccountByCommand: () => ({
+      id: "auth-gpt01",
+      command: "/gpt01"
+    }),
+    getFreshCodeByCommand: async () => {
+      requestedCodes += 1;
+      return null;
+    }
+  };
+  const service = makeService(fake, {
+    store,
+    authenticator,
+    sessionDir: path.join(testRuntimeDir, "customer-2fa-session"),
+    mediaDir: path.join(testRuntimeDir, "customer-2fa-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "customer-2fa-1",
+          remoteJid: "51977778888@s.whatsapp.net",
+          fromMe: false
+        },
+        message: { conversation: "/gpt01" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(requestedCodes, 0);
+  assert.deepEqual(
+    socket.calls.sent.map((item) => item.content.text),
+    ["Catálogo", "Planes", "Ayuda"]
+  );
 });
 
 test("un cliente no puede registrarse a sí mismo con un comando", async () => {

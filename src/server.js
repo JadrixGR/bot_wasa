@@ -41,7 +41,13 @@ const authenticator = new AuthenticatorService({
   store,
   encryptionKey: authenticatorEncryptionKey
 });
-const whatsapp = new WhatsAppService({ store, sessionDir, mediaDir, ai });
+const whatsapp = new WhatsAppService({
+  store,
+  sessionDir,
+  mediaDir,
+  ai,
+  authenticator
+});
 const scheduler = new ReminderScheduler({
   store,
   whatsapp,
@@ -105,7 +111,7 @@ function clientForPanel(client) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.9.0",
+    version: "4.9.1",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
     authenticator: {
@@ -580,7 +586,7 @@ app.use((error, _req, res, _next) => {
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4.9.0 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V4.9.1 disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
   }

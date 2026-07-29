@@ -2973,6 +2973,55 @@ html[data-theme="dark"] .client-row.tone-neutral:hover td { background: #1d2538;
     linear-gradient(135deg, #111a31, #222951);
 }
 
+.authenticator-command-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.62rem 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 17%, var(--line));
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--primary) 5%, var(--soft-bg));
+}
+
+.authenticator-command-row span {
+  color: var(--muted);
+  font-size: 0.53rem;
+  font-weight: 850;
+  letter-spacing: 0.11em;
+}
+
+.authenticator-command-row code,
+.authenticator-command-input {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+.authenticator-command-row code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.authenticator-command-row button {
+  min-height: 1.85rem;
+  padding: 0.3rem 0.52rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  color: var(--strong-muted);
+  background: var(--panel);
+  font-size: 0.58rem;
+  font-weight: 850;
+}
+
+.authenticator-command-row button:hover {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--line));
+  color: var(--primary);
+}
+
 .authenticator-code-label,
 .authenticator-code-row,
 .authenticator-timer {
@@ -3196,6 +3245,10 @@ html[data-theme="dark"] .authenticator-empty-icon {
 }
 
 html[data-theme="dark"] .authenticator-card-footer button {
+  background: #171f31;
+}
+
+html[data-theme="dark"] .authenticator-command-row button {
   background: #171f31;
 }
 

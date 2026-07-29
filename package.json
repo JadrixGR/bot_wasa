@@ -1,6 +1,6 @@
 {
   "name": "jadrixservs-bot-v4",
-  "version": "4.9.0",
+  "version": "4.9.1",
   "private": true,
   "description": "Bot de WhatsApp con panel profesional para clientes, renovaciones y cobranzas de JadrixServs",
   "main": "src/server.js",

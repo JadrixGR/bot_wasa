@@ -15,6 +15,11 @@ const FALLBACK_WA_WEB_VERSIONS = [
 const SIGNAL_LOG_FILTER_MARKER = Symbol.for(
   "jadrixservs.signal-session-log-filter"
 );
+const AUTHENTICATOR_SEND_WINDOW = Object.freeze({
+  minimumSeconds: 20,
+  maximumSeconds: 30,
+  safetyMilliseconds: 2000
+});
 
 let baileysModulePromise;
 
@@ -280,12 +285,35 @@ function mimeTypeForExtension(extension) {
   );
 }
 
+function formatAuthenticatorCodeMessage({
+  service,
+  code,
+  secondsRemaining
+}) {
+  const serviceName =
+    String(service || "tu cuenta").replace(/[\r\n*_`~]/g, " ").trim() ||
+    "tu cuenta";
+  const safeCode = String(code || "").replace(/\D/g, "");
+  const validity = Math.max(
+    20,
+    Math.min(30, Math.floor(Number(secondsRemaining) || 20))
+  );
+  return [
+    `🔐 *Código de ${serviceName}*`,
+    "",
+    `\`${safeCode}\``,
+    "",
+    `⏳ Válido por ${validity} segundos.`
+  ].join("\n");
+}
+
 class WhatsAppService {
   constructor({
     store,
     sessionDir,
     mediaDir,
     ai,
+    authenticator = null,
     baileysLoader = loadBaileys,
     qrEncoder = QRCode.toDataURL,
     sleepFn = sleep,
@@ -298,6 +326,7 @@ class WhatsAppService {
     this.sessionDir = path.resolve(sessionDir);
     this.mediaDir = path.resolve(mediaDir);
     this.ai = ai;
+    this.authenticator = authenticator;
     this.baileysLoader = baileysLoader;
     this.qrEncoder = qrEncoder;
     this.sleepFn = sleepFn;
@@ -1102,6 +1131,19 @@ class WhatsAppService {
 
   async #handleOwnerCommand(socket, message) {
     const body = extractMessageBody(message.message);
+    const authenticatorAccount =
+      /^\/[a-z0-9][a-z0-9_-]{1,31}$/i.test(body)
+        ? this.authenticator?.findAccountByCommand(body)
+        : null;
+    if (authenticatorAccount) {
+      await this.#handleOwnerAuthenticatorCommand(
+        socket,
+        message,
+        authenticatorAccount
+      );
+      return;
+    }
+
     const parsed = parseRegistrationCommand(body);
     if (!parsed.isCommand) return;
 
@@ -1138,6 +1180,78 @@ class WhatsAppService {
         "command",
         `Comando duplicado ignorado: ${parsed.command}`,
         { commandMessageId: message.key.id || "" }
+      );
+      this.store.save();
+    }
+  }
+
+  async #handleOwnerAuthenticatorCommand(socket, message, account) {
+    const commandMessageId = String(message.key.id || "");
+    const target = normalizeWhatsAppId(message.key.remoteJid);
+
+    if (
+      commandMessageId &&
+      this.store.isCommandMessageProcessed?.(commandMessageId)
+    ) {
+      this.store.addLog(
+        "authenticator",
+        `Comando 2FA duplicado ignorado: ${account.command}`,
+        {
+          command: account.command,
+          authenticatorId: account.id,
+          chatId: target,
+          commandMessageId
+        }
+      );
+      this.store.save();
+      return;
+    }
+
+    try {
+      let fresh = await this.authenticator.getFreshCodeByCommand(
+        account.command,
+        AUTHENTICATOR_SEND_WINDOW
+      );
+      if (!fresh) return;
+
+      const stopTyping = await this.beginTyping(target);
+      await this.sleepFn(350);
+      await stopTyping();
+
+      fresh = await this.authenticator.getFreshCodeByCommand(
+        account.command,
+        AUTHENTICATOR_SEND_WINDOW
+      );
+      if (!fresh) return;
+
+      await socket.sendMessage(target, {
+        text: formatAuthenticatorCodeMessage(fresh)
+      });
+      if (commandMessageId) {
+        this.store.markCommandMessageProcessed?.(commandMessageId);
+      }
+      this.store.addLog(
+        "authenticator",
+        `Código 2FA enviado con ${fresh.command} · ${fresh.service} · ${fresh.secondsRemaining} s de vigencia`,
+        {
+          command: fresh.command,
+          authenticatorId: fresh.id,
+          chatId: target,
+          secondsRemaining: fresh.secondsRemaining,
+          waitedMilliseconds: fresh.waitedMilliseconds
+        }
+      );
+      this.store.save();
+    } catch (error) {
+      this.store.addLog(
+        "authenticator",
+        `No se envió ${account.command}: ${error.message}`,
+        {
+          command: account.command,
+          authenticatorId: account.id,
+          chatId: target,
+          errorCode: error.code || null
+        }
       );
       this.store.save();
     }
@@ -1446,6 +1560,7 @@ module.exports = {
   calculateHumanDelay,
   compatibleBrowserProfile,
   extractMessageBody,
+  formatAuthenticatorCodeMessage,
   formatWhatsAppWebVersion,
   getDisconnectStatusCode,
   isSensitiveSignalSessionDump,

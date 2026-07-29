@@ -398,6 +398,16 @@ function formatAuthenticatorCode(code) {
   return value.replace(/(\d{3})(?=\d)/g, "$1 ");
 }
 
+function deriveAuthenticatorCommand(value) {
+  const slug = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .slice(0, 32);
+  return `/${slug.length >= 2 ? slug : "2fa"}`;
+}
+
 function authenticatorInitials(account) {
   const source = String(account.service || account.name || "2FA").trim();
   return source
@@ -411,7 +421,7 @@ function authenticatorInitials(account) {
 function renderAuthenticator() {
   const search = $("#authenticatorSearch").value.trim().toLowerCase();
   const accounts = state.authenticatorAccounts.filter((account) =>
-    `${account.name} ${account.service} ${account.email}`
+    `${account.name} ${account.service} ${account.email} ${account.command}`
       .toLowerCase()
       .includes(search)
   );
@@ -447,6 +457,11 @@ function renderAuthenticator() {
             <p>${escapeHtml(account.email)}</p>
           </div>
           <button class="authenticator-menu-button" data-auth-action="edit" data-id="${escapeHtml(account.id)}" type="button" title="Editar cuenta" aria-label="Editar ${escapeHtml(account.name)}">•••</button>
+        </div>
+        <div class="authenticator-command-row">
+          <span>COMANDO PRIVADO</span>
+          <code>${escapeHtml(account.command)}</code>
+          <button data-auth-action="copy-command" data-id="${escapeHtml(account.id)}" type="button" aria-label="Copiar comando ${escapeHtml(account.command)}">Copiar</button>
         </div>
         <div class="authenticator-code-panel">
           <div class="authenticator-code-label">
@@ -553,6 +568,11 @@ function openAuthenticatorDialog(account = null) {
   $("#authenticatorName").value = account?.name || "";
   $("#authenticatorService").value = account?.service || "";
   $("#authenticatorEmail").value = account?.email || "";
+  const commandInput = $("#authenticatorCommand");
+  commandInput.value =
+    account?.command ||
+    deriveAuthenticatorCommand(account?.name || "");
+  commandInput.dataset.manual = account ? "true" : "false";
   secretInput.value = "";
   secretInput.type = "password";
   secretInput.required = !account;
@@ -577,7 +597,8 @@ async function saveAuthenticator(event) {
   const payload = {
     name: $("#authenticatorName").value,
     service: $("#authenticatorService").value,
-    email: $("#authenticatorEmail").value
+    email: $("#authenticatorEmail").value,
+    command: $("#authenticatorCommand").value
   };
   const secret = $("#authenticatorSecret").value.trim();
   if (secret) payload.secret = secret;
@@ -960,6 +981,21 @@ function bindEvents() {
   });
   $("#authenticatorSearch").addEventListener("input", renderAuthenticator);
   $("#authenticatorForm").addEventListener("submit", saveAuthenticator);
+  $("#authenticatorName").addEventListener("input", () => {
+    const commandInput = $("#authenticatorCommand");
+    if (
+      $("#authenticatorId").value ||
+      commandInput.dataset.manual === "true"
+    ) {
+      return;
+    }
+    commandInput.value = deriveAuthenticatorCommand(
+      $("#authenticatorName").value
+    );
+  });
+  $("#authenticatorCommand").addEventListener("input", () => {
+    $("#authenticatorCommand").dataset.manual = "true";
+  });
   $$(".authenticator-close").forEach((button) =>
     button.addEventListener("click", () => $("#authenticatorDialog").close())
   );
@@ -985,6 +1021,16 @@ function bindEvents() {
       try {
         await copyTextToClipboard(account.code);
         showToast(`Código de ${account.service} copiado.`);
+      } catch (error) {
+        showToast(error.message, true);
+      }
+      return;
+    }
+
+    if (button.dataset.authAction === "copy-command") {
+      try {
+        await copyTextToClipboard(account.command);
+        showToast(`Comando ${account.command} copiado.`);
       } catch (error) {
         showToast(error.message, true);
       }

@@ -4,6 +4,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { createInitialData, defaultSettings } = require("./defaults");
+const { commandDefinitions } = require("./command-registry");
+const {
+  deriveAuthenticatorCommand,
+  normalizeAuthenticatorCommand
+} = require("./authenticator-service");
 const {
   addDays,
   calculateRenewal,
@@ -12,6 +17,43 @@ const {
 } = require("./date-utils");
 
 const MAX_PURCHASES_PER_PHONE = 2;
+const RESERVED_REGISTRATION_COMMANDS = new Set(
+  commandDefinitions.map(({ command }) => command)
+);
+
+function uniqueAuthenticatorCommand(baseCommand, usedCommands) {
+  if (!usedCommands.has(baseCommand)) return baseCommand;
+  const body = baseCommand.slice(1);
+  for (let suffix = 2; suffix < 10000; suffix += 1) {
+    const suffixText = String(suffix);
+    const candidate = `/${body.slice(0, 32 - suffixText.length)}${suffixText}`;
+    if (!usedCommands.has(candidate)) return candidate;
+  }
+  throw new Error("No se pudo crear un comando 2FA único.");
+}
+
+function migrateAuthenticatorCommands(accounts) {
+  const usedCommands = new Set(RESERVED_REGISTRATION_COMMANDS);
+  let changed = false;
+  const migratedAccounts = accounts.map((account, index) => {
+    let desiredCommand;
+    try {
+      desiredCommand = normalizeAuthenticatorCommand(account.command);
+    } catch {
+      desiredCommand = deriveAuthenticatorCommand(
+        account.name || account.service || `cuenta2fa${index + 1}`
+      );
+    }
+    const command = uniqueAuthenticatorCommand(
+      desiredCommand,
+      usedCommands
+    );
+    usedCommands.add(command);
+    if (account.command !== command) changed = true;
+    return { ...account, command };
+  });
+  return { accounts: migratedAccounts, changed };
+}
 
 function normalizeWhatsAppDigits(value) {
   const localPart = String(value || "")
@@ -98,12 +140,36 @@ class JsonStore {
     }
     const initial = createInitialData();
     const isPreTrainingVersion = Number(parsed.version || 0) < 4.3;
-    const isUpgrade = Number(parsed.version || 0) < initial.version;
+    const isVersionUpgrade = Number(parsed.version || 0) < initial.version;
     const migratedAt = new Date().toISOString();
     const previousConversations =
       parsed.conversations && typeof parsed.conversations === "object"
         ? parsed.conversations
         : {};
+    const normalizedAuthenticatorAccounts = Array.isArray(
+      parsed.authenticatorAccounts
+    )
+      ? parsed.authenticatorAccounts
+          .filter(
+            (account) =>
+              account &&
+              typeof account === "object" &&
+              !Array.isArray(account)
+          )
+          .map((account) => ({
+            ...account,
+            name: String(account.name || "").trim(),
+            service: String(account.service || "").trim(),
+            email: String(account.email || "").trim(),
+            encryptedSecret: String(account.encryptedSecret || ""),
+            algorithm: String(account.algorithm || "SHA1").toUpperCase(),
+            digits: Number(account.digits) || 6,
+            period: Number(account.period) || 30
+          }))
+      : [];
+    const authenticatorMigration = migrateAuthenticatorCommands(
+      normalizedAuthenticatorAccounts
+    );
     const migrated = {
       ...initial,
       ...parsed,
@@ -140,25 +206,7 @@ class JsonStore {
                 : null
           }))
         : [],
-      authenticatorAccounts: Array.isArray(parsed.authenticatorAccounts)
-        ? parsed.authenticatorAccounts
-            .filter(
-              (account) =>
-                account &&
-                typeof account === "object" &&
-                !Array.isArray(account)
-            )
-            .map((account) => ({
-              ...account,
-              name: String(account.name || "").trim(),
-              service: String(account.service || "").trim(),
-              email: String(account.email || "").trim(),
-              encryptedSecret: String(account.encryptedSecret || ""),
-              algorithm: String(account.algorithm || "SHA1").toUpperCase(),
-              digits: Number(account.digits) || 6,
-              period: Number(account.period) || 30
-            }))
-        : [],
+      authenticatorAccounts: authenticatorMigration.accounts,
       processedCommandIds: Array.isArray(parsed.processedCommandIds)
         ? parsed.processedCommandIds.slice(0, 500).map(String)
         : [],
@@ -168,7 +216,7 @@ class JsonStore {
           const conversation = value && typeof value === "object" ? value : {};
           return [
             chatId,
-            isUpgrade && !conversation.welcomeSequenceSentAt
+            isVersionUpgrade && !conversation.welcomeSequenceSentAt
               ? {
                   ...conversation,
                   welcomeMessagesSent: 3,
@@ -192,7 +240,10 @@ class JsonStore {
     if (migrated.settings.afkEnabled && !migrated.settings.afkSessionId) {
       migrated.settings.afkSessionId = crypto.randomUUID();
     }
-    return { data: migrated, isUpgrade };
+    return {
+      data: migrated,
+      isUpgrade: isVersionUpgrade || authenticatorMigration.changed
+    };
   }
 
   #write(data, { backupCurrent = true } = {}) {
@@ -428,6 +479,42 @@ class JsonStore {
     return account ? structuredClone(account) : null;
   }
 
+  findAuthenticatorAccountByCommand(value) {
+    let command;
+    try {
+      command = normalizeAuthenticatorCommand(value);
+    } catch {
+      return null;
+    }
+    const account = (this.data.authenticatorAccounts || []).find(
+      (item) => item.command === command
+    );
+    return account ? structuredClone(account) : null;
+  }
+
+  isCommandMessageProcessed(value) {
+    const commandMessageId = String(value || "");
+    return Boolean(
+      commandMessageId &&
+      (this.data.processedCommandIds || []).includes(commandMessageId)
+    );
+  }
+
+  markCommandMessageProcessed(value) {
+    const commandMessageId = String(value || "");
+    if (!commandMessageId) return false;
+    this.data.processedCommandIds ||= [];
+    if (this.data.processedCommandIds.includes(commandMessageId)) {
+      return false;
+    }
+    this.data.processedCommandIds.unshift(commandMessageId);
+    this.data.processedCommandIds = [
+      ...new Set(this.data.processedCommandIds)
+    ].slice(0, 500);
+    this.save();
+    return true;
+  }
+
   createAuthenticatorAccount(input) {
     this.data.authenticatorAccounts ||= [];
     const now = new Date().toISOString();
@@ -437,6 +524,7 @@ class JsonStore {
       createdAt: now,
       updatedAt: now
     });
+    this.#assertAuthenticatorCommandAvailable(account.command);
     this.data.authenticatorAccounts.push(account);
     this.addLog(
       "authenticator",
@@ -464,6 +552,7 @@ class JsonStore {
       createdAt: current.createdAt,
       updatedAt: new Date().toISOString()
     });
+    this.#assertAuthenticatorCommandAvailable(updated.command, id);
     this.data.authenticatorAccounts[index] = updated;
     this.addLog(
       "authenticator",
@@ -497,6 +586,9 @@ class JsonStore {
     const service = String(input.service || "").trim();
     const email = String(input.email || "").trim();
     const encryptedSecret = String(input.encryptedSecret || "");
+    const command = normalizeAuthenticatorCommand(
+      input.command || deriveAuthenticatorCommand(name)
+    );
     const algorithm = String(input.algorithm || "SHA1").toUpperCase();
     const digits = Number(input.digits || 6);
     const period = Number(input.period || 30);
@@ -520,6 +612,7 @@ class JsonStore {
       name: name.slice(0, 120),
       service: service.slice(0, 120),
       email: email.slice(0, 240),
+      command,
       encryptedSecret,
       algorithm,
       digits,
@@ -527,6 +620,24 @@ class JsonStore {
       createdAt: input.createdAt || new Date().toISOString(),
       updatedAt: input.updatedAt || new Date().toISOString()
     };
+  }
+
+  #assertAuthenticatorCommandAvailable(command, exceptId = null) {
+    if (RESERVED_REGISTRATION_COMMANDS.has(command)) {
+      throw new Error(
+        `El comando ${command} ya está reservado para registrar clientes. Elige otro, por ejemplo ${command}01.`
+      );
+    }
+    const duplicate = (this.data.authenticatorAccounts || []).find(
+      (account) =>
+        account.id !== exceptId &&
+        String(account.command || "").toLowerCase() === command
+    );
+    if (duplicate) {
+      throw new Error(
+        `El comando ${command} ya pertenece a la cuenta 2FA “${duplicate.name}”.`
+      );
+    }
   }
 
   listClients({ includeArchived = false } = {}) {

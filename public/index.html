@@ -17,7 +17,7 @@
         }
       })();
     </script>
-    <title>JadrixServs · Panel Profesional V4.9.0</title>
+    <title>JadrixServs · Panel Profesional V4.9.1</title>
     <link rel="icon" type="image/jpeg" href="/jadrixservs-logo.jpg">
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
@@ -61,7 +61,7 @@
               <div><strong>Atención automatizada</strong><small>Bienvenidas, AFK y cobranzas programadas.</small></div>
             </article>
           </div>
-          <p class="showcase-footnote"><span>●</span> Panel privado · V4.9.0 Profesional</p>
+          <p class="showcase-footnote"><span>●</span> Panel privado · V4.9.1 Profesional</p>
         </section>
 
         <section class="login-card">
@@ -109,7 +109,7 @@
           </span>
           <div>
             <strong>JadrixServs</strong>
-            <span>Panel Profesional V4.9.0</span>
+            <span>Panel Profesional V4.9.1</span>
           </div>
         </div>
         <nav aria-label="Secciones del panel">
@@ -478,7 +478,7 @@
             <div>
               <p class="eyebrow">SEGURIDAD 2FA</p>
               <h2>Autenticador</h2>
-              <p class="muted">Guarda tus cuentas y genera sus códigos temporales desde el panel privado.</p>
+              <p class="muted">Guarda tus cuentas, genera sus códigos temporales y envíalos con un comando privado desde WhatsApp.</p>
             </div>
             <div class="button-row">
               <button id="refreshAuthenticatorButton" class="button secondary" type="button">Actualizar códigos</button>
@@ -493,25 +493,25 @@
             </div>
             <div class="authenticator-hero-copy">
               <span id="authenticatorSecurityPill" class="pill green">Cifrado activo</span>
-              <h3>Claves protegidas, códigos siempre disponibles.</h3>
-              <p>Las claves secretas se cifran antes de guardarse en <code>/data</code>. Después de registrar una cuenta, el panel solo muestra el código temporal y nunca vuelve a revelar la clave original.</p>
+              <h3>Claves protegidas y códigos listos para WhatsApp.</h3>
+              <p>Las claves secretas se cifran antes de guardarse en <code>/data</code>. Cada cuenta tiene un comando único; si el código tiene menos de 20 segundos, el bot espera el siguiente y lo envía con una vigencia segura.</p>
             </div>
             <div class="authenticator-security-points">
               <span><i></i>Cifrado AES-256-GCM</span>
               <span><i></i>Códigos TOTP locales</span>
-              <span><i></i>Sin servicios externos</span>
+              <span><i></i>Ventana segura de 20–30 s</span>
             </div>
           </article>
 
           <div class="notice authenticator-warning">
-            <strong>Información sensible:</strong> usa esta sección únicamente desde tu panel de administrador y con HTTPS. No compartas las claves secretas ni los códigos temporales.
+            <strong>Comandos protegidos:</strong> solo funcionan cuando tú los escribes desde el WhatsApp propietario en el chat del cliente. Si un cliente escribe el comando, el bot nunca le entrega el código 2FA.
           </div>
           <div id="authenticatorKeyNotice" class="notice hidden"></div>
 
           <article class="panel authenticator-toolbar">
             <div>
               <label for="authenticatorSearch">Buscar cuenta</label>
-              <input id="authenticatorSearch" type="search" autocomplete="off" placeholder="Nombre, servicio o correo…">
+              <input id="authenticatorSearch" type="search" autocomplete="off" placeholder="Nombre, servicio, correo o comando…">
             </div>
             <span id="authenticatorCount" class="pill blue">0 cuentas</span>
           </article>
@@ -644,6 +644,11 @@
             <input id="authenticatorEmail" type="text" maxlength="240" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="cuenta@correo.com" required>
           </label>
           <label class="span-2">
+            Comando privado de WhatsApp
+            <input id="authenticatorCommand" class="authenticator-command-input" type="text" maxlength="33" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="/gpt01" pattern="/[A-Za-z0-9][A-Za-z0-9_-]{1,31}" required>
+            <small>Ejemplo: escribe <code>/gpt01</code> desde tu propio WhatsApp en el chat del cliente. Cada cuenta debe usar un comando diferente.</small>
+          </label>
+          <label class="span-2">
             Clave secreta 2FA
             <span class="secret-input-shell">
               <input id="authenticatorSecret" type="password" maxlength="4096" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="Pega la clave Base32 o el enlace otpauth://">
@@ -653,7 +658,7 @@
           </label>
         </div>
         <div class="notice authenticator-dialog-notice">
-          La clave se cifra al guardar. Por seguridad, no podrá consultarse nuevamente desde el panel; para cambiarla deberás pegar una nueva.
+          La clave se cifra al guardar y no podrá consultarse nuevamente. El bot nunca guarda el código temporal en los registros y solo lo envía si quedan entre 20 y 30 segundos.
         </div>
         <div class="dialog-actions">
           <button class="button secondary authenticator-close" type="button">Cancelar</button>
