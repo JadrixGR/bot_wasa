@@ -24,10 +24,10 @@ function fillTemplate(template, client) {
   );
 }
 
-function reminderActionFor(client, today, { chargeAllowed = true } = {}) {
+function reminderActionFor(client, today, { chargeAllowed = true, reminderAllowed = true } = {}) {
   if (client.archived || client.status !== "activo" || !client.expiryDate) return null;
   const remaining = daysBetween(today, client.expiryDate);
-  if (client.autoReminder && remaining === 2) {
+  if (reminderAllowed && client.autoReminder && remaining === 2) {
     const key = `${client.expiryDate}:reminder:2`;
     if (client.lastReminderKey !== key) {
       return { type: "reminder", key, remaining };
@@ -42,6 +42,10 @@ function reminderActionFor(client, today, { chargeAllowed = true } = {}) {
 
 function isChargeWindowOpen(startTime, currentMinutes) {
   return Number(currentMinutes) >= timeToMinutes(startTime || "09:00");
+}
+
+function isSendWindowOpen(startTime, currentMinutes) {
+  return isChargeWindowOpen(startTime, currentMinutes);
 }
 
 class ReminderScheduler {
@@ -97,11 +101,16 @@ class ReminderScheduler {
       settings.chargeStartTime || "09:00",
       currentMinutes
     );
+    const reminderWindowOpen = isSendWindowOpen(
+      settings.reminderStartTime || settings.chargeStartTime || "09:00",
+      currentMinutes
+    );
 
     try {
       for (const client of this.store.listClients()) {
         const action = reminderActionFor(client, today, {
-          chargeAllowed: chargeWindowOpen
+          chargeAllowed: chargeWindowOpen,
+          reminderAllowed: reminderWindowOpen
         });
         if (!action) continue;
         try {
@@ -127,7 +136,7 @@ class ReminderScheduler {
     } finally {
       this.running = false;
     }
-    return { sent, errors, skipped: false, chargeWindowOpen };
+    return { sent, errors, skipped: false, chargeWindowOpen, reminderWindowOpen };
   }
 }
 
@@ -135,5 +144,6 @@ module.exports = {
   ReminderScheduler,
   reminderActionFor,
   fillTemplate,
-  isChargeWindowOpen
+  isChargeWindowOpen,
+  isSendWindowOpen
 };

@@ -381,6 +381,7 @@ const defaultSettings = {
   chargeTemplate:
     "Hola {nombre} 👋 Hoy vence tu servicio *{producto}*. El monto de renovación es *{precio}*. Escríbenos para mantener el servicio activo.",
   chargeStartTime: "09:00",
+  reminderStartTime: "09:00",
   afkEnabled: false,
   afkMessage:
     "👋 Gracias por escribir a JadrixServs. En este momento estamos fuera del horario de atención. Apenas volvamos, revisaremos tu mensaje y te responderemos por este chat.",

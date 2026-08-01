@@ -1,0 +1,26 @@
+JadrixServs - Ajuste de horario de envíos (9:00 a.m.)
+=====================================================
+
+QUÉ CAMBIÓ
+- Antes: la cobranza sí respetaba la hora mínima (09:00), pero los RECORDATORIOS
+  se enviaban en la primera corrida del programador después de medianoche (00:00).
+- Ahora: los recordatorios también respetan una hora mínima. Por defecto 09:00
+  (zona horaria America/Lima), igual que las cobranzas.
+- En Ajustes hay un nuevo campo: "Hora mínima para enviar recordatorios".
+  Si tu archivo de datos ya existía, ese valor se completa automáticamente con la
+  hora de cobranza que ya tenías (09:00), sin borrar nada.
+
+CÓMO SE COMPORTA
+- El programador revisa cada 15 minutos, así que el envío real ocurre entre las
+  9:00 y 9:15 del día pactado.
+- Si el bot estuvo desconectado a esa hora, envía apenas se reconecte ese mismo
+  día, sin duplicar mensajes.
+
+SUBIR A RENDER (sin perder datos)
+1. Sube/reemplaza los archivos del proyecto en tu repositorio (o vuelve a subir el ZIP).
+   Archivos modificados: src/scheduler.js, src/store.js, src/defaults.js,
+   public/index.html, public/app.js, test/scheduler.test.js
+2. Haz commit y push -> Render despliega automáticamente.
+3. NO toques el disco persistente (jadrixservs-data / ruta /data). La migración es
+   aditiva: solo agrega el campo reminderStartTime a los ajustes existentes.
+4. Al abrir el panel, ve a Ajustes y confirma que ambas horas digan 09:00.

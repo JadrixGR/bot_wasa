@@ -360,6 +360,10 @@ class JsonStore {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(migrated.settings.chargeStartTime || ""))) {
       migrated.settings.chargeStartTime = defaultSettings.chargeStartTime;
     }
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(migrated.settings.reminderStartTime || ""))) {
+      migrated.settings.reminderStartTime =
+        migrated.settings.chargeStartTime || defaultSettings.reminderStartTime;
+    }
     if (migrated.settings.afkEnabled && !migrated.settings.afkSessionId) {
       migrated.settings.afkSessionId = crypto.randomUUID();
     }
@@ -461,6 +465,7 @@ class JsonStore {
       "reminderTemplate",
       "chargeTemplate",
       "chargeStartTime",
+      "reminderStartTime",
       "afkEnabled",
       "afkMessage",
       "greetingMessages"
@@ -488,12 +493,12 @@ class JsonStore {
         continue;
       }
 
-      if (key === "chargeStartTime") {
+      if (key === "chargeStartTime" || key === "reminderStartTime") {
         const value = String(patch[key] || "").trim();
         if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
-          throw new Error("La hora de cobranza debe tener el formato HH:MM.");
+          throw new Error("La hora de envío debe tener el formato HH:MM.");
         }
-        this.data.settings.chargeStartTime = value;
+        this.data.settings[key] = value;
         continue;
       }
 

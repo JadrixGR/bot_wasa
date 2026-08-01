@@ -128,7 +128,7 @@ test("el programador envía solo el recordatorio y la cobranza que corresponden"
 });
 
 
-test("no envía cobranzas antes de las 9 AM, pero sí permite recordatorios", async () => {
+test("no envía cobranzas ni recordatorios antes de las 9 AM", async () => {
   const clients = [
     {
       ...baseClient,
@@ -169,6 +169,41 @@ test("no envía cobranzas antes de las 9 AM, pero sí permite recordatorios", as
   const result = await scheduler.runOnce();
 
   assert.equal(result.chargeWindowOpen, false);
+  assert.equal(result.reminderWindowOpen, false);
+  assert.equal(result.sent, 0);
+  assert.equal(sent.length, 0);
+});
+
+test("envía recordatorios y cobranzas desde la hora configurada", async () => {
+  const clients = [
+    { ...baseClient, id: "recordatorio-9am", whatsapp: "51911111111" }
+  ];
+  const sent = [];
+  const store = {
+    listClients: () => clients.map((client) => ({ ...client })),
+    getSettings: () => ({
+      reminderTemplate: "Aviso {nombre}",
+      chargeTemplate: "Cobro {nombre}",
+      chargeStartTime: "09:00",
+      reminderStartTime: "09:00"
+    }),
+    updateClient: () => undefined,
+    addLog: () => undefined,
+    save: () => undefined
+  };
+  const whatsapp = {
+    getStatus: () => ({ ready: true }),
+    sendText: async (number, message) => sent.push({ number, message })
+  };
+  const scheduler = new ReminderScheduler({
+    store,
+    whatsapp,
+    todayFn: () => "2026-07-24",
+    minutesFn: () => 9 * 60
+  });
+
+  const result = await scheduler.runOnce();
+  assert.equal(result.reminderWindowOpen, true);
   assert.equal(result.sent, 1);
   assert.equal(sent[0].number, "51911111111");
 });

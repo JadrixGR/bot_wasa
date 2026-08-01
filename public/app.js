@@ -1048,6 +1048,10 @@ async function loadSettings() {
   $("#reminderTemplate").value = payload.settings.reminderTemplate || "";
   $("#chargeTemplate").value = payload.settings.chargeTemplate || "";
   $("#chargeStartTime").value = payload.settings.chargeStartTime || "09:00";
+  if ($("#reminderStartTime")) {
+    $("#reminderStartTime").value =
+      payload.settings.reminderStartTime || payload.settings.chargeStartTime || "09:00";
+  }
   $("#afkEnabled").checked = Boolean(payload.settings.afkEnabled);
   $("#afkMessage").value = payload.settings.afkMessage || "";
   renderAfkStatus(payload.settings);
@@ -1064,7 +1068,10 @@ async function saveSettings() {
         greetingMessages: [$("#greeting1").value, $("#greeting2").value, $("#greeting3").value],
         reminderTemplate: $("#reminderTemplate").value,
         chargeTemplate: $("#chargeTemplate").value,
-        chargeStartTime: $("#chargeStartTime").value
+        chargeStartTime: $("#chargeStartTime").value,
+        reminderStartTime: $("#reminderStartTime")
+          ? $("#reminderStartTime").value
+          : $("#chargeStartTime").value
       }
     });
     state.settings = payload.settings;
