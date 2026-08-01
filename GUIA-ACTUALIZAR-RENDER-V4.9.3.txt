@@ -1,0 +1,35 @@
+GUIA RAPIDA — ACTUALIZAR A V4.9.3 EN RENDER (SIN PERDER DATA)
+=============================================================
+Esta actualizacion es SOLO VISUAL (interfaz). No toca la base de datos
+ni la sesion de WhatsApp guardadas en el disco persistente /data.
+
+PASOS
+1) Descarga y descomprime este ZIP en tu PC.
+2) Sube los archivos a tu repositorio de GitHub (el mismo que usa Render),
+   reemplazando los existentes. Solo cambian:
+      public/index.html
+      public/styles.css
+      public/app.js
+      package.json (version 4.9.3)
+3) Haz commit y push. Render hara el deploy automatico.
+   Si no tienes auto-deploy: entra a Render > tu servicio > Manual Deploy >
+   "Deploy latest commit".
+4) IMPORTANTE: NO borres el servicio ni el disco. En Render > Disks debe
+   seguir montado en /data. Asi conservas clientes, cobros y la sesion.
+5) Al abrir el panel, presiona Ctrl + F5 (o Cmd + Shift + R) para limpiar
+   el cache y ver el nuevo diseno.
+
+QUE CAMBIO
+- Login nuevo a pantalla completa con panel de marca animado, insignias de
+  seguridad y boton para mostrar/ocultar la contrasena.
+- Logo oficial de WhatsApp con pulso verde en "Conectado a WhatsApp"
+  (en Resumen y en la seccion WhatsApp).
+- Barra lateral tipo SaaS con grupos (Operacion / Automatizacion / Seguridad)
+  e indicador deslizante en la opcion activa.
+- Botones con degradado, brillo al pasar el mouse y transiciones suaves.
+- Tarjetas KPI, paneles con vidrio esmerilado y animacion de entrada.
+- Modo dia/noche ajustado para buen contraste en ambos temas.
+- Diseno responsive verificado en escritorio y celular.
+
+NADA de la logica cambio: comandos, cobros 9:00 AM, catalogo, accesos 2FA
+y respaldos funcionan igual que antes.

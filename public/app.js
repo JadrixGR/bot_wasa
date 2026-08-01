@@ -1556,3 +1556,28 @@ async function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+
+/* V4.9.3 — mejoras visuales (sin lógica de negocio) */
+(() => {
+  const toggle = document.getElementById("togglePassword");
+  const field = document.getElementById("loginPassword");
+  if (toggle && field) {
+    toggle.addEventListener("click", () => {
+      const show = field.type === "password";
+      field.type = show ? "text" : "password";
+      toggle.textContent = show ? "Ocultar" : "Mostrar";
+      toggle.setAttribute("aria-pressed", String(show));
+      toggle.setAttribute("aria-label", show ? "Ocultar contraseña" : "Mostrar contraseña");
+      field.focus();
+    });
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const sidebar = document.querySelector(".sidebar");
+    if (sidebar && sidebar.classList.contains("open")) {
+      sidebar.classList.remove("open");
+      document.getElementById("sidebarBackdrop")?.classList.remove("visible");
+      document.getElementById("mobileMenu")?.setAttribute("aria-expanded", "false");
+    }
+  });
+})();

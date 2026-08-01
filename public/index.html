@@ -4,8 +4,11 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta id="themeColorMeta" name="theme-color" content="#07080f">
-    <title>JadrixServs · Panel Profesional V4.9.2</title>
+    <title>JadrixServs · Panel Profesional V4.9.3</title>
     <link rel="icon" type="image/jpeg" href="/jadrixservs-logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
   </head>
@@ -48,7 +51,7 @@
               <div><strong>Atención automatizada</strong><small>Bienvenidas, AFK y cobranzas programadas.</small></div>
             </article>
           </div>
-          <p class="showcase-footnote"><span>●</span> Panel privado · V4.9.2 Profesional</p>
+          <p class="showcase-footnote"><span>●</span> Panel privado · V4.9.3 Profesional</p>
         </section>
 
         <section class="login-card">
@@ -67,12 +70,18 @@
             <h1>Bienvenido de nuevo</h1>
             <p class="muted">Ingresa a tu centro de control para administrar toda la operación.</p>
           </div>
+          <div class="login-badges">
+            <span><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16.1 3C9 3 3.2 8.8 3.2 15.9c0 2.3.6 4.5 1.8 6.4L3 29l6.9-1.8c1.9 1 4 1.6 6.2 1.6 7.1 0 12.9-5.8 12.9-12.9S23.2 3 16.1 3Zm0 23.3c-2 0-3.9-.5-5.6-1.5l-.4-.2-4.1 1.1 1.1-4-.3-.4a10.4 10.4 0 1 1 9.3 5Zm5.8-7.8c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2s-.8 1-1 1.2c-.2.2-.4.2-.7.1-1.9-.9-3.1-1.6-4.4-3.7-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.6s-.7-1.7-1-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.4-1.2 1.2-1.2 2.8s1.2 3.3 1.4 3.5c.2.2 2.4 3.7 5.8 5.1 2.2.9 3 1 4.1.8.7-.1 1.9-.8 2.2-1.5.3-.8.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4Z"/></svg> WhatsApp Business API</span>
+            <span>Datos en disco persistente</span>
+            <span>Sesión cifrada</span>
+          </div>
           <form id="loginForm" class="stack">
             <label>
               Contraseña de administrador
               <span class="field-shell">
                 <span class="field-leading" aria-hidden="true">••</span>
                 <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Ingresa tu contraseña" required>
+                <button id="togglePassword" class="password-toggle" type="button" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button>
               </span>
             </label>
             <button class="button primary wide login-submit" type="submit">
@@ -96,7 +105,7 @@
           </span>
           <div>
             <strong>JadrixServs</strong>
-            <span>Panel Profesional V4.9.2</span>
+            <span>Panel Profesional V4.9.3</span>
           </div>
         </div>
         <nav aria-label="Secciones del panel">
@@ -239,6 +248,7 @@
                 </div>
                 <span id="dashboardWaPill" class="pill neutral">Cargando</span>
               </div>
+              <div class="wa-brand"><span class="wa-logo-ring"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16.1 3C9 3 3.2 8.8 3.2 15.9c0 2.3.6 4.5 1.8 6.4L3 29l6.9-1.8c1.9 1 4 1.6 6.2 1.6 7.1 0 12.9-5.8 12.9-12.9S23.2 3 16.1 3Zm0 23.3c-2 0-3.9-.5-5.6-1.5l-.4-.2-4.1 1.1 1.1-4-.3-.4a10.4 10.4 0 1 1 9.3 5Zm5.8-7.8c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2s-.8 1-1 1.2c-.2.2-.4.2-.7.1-1.9-.9-3.1-1.6-4.4-3.7-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.6s-.7-1.7-1-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.4-1.2 1.2-1.2 2.8s1.2 3.3 1.4 3.5c.2.2 2.4 3.7 5.8 5.1 2.2.9 3 1 4.1.8.7-.1 1.9-.8 2.2-1.5.3-.8.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4Z"/></svg></span><span class="wa-brand-copy"><strong>Conectado a WhatsApp</strong><small>Sesión del bot JadrixServs</small></span></div>
               <div id="dashboardWaBody" class="empty-state compact">Consultando conexión…</div>
             </article>
             <article class="panel dashboard-panel activity-summary-panel">
@@ -273,6 +283,7 @@
               <p>Iniciando conexión segura…</p>
             </div>
             <div class="wa-copy">
+              <div class="wa-brand"><span class="wa-logo-ring"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16.1 3C9 3 3.2 8.8 3.2 15.9c0 2.3.6 4.5 1.8 6.4L3 29l6.9-1.8c1.9 1 4 1.6 6.2 1.6 7.1 0 12.9-5.8 12.9-12.9S23.2 3 16.1 3Zm0 23.3c-2 0-3.9-.5-5.6-1.5l-.4-.2-4.1 1.1 1.1-4-.3-.4a10.4 10.4 0 1 1 9.3 5Zm5.8-7.8c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2s-.8 1-1 1.2c-.2.2-.4.2-.7.1-1.9-.9-3.1-1.6-4.4-3.7-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.6s-.7-1.7-1-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.4-1.2 1.2-1.2 2.8s1.2 3.3 1.4 3.5c.2.2 2.4 3.7 5.8 5.1 2.2.9 3 1 4.1.8.7-.1 1.9-.8 2.2-1.5.3-.8.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4Z"/></svg></span><span class="wa-brand-copy"><strong>Conectado a WhatsApp</strong><small>Vinculación oficial por dispositivo</small></span></div>
               <span id="waPill" class="pill neutral">Iniciando</span>
               <h3 id="waTitle">Preparando WhatsApp</h3>
               <p id="waDescription" class="muted">El código QR aparecerá aquí.</p>
