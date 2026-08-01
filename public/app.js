@@ -9,6 +9,9 @@ const state = {
   plans: [],
   lookupClients: [],
   authenticatorAccounts: [],
+  catalog: [],
+  accessEntries: [],
+  accessAccountId: null,
   authenticatorSecurity: null,
   activeSection: "dashboard",
   poller: null,
@@ -26,8 +29,8 @@ function preferredTheme() {
   } catch {
     // El panel continúa aunque el navegador bloquee el almacenamiento local.
   }
-  if (document.documentElement.dataset.theme === "dark") return "dark";
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  if (document.documentElement.dataset.theme === "light") return "light";
+  return "dark";
 }
 
 function applyTheme(theme, persist = false) {
@@ -37,7 +40,7 @@ function applyTheme(theme, persist = false) {
   document.documentElement.style.colorScheme = nextTheme;
 
   const themeMeta = $("#themeColorMeta");
-  if (themeMeta) themeMeta.setAttribute("content", isDark ? "#090e1a" : "#f3f6fc");
+  if (themeMeta) themeMeta.setAttribute("content", isDark ? "#07080f" : "#f3f6fc");
 
   $$('[data-theme-toggle]').forEach((button) => {
     button.setAttribute("aria-pressed", String(isDark));
@@ -162,6 +165,7 @@ function navigate(section) {
     lookup: "Buscar celular",
     messages: "Mensajes automáticos",
     afk: "Modo AFK",
+    catalog: "Catálogo y comandos",
     authenticator: "Autenticador",
     activity: "Actividad"
   };
@@ -172,6 +176,9 @@ function navigate(section) {
     behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
   });
   if (section === "clients") loadClients();
+  if (section === "catalog") {
+    loadCatalog().catch((error) => showToast(error.message, true));
+  }
   if (section === "activity") loadLogs();
   if (section === "messages" || section === "afk") loadSettings();
   if (section === "authenticator") {
@@ -486,6 +493,7 @@ function renderAuthenticator() {
         <div class="authenticator-card-footer">
           <span>${escapeHtml(account.algorithm)} · ${escapeHtml(account.digits)} dígitos · ${escapeHtml(account.period)} s</span>
           <div>
+            <button data-auth-action="access" data-id="${escapeHtml(account.id)}" type="button">Accesos</button>
             <button data-auth-action="edit" data-id="${escapeHtml(account.id)}" type="button">Editar</button>
             <button class="danger" data-auth-action="delete" data-id="${escapeHtml(account.id)}" type="button">Eliminar</button>
           </div>
@@ -618,6 +626,228 @@ async function saveAuthenticator(event) {
   } finally {
     button.disabled = false;
     button.textContent = "Guardar cuenta";
+  }
+}
+
+// ─── Catálogo y comandos ───────────────────────────────────────────────
+function normalizeCommandInput(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  const body = raw.startsWith("/") ? raw.slice(1) : raw;
+  const clean = body
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+  return clean ? `/${clean.slice(0, 32)}` : "";
+}
+
+function renderCatalog() {
+  const search = $("#catalogSearch").value.trim().toLowerCase();
+  const items = state.catalog.filter((item) =>
+    `${item.name} ${item.command} ${item.price} ${item.period}`
+      .toLowerCase()
+      .includes(search)
+  );
+  const total = state.catalog.length;
+  $("#catalogCount").textContent = `${total} producto${total === 1 ? "" : "s"}`;
+  $("#catalogEmpty").classList.toggle("hidden", total > 0);
+
+  const grid = $("#catalogGrid");
+  if (total > 0 && items.length === 0) {
+    grid.innerHTML = `
+      <article class="panel empty-state">
+        <strong>No hay coincidencias.</strong>
+        <span>Prueba con otro nombre o comando.</span>
+      </article>`;
+    return;
+  }
+
+  grid.innerHTML = items
+    .map(
+      (item) => `
+      <article class="catalog-card ${item.commandEnabled === false ? "is-disabled" : ""}">
+        <div class="catalog-card-heading">
+          <div>
+            <span class="pill ${item.itemType === "plan" ? "violet" : "blue"}">${item.itemType === "plan" ? "Plan" : "Producto"}</span>
+            <h3>${escapeHtml(item.name)}</h3>
+            <p>${escapeHtml(item.period || "Sin vigencia definida")}</p>
+          </div>
+          <strong class="catalog-price">${escapeHtml(item.price || "—")}</strong>
+        </div>
+        <div class="authenticator-command-row">
+          <span>COMANDO</span>
+          <code>${escapeHtml(item.command)}</code>
+          <button data-catalog-action="copy" data-id="${escapeHtml(item.id)}" type="button">Copiar</button>
+        </div>
+        ${item.details ? `<p class="catalog-details">${escapeHtml(item.details)}</p>` : ""}
+        ${Array.isArray(item.includes) && item.includes.length
+          ? `<ul class="catalog-includes">${item.includes.map((entry) => `<li>${escapeHtml(entry)}</li>`).join("")}</ul>`
+          : ""}
+        <div class="authenticator-card-footer">
+          <span>${item.commandEnabled === false ? "Comando desactivado" : "Comando activo"}</span>
+          <div>
+            <button data-catalog-action="edit" data-id="${escapeHtml(item.id)}" type="button">Editar</button>
+            <button class="danger" data-catalog-action="delete" data-id="${escapeHtml(item.id)}" type="button">Eliminar</button>
+          </div>
+        </div>
+      </article>`
+    )
+    .join("");
+}
+
+async function loadCatalog() {
+  const payload = await api("/api/catalog");
+  state.catalog = payload.items || [];
+  renderCatalog();
+}
+
+function openCatalogDialog(item = null) {
+  $("#catalogDialogTitle").textContent = item ? "Editar producto" : "Nuevo producto";
+  $("#catalogItemId").value = item?.id || "";
+  $("#catalogName").value = item?.name || "";
+  $("#catalogType").value = item?.itemType === "plan" ? "plan" : "product";
+  $("#catalogPrice").value = item?.price || "";
+  $("#catalogPeriod").value = item?.period || "1 mes";
+  const commandInput = $("#catalogCommand");
+  commandInput.value = item?.command || "";
+  commandInput.dataset.manual = item ? "true" : "false";
+  $("#catalogAliases").value = Array.isArray(item?.aliases) ? item.aliases.join(", ") : "";
+  $("#catalogDetails").value = item?.details || "";
+  $("#catalogIncludes").value = Array.isArray(item?.includes) ? item.includes.join(", ") : "";
+  $("#catalogEnabled").checked = item ? item.commandEnabled !== false : true;
+  $("#catalogDialog").showModal();
+}
+
+async function saveCatalogItem(event) {
+  event.preventDefault();
+  const id = $("#catalogItemId").value;
+  const button = $("#saveCatalogButton");
+  const splitList = (value) =>
+    String(value || "")
+      .split(/[,\n]/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  const payload = {
+    name: $("#catalogName").value,
+    itemType: $("#catalogType").value,
+    price: $("#catalogPrice").value,
+    period: $("#catalogPeriod").value,
+    command: normalizeCommandInput($("#catalogCommand").value),
+    aliases: splitList($("#catalogAliases").value),
+    details: $("#catalogDetails").value,
+    includes: splitList($("#catalogIncludes").value),
+    commandEnabled: $("#catalogEnabled").checked
+  };
+  if (!payload.command) {
+    showToast("Ingresa un comando válido, por ejemplo /claudepro.", true);
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Guardando…";
+  try {
+    await api(id ? `/api/catalog/${id}` : "/api/catalog", {
+      method: id ? "PUT" : "POST",
+      body: payload
+    });
+    $("#catalogDialog").close();
+    await loadCatalog();
+    await loadSettings().catch(() => undefined);
+    showToast(id ? "Producto actualizado." : "Producto agregado al catálogo.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Guardar producto";
+  }
+}
+
+// ─── Accesos 2FA de clientes ───────────────────────────────────────────
+function renderAccessList() {
+  const list = $("#accessList");
+  if (!state.accessEntries.length) {
+    list.innerHTML = `<p class="muted access-empty">Todavía no hay clientes autorizados en esta cuenta.</p>`;
+    return;
+  }
+  list.innerHTML = state.accessEntries
+    .map(
+      (entry) => `
+      <div class="access-row ${entry.active ? "" : "is-off"}">
+        <div>
+          <strong>${escapeHtml(entry.name || "Cliente")}</strong>
+          <span class="muted">+${escapeHtml(entry.whatsapp)}</span>
+          <span class="muted">${entry.dailyLimit ? `${escapeHtml(entry.dailyLimit)} códigos/día` : "Sin límite diario"}${entry.expiresAt ? ` · vence ${escapeHtml(entry.expiresAt)}` : ""}</span>
+        </div>
+        <div class="access-row-actions">
+          <span class="pill ${entry.active ? "green" : "red"}">${entry.active ? "Activo" : "Inactivo"}</span>
+          <button data-access-action="edit" data-id="${escapeHtml(entry.id)}" type="button">Editar</button>
+          <button class="danger" data-access-action="delete" data-id="${escapeHtml(entry.id)}" type="button">Quitar</button>
+        </div>
+      </div>`
+    )
+    .join("");
+}
+
+function resetAccessForm() {
+  $("#accessId").value = "";
+  $("#accessName").value = "";
+  $("#accessWhatsapp").value = "";
+  $("#accessExpiresAt").value = "";
+  $("#accessDailyLimit").value = "";
+  $("#accessNotes").value = "";
+  $("#accessActive").checked = true;
+  $("#saveAccessButton").textContent = "Autorizar cliente";
+  $("#accessCancelEditButton").classList.add("hidden");
+}
+
+async function loadAccess(accountId) {
+  const payload = await api(`/api/authenticator/access?accountId=${encodeURIComponent(accountId)}`);
+  state.accessEntries = payload.access || [];
+  renderAccessList();
+}
+
+async function openAccessDialog(account) {
+  state.accessAccountId = account.id;
+  $("#accessAccountId").value = account.id;
+  $("#accessDialogTitle").textContent = `Accesos · ${account.name}`;
+  $("#accessCommandHint").textContent = account.command;
+  resetAccessForm();
+  state.accessEntries = [];
+  renderAccessList();
+  $("#accessDialog").showModal();
+  try {
+    await loadAccess(account.id);
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function saveAccess(event) {
+  event.preventDefault();
+  const accountId = $("#accessAccountId").value;
+  const id = $("#accessId").value;
+  const button = $("#saveAccessButton");
+  const payload = {
+    name: $("#accessName").value,
+    whatsapp: $("#accessWhatsapp").value,
+    expiresAt: $("#accessExpiresAt").value || null,
+    dailyLimit: Number($("#accessDailyLimit").value) || 0,
+    active: $("#accessActive").checked,
+    notes: $("#accessNotes").value
+  };
+  button.disabled = true;
+  button.textContent = "Guardando…";
+  try {
+    await api(
+      id ? `/api/authenticator/access/${id}` : `/api/authenticator/${accountId}/access`,
+      { method: id ? "PUT" : "POST", body: payload }
+    );
+    resetAccessForm();
+    await loadAccess(accountId);
+    showToast(id ? "Acceso actualizado." : "Cliente autorizado para pedir el código 2FA.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = $("#accessId").value ? "Guardar cambios" : "Autorizar cliente";
   }
 }
 
@@ -1037,6 +1267,11 @@ function bindEvents() {
       return;
     }
 
+    if (button.dataset.authAction === "access") {
+      await openAccessDialog(account);
+      return;
+    }
+
     if (button.dataset.authAction === "edit") {
       openAuthenticatorDialog(account);
       return;
@@ -1204,6 +1439,96 @@ function bindEvents() {
     }
   });
   $("#refreshLogsButton").addEventListener("click", loadLogs);
+
+  $("#newCatalogButton").addEventListener("click", () => openCatalogDialog());
+  $$("[data-catalog-new]").forEach((button) =>
+    button.addEventListener("click", () => openCatalogDialog())
+  );
+  $("#refreshCatalogButton").addEventListener("click", async () => {
+    try {
+      await loadCatalog();
+      showToast("Catálogo actualizado.");
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
+  $("#catalogSearch").addEventListener("input", renderCatalog);
+  $("#catalogForm").addEventListener("submit", saveCatalogItem);
+  $("#catalogName").addEventListener("input", () => {
+    const commandInput = $("#catalogCommand");
+    if ($("#catalogItemId").value || commandInput.dataset.manual === "true") return;
+    commandInput.value = normalizeCommandInput($("#catalogName").value);
+  });
+  $("#catalogCommand").addEventListener("input", () => {
+    $("#catalogCommand").dataset.manual = "true";
+  });
+  $$(".catalog-close").forEach((button) =>
+    button.addEventListener("click", () => $("#catalogDialog").close())
+  );
+  $("#catalogGrid").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-catalog-action]");
+    if (!button) return;
+    const item = state.catalog.find((entry) => entry.id === button.dataset.id);
+    if (!item) return;
+    const action = button.dataset.catalogAction;
+    if (action === "copy") {
+      try {
+        await copyTextToClipboard(item.command);
+        showToast(`Comando ${item.command} copiado.`);
+      } catch (error) {
+        showToast(error.message, true);
+      }
+      return;
+    }
+    if (action === "edit") {
+      openCatalogDialog(item);
+      return;
+    }
+    if (action === "delete") {
+      if (!confirm(`¿Eliminar “${item.name}” del catálogo?`)) return;
+      try {
+        await api(`/api/catalog/${item.id}`, { method: "DELETE" });
+        await loadCatalog();
+        showToast("Producto eliminado.");
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    }
+  });
+
+  $("#accessForm").addEventListener("submit", saveAccess);
+  $$(".access-close").forEach((button) =>
+    button.addEventListener("click", () => $("#accessDialog").close())
+  );
+  $("#accessCancelEditButton").addEventListener("click", resetAccessForm);
+  $("#accessList").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-access-action]");
+    if (!button) return;
+    const entry = state.accessEntries.find((item) => item.id === button.dataset.id);
+    if (!entry) return;
+    if (button.dataset.accessAction === "edit") {
+      $("#accessId").value = entry.id;
+      $("#accessName").value = entry.name || "";
+      $("#accessWhatsapp").value = entry.whatsapp || "";
+      $("#accessExpiresAt").value = entry.expiresAt || "";
+      $("#accessDailyLimit").value = entry.dailyLimit || "";
+      $("#accessNotes").value = entry.notes || "";
+      $("#accessActive").checked = entry.active !== false;
+      $("#saveAccessButton").textContent = "Guardar cambios";
+      $("#accessCancelEditButton").classList.remove("hidden");
+      return;
+    }
+    if (button.dataset.accessAction === "delete") {
+      if (!confirm(`¿Quitar el acceso de ${entry.name || entry.whatsapp}?`)) return;
+      try {
+        await api(`/api/authenticator/access/${entry.id}`, { method: "DELETE" });
+        await loadAccess(state.accessAccountId);
+        showToast("Acceso revocado.");
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    }
+  });
 }
 
 async function init() {

@@ -1,8 +1,10 @@
 "use strict";
 
-const { products, plans } = require("./defaults");
+const { products: defaultProducts, plans: defaultPlans } = require("./defaults");
 
-const commandDefinitions = Object.freeze([
+// Comandos históricos de JadrixServs. Se usan como base cuando un producto
+// guardado en /data todavía no tiene su comando propio.
+const baseCommandDefinitions = Object.freeze([
   { command: "/claudepro", itemId: "claude-pro", itemType: "product" },
   { command: "/gptpro", itemId: "chatgpt-pro", itemType: "product" },
   { command: "/gptplus", itemId: "chatgpt-plus", itemType: "product" },
@@ -27,37 +29,116 @@ const commandDefinitions = Object.freeze([
   { command: "/planplus", itemId: "plan-plus", itemType: "plan" }
 ]);
 
-const itemsById = new Map(
-  [...products, ...plans].map((item) => [item.id, item])
-);
-const definitionsByCommand = new Map(
-  commandDefinitions.map((definition) => [
-    definition.command,
-    definition
-  ])
+const baseCommandByItemId = new Map(
+  baseCommandDefinitions.map(({ command, itemId }) => [itemId, command])
 );
 
+let catalogProvider = null;
+
+function configureCatalogSource(provider) {
+  catalogProvider = typeof provider === "function" ? provider : null;
+}
+
+function normalizeRegistrationCommand(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  const body = raw.startsWith("/") ? raw.slice(1) : raw;
+  const clean = body.replace(/[^a-z0-9]/g, "");
+  return clean ? `/${clean.slice(0, 32)}` : "";
+}
+
+function deriveRegistrationCommand(value) {
+  return normalizeRegistrationCommand(
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+  );
+}
+
+function commandForItem(item, itemType) {
+  const own = normalizeRegistrationCommand(item?.command);
+  if (own) return own;
+  const base = baseCommandByItemId.get(String(item?.id || ""));
+  if (base) return base;
+  return deriveRegistrationCommand(item?.id || item?.name || itemType);
+}
+
+function readSourceCatalog() {
+  let source = null;
+  try {
+    source = catalogProvider ? catalogProvider() : null;
+  } catch {
+    source = null;
+  }
+  const products = Array.isArray(source?.products) ? source.products : null;
+  const plans = Array.isArray(source?.plans) ? source.plans : null;
+  if (!products && !plans) {
+    return [
+      ...defaultProducts.map((item) => ({ item, itemType: "product" })),
+      ...defaultPlans.map((item) => ({ item, itemType: "plan" }))
+    ];
+  }
+  return [
+    ...(products || []).map((item) => ({ item, itemType: "product" })),
+    ...(plans || []).map((item) => ({ item, itemType: "plan" }))
+  ];
+}
+
+function resolveCatalog({ includeDisabled = false } = {}) {
+  const seen = new Set();
+  const entries = [];
+  for (const { item, itemType } of readSourceCatalog()) {
+    if (!item || typeof item !== "object") continue;
+    const command = commandForItem(item, itemType);
+    if (!command || seen.has(command)) continue;
+    const enabled = item.commandEnabled !== false;
+    if (!enabled && !includeDisabled) continue;
+    seen.add(command);
+    entries.push({
+      command,
+      itemId: String(item.id || ""),
+      itemType,
+      enabled,
+      item
+    });
+  }
+  return entries;
+}
+
+function reservedRegistrationCommands() {
+  return new Set(
+    resolveCatalog({ includeDisabled: true }).map((entry) => entry.command)
+  );
+}
+
 function priceForDays(item, days) {
-  if (item.id === "gemini-pro") {
+  const tiers = Array.isArray(item?.pricingTiers) ? item.pricingTiers : [];
+  if (tiers.length) {
+    const sorted = tiers
+      .map((tier) => ({
+        minDays: Number(tier?.minDays) || 0,
+        price: String(tier?.price || "").trim()
+      }))
+      .filter((tier) => tier.price)
+      .sort((a, b) => b.minDays - a.minDays);
+    const match = sorted.find((tier) => Number(days) >= tier.minDays);
+    if (match) return match.price;
+  }
+  if (item?.id === "gemini-pro") {
     if (days >= 500) return "S/70";
     if (days >= 300) return "S/50";
     return "S/20";
   }
-  return item.price;
+  return item?.price;
 }
 
 function getCommandCatalog() {
-  return commandDefinitions.map((definition) => {
-    const item = itemsById.get(definition.itemId);
-    if (!item) {
-      throw new Error(`Producto no encontrado para ${definition.command}.`);
-    }
-    return {
-      ...definition,
-      name: item.name,
-      price: item.price
-    };
-  });
+  return resolveCatalog().map(({ command, itemId, itemType, item }) => ({
+    command,
+    itemId,
+    itemType,
+    name: item.name,
+    price: item.price
+  }));
 }
 
 function parseRegistrationCommand(text) {
@@ -74,7 +155,9 @@ function parseRegistrationCommand(text) {
   }
 
   const command = `/${match[1].toLowerCase()}`;
-  const definition = definitionsByCommand.get(command);
+  const definition = resolveCatalog().find(
+    (entry) => entry.command === command
+  );
   if (!definition) {
     return {
       isCommand: true,
@@ -94,8 +177,8 @@ function parseRegistrationCommand(text) {
     };
   }
 
-  const item = itemsById.get(definition.itemId);
-  if (!item) {
+  const item = definition.item;
+  if (!item?.name) {
     return {
       isCommand: true,
       ok: false,
@@ -119,7 +202,14 @@ function parseRegistrationCommand(text) {
 }
 
 module.exports = {
-  commandDefinitions,
+  baseCommandDefinitions,
+  commandDefinitions: baseCommandDefinitions,
+  configureCatalogSource,
+  commandForItem,
+  deriveRegistrationCommand,
+  normalizeRegistrationCommand,
+  reservedRegistrationCommands,
+  resolveCatalog,
   getCommandCatalog,
   parseRegistrationCommand,
   priceForDays

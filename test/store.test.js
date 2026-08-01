@@ -44,7 +44,7 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
     );
 
     const store = new JsonStore(directory);
-    assert.equal(store.data.version, 4.7);
+    assert.equal(store.data.version, 4.92);
     assert.equal(store.data.clients[0].id, "cliente-existente");
     assert.equal(store.data.clients[0].accountReference, "");
     assert.equal(store.data.clients[0].reminderDays, 2);
@@ -362,7 +362,7 @@ test("restaura un respaldo JSON y conserva la versión de datos actual", () => {
     const result = store.restoreSnapshot(snapshot);
 
     assert.equal(result.clients, 1);
-    assert.equal(result.version, 4.7);
+    assert.equal(result.version, 4.92);
     assert.equal(store.listClients()[0].name, "Cliente restaurado");
     assert.ok(fs.existsSync(path.join(directory, "jadrixservs-v4.backup.json")));
   } finally {

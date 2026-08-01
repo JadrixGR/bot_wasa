@@ -390,13 +390,15 @@ const defaultSettings = {
 
 function createInitialData() {
   return {
-    version: 4.7,
+    version: 4.92,
     settings: structuredClone(defaultSettings),
     products: structuredClone(products),
     plans: structuredClone(plans),
     knowledgeBase: structuredClone(knowledgeBase),
     clients: [],
     authenticatorAccounts: [],
+    authenticatorAccess: [],
+    catalogVersion: 4.92,
     processedCommandIds: [],
     conversations: {},
     logs: [],

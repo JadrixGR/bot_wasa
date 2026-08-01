@@ -279,7 +279,7 @@ test("agrega el Autenticador a una base V4.7 existente sin perder clientes", () 
     const reloaded = new JsonStore(directory);
     assert.equal(reloaded.getClient(client.id).name, "Cliente existente");
     assert.equal(reloaded.listAuthenticatorAccounts().length, 1);
-    assert.equal(reloaded.data.version, 4.7);
+    assert.equal(reloaded.data.version, 4.92);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

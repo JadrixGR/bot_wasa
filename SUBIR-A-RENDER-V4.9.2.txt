@@ -1,0 +1,99 @@
+JADRIXSERVS BOT V4.9.2 - CATÁLOGO EDITABLE, ACCESOS 2FA PARA CLIENTES Y NUEVO DISEÑO
+=====================================================================================
+
+QUÉ AGREGA ESTA VERSIÓN
+- Nuevo diseño oscuro con acentos azul eléctrico y violeta neón (modo noche por defecto).
+- Nueva sección "Catálogo y comandos" en el menú lateral:
+  * Crear, editar, activar/desactivar y eliminar productos o planes.
+  * Definir el comando de registro de cada producto (ejemplo: /claudepro 30).
+  * Editar nombre, precio, duración y descripción sin tocar el código.
+  * Los productos que ya existían se importan automáticamente al catálogo.
+- Nueva opción "Accesos" dentro de cada cuenta del Autenticador:
+  * Autorizas números de WhatsApp de clientes para que pidan su propio código 2FA.
+  * Puedes poner fecha de vencimiento, límite de códigos por día y nota interna.
+  * Puedes activar o desactivar un acceso cuando quieras.
+  * Si el número no está autorizado (o venció / superó el límite), el bot NO entrega el código.
+- Tú, como propietario, sigues teniendo acceso total a todos los comandos 2FA.
+
+TU DATA ACTUAL NO SE PIERDE
+- La actualización es aditiva: solo agrega claves nuevas (catalog, authenticatorAccess).
+- No se tocan clientes, cobros, mensajes, sesión de WhatsApp ni cuentas 2FA existentes.
+- Se conserva la misma base /data/jadrixservs-v4.json.
+
+ANTES DE ACTUALIZAR (2 minutos)
+1. En el panel actual abre "Clientes y cobros".
+2. Pulsa "Descargar respaldo JSON" y guarda el archivo en tu computadora.
+3. En Render abre tu MISMO servicio -> pestaña "Disks" y confirma:
+   - Disk: jadrixservs-data
+   - Mount Path: /data
+4. En "Environment" confirma que existan:
+   - DATA_DIR = /data
+   - MEDIA_DIR = /data/media
+   - ADMIN_PASSWORD = (tu contraseña actual)
+   - COOKIE_SECRET = (EL MISMO valor que ya tienes)
+   - AUTHENTICATOR_ENCRYPTION_KEY = (EL MISMO valor, si ya lo usabas)
+5. NO borres el disco. NO crees un servicio nuevo. NO cambies las claves.
+   Cambiar COOKIE_SECRET o AUTHENTICATOR_ENCRYPTION_KEY impide abrir las cuentas 2FA guardadas.
+
+CÓMO SUBIR LOS ARCHIVOS
+Opción A - GitHub (recomendada, es la que ya usas)
+1. Descomprime el ZIP jadrixservs-bot-v4.9.2.zip en tu computadora.
+2. Abre la carpeta de tu repositorio actual de GitHub.
+3. Copia y REEMPLAZA estas carpetas y archivos con los del ZIP:
+   - carpeta src/
+   - carpeta public/
+   - carpeta test/
+   - package.json
+   - package-lock.json
+   - Dockerfile
+   - render.yaml
+   - SUBIR-A-RENDER-V4.9.2.txt
+   IMPORTANTE: no copies la carpeta data/ ni node_modules/.
+4. Sube los cambios (commit + push) a la rama que Render está desplegando (main).
+5. Render detecta el push y hace el deploy solo. Espera a que diga "Live".
+
+Opción B - Subida manual desde la web de GitHub
+1. Entra a tu repositorio en github.com.
+2. Pulsa "Add file" -> "Upload files".
+3. Arrastra las carpetas src, public y test y los archivos sueltos del ZIP.
+4. Escribe el mensaje "Actualización V4.9.2" y pulsa "Commit changes".
+5. Render desplegará automáticamente.
+
+DESPUÉS DEL DEPLOY (verificación rápida)
+1. Abre https://TU-SERVICIO.onrender.com/health
+   Debe responder con "version":"4.9.2".
+2. Entra al panel con tu contraseña de siempre.
+3. Revisa "Clientes y cobros": deben estar todos tus clientes.
+4. Entra a "Catálogo y comandos": deben aparecer tus productos ya cargados.
+5. Entra a "WhatsApp": si la sesión sigue viva NO tendrás que escanear el QR.
+   Si pide QR, escanéalo una vez desde tu celular.
+6. Entra a "Autenticador": tus cuentas 2FA deben abrirse normalmente.
+
+CÓMO USAR EL CATÁLOGO
+1. Menú lateral -> "Catálogo y comandos".
+2. Pulsa "+ Nuevo producto".
+3. Llena: nombre, precio, duración, comando (ejemplo /spotify) y descripción.
+4. Guarda. Desde ese momento, escribiendo "/spotify 30" en el chat del cliente,
+   el bot registra la compra con ese precio y esa duración.
+5. Para cambiar un precio: pulsa "Editar", cambia el precio y guarda. Listo.
+
+CÓMO AUTORIZAR A UN CLIENTE PARA PEDIR SU CÓDIGO 2FA
+1. Menú lateral -> "Autenticador".
+2. En la cuenta que quieras, pulsa "Accesos".
+3. Escribe el nombre y el número de WhatsApp del cliente (con o sin +51).
+4. Opcional: fecha de vencimiento y límite de códigos por día.
+5. Pulsa "Autorizar cliente".
+6. Ese cliente ya puede escribir el comando de esa cuenta (ejemplo /gpt01)
+   desde su propio WhatsApp y recibirá el código 2FA vigente.
+7. Para revocar: pulsa "Quitar", o desactiva el acceso con "Editar".
+
+SI ALGO SALE MAL
+- Entra al panel -> "Clientes y cobros" -> "Restaurar respaldo JSON" y sube el
+  archivo que descargaste antes de actualizar.
+- En Render, pestaña "Events", puedes volver al deploy anterior con "Rollback".
+- El disco /data no se borra con un rollback.
+
+RECORDATORIOS DE SEGURIDAD
+- Nunca compartas ADMIN_PASSWORD, COOKIE_SECRET ni AUTHENTICATOR_ENCRYPTION_KEY.
+- Autoriza en los accesos 2FA solo números que reconozcas.
+- Revisa "Actividad" para ver quién pidió códigos y cuándo.

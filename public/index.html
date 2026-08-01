@@ -1,23 +1,10 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="dark">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta id="themeColorMeta" name="theme-color" content="#f3f6fc">
-    <script>
-      (() => {
-        try {
-          const savedTheme = localStorage.getItem("jadrixservs-theme");
-          const theme = savedTheme === "dark" || savedTheme === "light"
-            ? savedTheme
-            : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-          document.documentElement.dataset.theme = theme;
-        } catch {
-          document.documentElement.dataset.theme = "light";
-        }
-      })();
-    </script>
-    <title>JadrixServs · Panel Profesional V4.9.1</title>
+    <meta id="themeColorMeta" name="theme-color" content="#07080f">
+    <title>JadrixServs · Panel Profesional V4.9.2</title>
     <link rel="icon" type="image/jpeg" href="/jadrixservs-logo.jpg">
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
@@ -61,7 +48,7 @@
               <div><strong>Atención automatizada</strong><small>Bienvenidas, AFK y cobranzas programadas.</small></div>
             </article>
           </div>
-          <p class="showcase-footnote"><span>●</span> Panel privado · V4.9.1 Profesional</p>
+          <p class="showcase-footnote"><span>●</span> Panel privado · V4.9.2 Profesional</p>
         </section>
 
         <section class="login-card">
@@ -109,7 +96,7 @@
           </span>
           <div>
             <strong>JadrixServs</strong>
-            <span>Panel Profesional V4.9.1</span>
+            <span>Panel Profesional V4.9.2</span>
           </div>
         </div>
         <nav aria-label="Secciones del panel">
@@ -133,6 +120,11 @@
             <span class="nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
             </span><span>Buscar celular</span>
+          </button>
+          <button class="nav-button" data-section="catalog" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2"/></svg>
+            </span><span>Catálogo y comandos</span>
           </button>
           <p class="nav-caption nav-caption-secondary">AUTOMATIZACIÓN</p>
           <button class="nav-button" data-section="messages" type="button">
@@ -504,7 +496,7 @@
           </article>
 
           <div class="notice authenticator-warning">
-            <strong>Comandos protegidos:</strong> solo funcionan cuando tú los escribes desde el WhatsApp propietario en el chat del cliente. Si un cliente escribe el comando, el bot nunca le entrega el código 2FA.
+            <strong>Comandos protegidos:</strong> siempre funcionan cuando tú los escribes desde el WhatsApp propietario. Además, con el botón <strong>Accesos</strong> de cada cuenta puedes autorizar números de clientes para que pidan su propio código 2FA, con límite diario y fecha de vencimiento opcional.
           </div>
           <div id="authenticatorKeyNotice" class="notice hidden"></div>
 
@@ -522,6 +514,39 @@
             <strong>Aún no hay cuentas en el Autenticador.</strong>
             <span>Agrega una con su nombre, servicio, correo y clave secreta 2FA.</span>
             <button class="button primary" data-authenticator-new type="button">Agregar primera cuenta</button>
+          </article>
+        </section>
+
+        <section id="section-catalog" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">CATÁLOGO</p>
+              <h2>Catálogo y comandos</h2>
+              <p class="muted">Agrega productos o planes nuevos, edita precios y define el comando con el que registras clientes desde WhatsApp.</p>
+            </div>
+            <div class="button-row">
+              <button id="refreshCatalogButton" class="button secondary" type="button">Actualizar</button>
+              <button id="newCatalogButton" class="button primary" type="button">+ Nuevo producto</button>
+            </div>
+          </div>
+
+          <div class="notice">
+            <strong>Cómo funciona:</strong> escribe el comando y los días en el chat del cliente, por ejemplo <code>/claudepro 30</code>, y el bot lo registra con el precio del catálogo.
+          </div>
+
+          <article class="panel authenticator-toolbar">
+            <div>
+              <label for="catalogSearch">Buscar en el catálogo</label>
+              <input id="catalogSearch" type="search" autocomplete="off" placeholder="Nombre, comando o precio…">
+            </div>
+            <span id="catalogCount" class="pill blue">0 productos</span>
+          </article>
+
+          <div id="catalogGrid" class="catalog-grid"></div>
+          <article id="catalogEmpty" class="panel empty-state hidden">
+            <strong>Todavía no hay productos en el catálogo.</strong>
+            <span>Agrega el primero con su precio y su comando.</span>
+            <button class="button primary" data-catalog-new type="button">Agregar producto</button>
           </article>
         </section>
 
@@ -645,7 +670,7 @@
           </label>
           <label class="span-2">
             Comando privado de WhatsApp
-            <input id="authenticatorCommand" class="authenticator-command-input" type="text" maxlength="33" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="/gpt01" pattern="/[A-Za-z0-9][A-Za-z0-9_-]{1,31}" required>
+            <input id="authenticatorCommand" class="authenticator-command-input" type="text" maxlength="33" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="/gpt01" pattern="/[A-Za-z0-9][A-Za-z0-9_\-]{1,31}" required>
             <small>Ejemplo: escribe <code>/gpt01</code> desde tu propio WhatsApp en el chat del cliente. Cada cuenta debe usar un comando diferente.</small>
           </label>
           <label class="span-2">
@@ -663,6 +688,68 @@
         <div class="dialog-actions">
           <button class="button secondary authenticator-close" type="button">Cancelar</button>
           <button id="saveAuthenticatorButton" class="button primary" type="submit">Guardar cuenta</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="catalogDialog">
+      <form id="catalogForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">CATÁLOGO</p><h2 id="catalogDialogTitle">Nuevo producto</h2></div>
+          <button class="icon-button catalog-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="catalogItemId" type="hidden">
+        <div class="form-grid">
+          <label>Nombre<input id="catalogName" type="text" maxlength="120" placeholder="Claude Pro" required></label>
+          <label>Tipo
+            <select id="catalogType">
+              <option value="product">Producto</option>
+              <option value="plan">Plan / combo</option>
+            </select>
+          </label>
+          <label>Precio<input id="catalogPrice" type="text" maxlength="120" placeholder="S/25"></label>
+          <label>Vigencia<input id="catalogPeriod" type="text" maxlength="120" placeholder="1 mes"></label>
+          <label class="span-2">
+            Comando de registro
+            <input id="catalogCommand" class="authenticator-command-input" type="text" maxlength="33" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="/claudepro" required>
+            <small>Se usa así: <code>/claudepro 30</code> en el chat del cliente.</small>
+          </label>
+          <label class="span-2">Palabras clave para la IA<input id="catalogAliases" type="text" placeholder="claude, claude pro"></label>
+          <label class="span-2">Descripción<textarea id="catalogDetails" rows="3" placeholder="Qué incluye, garantía, soporte…"></textarea></label>
+          <label class="span-2">Incluye (solo planes)<textarea id="catalogIncludes" rows="2" placeholder="ChatGPT Pro, Perplexity Pro, CapCut Pro"></textarea></label>
+          <label class="toggle-row span-2"><input id="catalogEnabled" type="checkbox" checked><span>Comando activo en WhatsApp</span></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary catalog-close" type="button">Cancelar</button>
+          <button id="saveCatalogButton" class="button primary" type="submit">Guardar producto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="accessDialog">
+      <form id="accessForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">ACCESOS 2FA</p><h2 id="accessDialogTitle">Clientes autorizados</h2></div>
+          <button class="icon-button access-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="accessAccountId" type="hidden">
+        <input id="accessId" type="hidden">
+        <div class="notice">
+          Los números autorizados podrán escribir <code id="accessCommandHint">/comando</code> desde su propio WhatsApp y recibir el código 2FA de esta cuenta.
+        </div>
+        <div id="accessList" class="access-list"></div>
+        <div class="form-grid">
+          <label>Nombre del cliente<input id="accessName" type="text" maxlength="120" placeholder="Kevin"></label>
+          <label>WhatsApp<input id="accessWhatsapp" type="text" inputmode="tel" placeholder="921444991" required></label>
+          <label>Vence el (opcional)<input id="accessExpiresAt" type="date"></label>
+          <label>Límite de códigos por día<input id="accessDailyLimit" type="number" min="0" max="100" step="1" placeholder="0 = sin límite"></label>
+          <label class="toggle-row span-2"><input id="accessActive" type="checkbox" checked><span>Acceso activo</span></label>
+          <label class="span-2">Nota interna<input id="accessNotes" type="text" maxlength="300" placeholder="Cuenta compartida con 2 personas"></label>
+        </div>
+        <div class="dialog-actions">
+          <button id="accessCancelEditButton" class="button secondary hidden" type="button">Cancelar edición</button>
+          <button class="button secondary access-close" type="button">Cerrar</button>
+          <button id="saveAccessButton" class="button primary" type="submit">Autorizar cliente</button>
         </div>
       </form>
     </dialog>

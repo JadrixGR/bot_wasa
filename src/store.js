@@ -4,7 +4,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { createInitialData, defaultSettings } = require("./defaults");
-const { commandDefinitions } = require("./command-registry");
+const {
+  commandForItem,
+  configureCatalogSource,
+  deriveRegistrationCommand,
+  normalizeRegistrationCommand,
+  reservedRegistrationCommands
+} = require("./command-registry");
 const {
   deriveAuthenticatorCommand,
   normalizeAuthenticatorCommand
@@ -17,9 +23,7 @@ const {
 } = require("./date-utils");
 
 const MAX_PURCHASES_PER_PHONE = 2;
-const RESERVED_REGISTRATION_COMMANDS = new Set(
-  commandDefinitions.map(({ command }) => command)
-);
+const CATALOG_VERSION = 4.92;
 
 function uniqueAuthenticatorCommand(baseCommand, usedCommands) {
   if (!usedCommands.has(baseCommand)) return baseCommand;
@@ -33,7 +37,7 @@ function uniqueAuthenticatorCommand(baseCommand, usedCommands) {
 }
 
 function migrateAuthenticatorCommands(accounts) {
-  const usedCommands = new Set(RESERVED_REGISTRATION_COMMANDS);
+  const usedCommands = reservedRegistrationCommands();
   let changed = false;
   const migratedAccounts = accounts.map((account, index) => {
     let desiredCommand;
@@ -53,6 +57,109 @@ function migrateAuthenticatorCommands(accounts) {
     return { ...account, command };
   });
   return { accounts: migratedAccounts, changed };
+}
+
+function normalizeCatalogItem(item, itemType, usedCommands) {
+  const base = item && typeof item === "object" ? item : {};
+  const name = String(base.name || "").trim();
+  const id =
+    String(base.id || "").trim() ||
+    deriveRegistrationCommand(name).replace("/", "") ||
+    crypto.randomUUID();
+  const aliases = Array.isArray(base.aliases)
+    ? base.aliases.map((alias) => String(alias || "").trim()).filter(Boolean)
+    : [];
+  const includes = Array.isArray(base.includes)
+    ? base.includes.map((entry) => String(entry || "").trim()).filter(Boolean)
+    : [];
+  const pricingTiers = Array.isArray(base.pricingTiers)
+    ? base.pricingTiers
+        .map((tier) => ({
+          minDays: Number(tier?.minDays) || 0,
+          price: String(tier?.price || "").trim()
+        }))
+        .filter((tier) => tier.price)
+    : [];
+
+  let command = commandForItem({ ...base, id }, itemType);
+  if (usedCommands) {
+    if (usedCommands.has(command)) {
+      const body = command.slice(1);
+      for (let suffix = 2; suffix < 1000; suffix += 1) {
+        const candidate = `/${body}${suffix}`;
+        if (!usedCommands.has(candidate)) {
+          command = candidate;
+          break;
+        }
+      }
+    }
+    usedCommands.add(command);
+  }
+
+  const normalized = {
+    ...base,
+    id,
+    name: name.slice(0, 120),
+    price: String(base.price || "").trim().slice(0, 120),
+    period: String(base.period || "").trim().slice(0, 120),
+    aliases,
+    details: String(base.details || "").trim().slice(0, 900),
+    command,
+    commandEnabled: base.commandEnabled !== false
+  };
+  if (itemType === "plan" || includes.length) normalized.includes = includes;
+  if (pricingTiers.length) normalized.pricingTiers = pricingTiers;
+  return normalized;
+}
+
+function migrateCatalog(parsed, initial) {
+  const alreadyMigrated = Number(parsed.catalogVersion || 0) >= CATALOG_VERSION;
+  const usedCommands = new Set();
+  const mergeWithDefaults = (savedItems, defaultItems, itemType) => {
+    const saved = Array.isArray(savedItems) ? savedItems : null;
+    const source = saved ? [...saved] : structuredClone(defaultItems);
+    if (saved && !alreadyMigrated) {
+      const savedIds = new Set(
+        saved.map((item) => String(item?.id || "").trim())
+      );
+      for (const fallback of defaultItems) {
+        if (!savedIds.has(String(fallback.id))) source.push(structuredClone(fallback));
+      }
+    }
+    return source
+      .filter((item) => item && typeof item === "object" && !Array.isArray(item))
+      .map((item) => normalizeCatalogItem(item, itemType, usedCommands))
+      .filter((item) => item.name);
+  };
+
+  return {
+    products: mergeWithDefaults(parsed.products, initial.products, "product"),
+    plans: mergeWithDefaults(parsed.plans, initial.plans, "plan")
+  };
+}
+
+function normalizeAuthenticatorAccessEntry(entry) {
+  const base = entry && typeof entry === "object" ? entry : {};
+  const whatsapp = normalizeWhatsAppDigits(base.whatsapp);
+  return {
+    id: String(base.id || crypto.randomUUID()),
+    accountId: String(base.accountId || ""),
+    name: String(base.name || "").trim().slice(0, 120),
+    whatsapp,
+    active: base.active !== false,
+    expiresAt: String(base.expiresAt || "").trim() || null,
+    dailyLimit:
+      Number.isSafeInteger(Number(base.dailyLimit)) && Number(base.dailyLimit) > 0
+        ? Number(base.dailyLimit)
+        : 0,
+    usageDate: String(base.usageDate || "") || null,
+    usedToday: Number(base.usedToday) || 0,
+    totalSent: Number(base.totalSent) || 0,
+    lastSentAt: base.lastSentAt || null,
+    notes: String(base.notes || "").trim().slice(0, 300),
+    createdAt: base.createdAt || new Date().toISOString(),
+    updatedAt: base.updatedAt || new Date().toISOString()
+  };
 }
 
 function normalizeWhatsAppDigits(value) {
@@ -78,6 +185,10 @@ class JsonStore {
     );
     fs.mkdirSync(this.dataDir, { recursive: true });
     this.#createPreUpdateBackup();
+    configureCatalogSource(() => ({
+      products: this.data?.products,
+      plans: this.data?.plans
+    }));
     this.data = this.#load();
   }
 
@@ -170,6 +281,14 @@ class JsonStore {
     const authenticatorMigration = migrateAuthenticatorCommands(
       normalizedAuthenticatorAccounts
     );
+    const catalogMigration = migrateCatalog(parsed, initial);
+    const normalizedAuthenticatorAccess = Array.isArray(
+      parsed.authenticatorAccess
+    )
+      ? parsed.authenticatorAccess
+          .map((entry) => normalizeAuthenticatorAccessEntry(entry))
+          .filter((entry) => entry.accountId && entry.whatsapp)
+      : [];
     const migrated = {
       ...initial,
       ...parsed,
@@ -207,6 +326,10 @@ class JsonStore {
           }))
         : [],
       authenticatorAccounts: authenticatorMigration.accounts,
+      authenticatorAccess: normalizedAuthenticatorAccess,
+      products: catalogMigration.products,
+      plans: catalogMigration.plans,
+      catalogVersion: CATALOG_VERSION,
       processedCommandIds: Array.isArray(parsed.processedCommandIds)
         ? parsed.processedCommandIds.slice(0, 500).map(String)
         : [],
@@ -623,7 +746,7 @@ class JsonStore {
   }
 
   #assertAuthenticatorCommandAvailable(command, exceptId = null) {
-    if (RESERVED_REGISTRATION_COMMANDS.has(command)) {
+    if (reservedRegistrationCommands().has(command)) {
       throw new Error(
         `El comando ${command} ya está reservado para registrar clientes. Elige otro, por ejemplo ${command}01.`
       );
@@ -638,6 +761,261 @@ class JsonStore {
         `El comando ${command} ya pertenece a la cuenta 2FA “${duplicate.name}”.`
       );
     }
+  }
+
+  // ─── Catálogo y comandos ─────────────────────────────────────────────
+  listCatalog() {
+    const map = (items, itemType) =>
+      (Array.isArray(items) ? items : []).map((item) => ({
+        ...structuredClone(item),
+        itemType,
+        command: commandForItem(item, itemType),
+        commandEnabled: item.commandEnabled !== false
+      }));
+    return [
+      ...map(this.data.products, "product"),
+      ...map(this.data.plans, "plan")
+    ];
+  }
+
+  getCatalogItem(id) {
+    return this.listCatalog().find((item) => item.id === id) || null;
+  }
+
+  #catalogBucket(itemType) {
+    if (itemType === "plan") {
+      this.data.plans ||= [];
+      return this.data.plans;
+    }
+    this.data.products ||= [];
+    return this.data.products;
+  }
+
+  #assertCatalogCommandAvailable(command, exceptId = null) {
+    const duplicate = this.listCatalog().find(
+      (item) => item.id !== exceptId && item.command === command
+    );
+    if (duplicate) {
+      throw new Error(
+        `El comando ${command} ya pertenece a “${duplicate.name}”. Elige otro.`
+      );
+    }
+    const authenticatorDuplicate = (this.data.authenticatorAccounts || []).find(
+      (account) => String(account.command || "").toLowerCase() === command
+    );
+    if (authenticatorDuplicate) {
+      throw new Error(
+        `El comando ${command} ya pertenece a la cuenta 2FA “${authenticatorDuplicate.name}”.`
+      );
+    }
+  }
+
+  createCatalogItem(input = {}) {
+    const itemType = input.itemType === "plan" ? "plan" : "product";
+    const candidate = normalizeCatalogItem(
+      { ...input, id: input.id || "" },
+      itemType,
+      null
+    );
+    if (!candidate.name) throw new Error("Ingresa el nombre del producto.");
+    if (!candidate.command) {
+      throw new Error("Ingresa un comando válido, por ejemplo /claudepro.");
+    }
+    if (this.getCatalogItem(candidate.id)) {
+      candidate.id = `${candidate.id}-${crypto.randomUUID().slice(0, 6)}`;
+    }
+    this.#assertCatalogCommandAvailable(candidate.command);
+    delete candidate.itemType;
+    this.#catalogBucket(itemType).push(candidate);
+    this.addLog(
+      "catalog",
+      `Producto agregado al catálogo: ${candidate.name} (${candidate.command})`,
+      { itemId: candidate.id }
+    );
+    this.save();
+    return { ...structuredClone(candidate), itemType };
+  }
+
+  updateCatalogItem(id, input = {}) {
+    const current = this.getCatalogItem(id);
+    if (!current) throw new Error("Producto del catálogo no encontrado.");
+    const nextType =
+      input.itemType === "plan" || input.itemType === "product"
+        ? input.itemType
+        : current.itemType;
+    const merged = normalizeCatalogItem(
+      { ...current, ...input, id },
+      nextType,
+      null
+    );
+    if (!merged.name) throw new Error("Ingresa el nombre del producto.");
+    if (!merged.command) {
+      throw new Error("Ingresa un comando válido, por ejemplo /claudepro.");
+    }
+    this.#assertCatalogCommandAvailable(merged.command, id);
+    delete merged.itemType;
+
+    const removeFrom = this.#catalogBucket(current.itemType);
+    const index = removeFrom.findIndex((item) => item.id === id);
+    if (index !== -1) removeFrom.splice(index, 1);
+    if (nextType === current.itemType && index !== -1) {
+      this.#catalogBucket(nextType).splice(index, 0, merged);
+    } else {
+      this.#catalogBucket(nextType).push(merged);
+    }
+    this.addLog(
+      "catalog",
+      `Catálogo actualizado: ${merged.name} (${merged.command})`,
+      { itemId: id }
+    );
+    this.save();
+    return { ...structuredClone(merged), itemType: nextType };
+  }
+
+  deleteCatalogItem(id) {
+    const current = this.getCatalogItem(id);
+    if (!current) throw new Error("Producto del catálogo no encontrado.");
+    const bucket = this.#catalogBucket(current.itemType);
+    const index = bucket.findIndex((item) => item.id === id);
+    if (index !== -1) bucket.splice(index, 1);
+    this.addLog("catalog", `Producto eliminado del catálogo: ${current.name}`, {
+      itemId: id
+    });
+    this.save();
+    return current;
+  }
+
+  // ─── Accesos 2FA de clientes ─────────────────────────────────────────
+  listAuthenticatorAccess(accountId = null) {
+    this.data.authenticatorAccess ||= [];
+    return structuredClone(
+      this.data.authenticatorAccess.filter(
+        (entry) => !accountId || entry.accountId === accountId
+      )
+    );
+  }
+
+  createAuthenticatorAccess(accountId, input = {}) {
+    this.data.authenticatorAccess ||= [];
+    const account = (this.data.authenticatorAccounts || []).find(
+      (item) => item.id === accountId
+    );
+    if (!account) throw new Error("Cuenta del Autenticador no encontrada.");
+    const entry = normalizeAuthenticatorAccessEntry({
+      ...input,
+      accountId,
+      id: crypto.randomUUID(),
+      usedToday: 0,
+      totalSent: 0,
+      usageDate: null,
+      lastSentAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    if (!entry.whatsapp) {
+      throw new Error("Ingresa el número de WhatsApp del cliente autorizado.");
+    }
+    const duplicate = this.data.authenticatorAccess.find(
+      (item) => item.accountId === accountId && item.whatsapp === entry.whatsapp
+    );
+    if (duplicate) {
+      throw new Error("Ese número ya está autorizado en esta cuenta 2FA.");
+    }
+    this.data.authenticatorAccess.push(entry);
+    this.addLog(
+      "authenticator",
+      `Acceso 2FA autorizado: ${entry.name || entry.whatsapp} → ${account.command}`,
+      { authenticatorId: accountId, accessId: entry.id }
+    );
+    this.save();
+    return structuredClone(entry);
+  }
+
+  updateAuthenticatorAccess(id, input = {}) {
+    this.data.authenticatorAccess ||= [];
+    const index = this.data.authenticatorAccess.findIndex(
+      (entry) => entry.id === id
+    );
+    if (index === -1) throw new Error("Acceso 2FA no encontrado.");
+    const current = this.data.authenticatorAccess[index];
+    const updated = normalizeAuthenticatorAccessEntry({
+      ...current,
+      ...input,
+      id,
+      accountId: current.accountId,
+      createdAt: current.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+    if (!updated.whatsapp) {
+      throw new Error("Ingresa el número de WhatsApp del cliente autorizado.");
+    }
+    this.data.authenticatorAccess[index] = updated;
+    this.addLog(
+      "authenticator",
+      `Acceso 2FA actualizado: ${updated.name || updated.whatsapp}`,
+      { authenticatorId: updated.accountId, accessId: id }
+    );
+    this.save();
+    return structuredClone(updated);
+  }
+
+  deleteAuthenticatorAccess(id) {
+    this.data.authenticatorAccess ||= [];
+    const index = this.data.authenticatorAccess.findIndex(
+      (entry) => entry.id === id
+    );
+    if (index === -1) throw new Error("Acceso 2FA no encontrado.");
+    const [deleted] = this.data.authenticatorAccess.splice(index, 1);
+    this.addLog(
+      "authenticator",
+      `Acceso 2FA revocado: ${deleted.name || deleted.whatsapp}`,
+      { authenticatorId: deleted.accountId, accessId: id }
+    );
+    this.save();
+    return structuredClone(deleted);
+  }
+
+  findAuthenticatorAccess(accountId, ...phones) {
+    this.data.authenticatorAccess ||= [];
+    const candidates = new Set(
+      phones.map(normalizeWhatsAppDigits).filter(Boolean)
+    );
+    if (!candidates.size) return null;
+    const entry = this.data.authenticatorAccess.find(
+      (item) => item.accountId === accountId && candidates.has(item.whatsapp)
+    );
+    return entry ? structuredClone(entry) : null;
+  }
+
+  checkAuthenticatorAccess(accountId, ...phones) {
+    const entry = this.findAuthenticatorAccess(accountId, ...phones);
+    if (!entry) return { allowed: false, reason: "sin-autorizacion", entry: null };
+    if (!entry.active) return { allowed: false, reason: "inactivo", entry };
+    const today = todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima");
+    if (entry.expiresAt && compareDateOnly(entry.expiresAt, today) < 0) {
+      return { allowed: false, reason: "vencido", entry };
+    }
+    if (entry.dailyLimit > 0) {
+      const used = entry.usageDate === today ? entry.usedToday : 0;
+      if (used >= entry.dailyLimit) {
+        return { allowed: false, reason: "limite-diario", entry };
+      }
+    }
+    return { allowed: true, reason: "ok", entry };
+  }
+
+  registerAuthenticatorAccessUsage(id) {
+    this.data.authenticatorAccess ||= [];
+    const entry = this.data.authenticatorAccess.find((item) => item.id === id);
+    if (!entry) return null;
+    const today = todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima");
+    entry.usedToday = entry.usageDate === today ? Number(entry.usedToday || 0) + 1 : 1;
+    entry.usageDate = today;
+    entry.totalSent = Number(entry.totalSent || 0) + 1;
+    entry.lastSentAt = new Date().toISOString();
+    entry.updatedAt = entry.lastSentAt;
+    this.save();
+    return structuredClone(entry);
   }
 
   listClients({ includeArchived = false } = {}) {

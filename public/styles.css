@@ -3380,3 +3380,222 @@ html[data-theme="dark"] .authenticator-command-row button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   JadrixServs V4.9.2 · Skin "StoreIA": fondo profundo, azul eléctrico y
+   violeta neón. Solo cambia la presentación; no altera el comportamiento.
+   ══════════════════════════════════════════════════════════════════════ */
+
+html[data-theme="dark"] {
+  --bg: #07080f;
+  --panel: #0e1120;
+  --ink: #eef1ff;
+  --muted: #8d95b5;
+  --line: #1e2440;
+  --navy: #04050b;
+  --primary: #6f6bff;
+  --primary-dark: #8f7bff;
+  --cyan: #43e0ff;
+  --red: #ff5f7a;
+  --amber: #ffb443;
+  --violet: #a05cff;
+  --shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  --field-bg: #0b0e1b;
+  --soft-bg: #0c1020;
+  --panel-rgb: 14, 17, 32;
+  --strong-muted: #b9c0dd;
+}
+
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at 12% -5%, rgba(111, 107, 255, 0.20), transparent 34rem),
+    radial-gradient(circle at 92% 4%, rgba(160, 92, 255, 0.16), transparent 32rem),
+    radial-gradient(circle at 50% 120%, rgba(67, 224, 255, 0.08), transparent 40rem),
+    var(--bg);
+}
+
+html[data-theme="dark"] .login-shell {
+  background:
+    radial-gradient(circle at 18% 12%, rgba(111, 107, 255, 0.22), transparent 28rem),
+    radial-gradient(circle at 82% 78%, rgba(160, 92, 255, 0.18), transparent 26rem),
+    linear-gradient(150deg, #05060d, #0b0f22 55%, #07080f);
+}
+
+html[data-theme="dark"] .login-card {
+  border-color: rgba(146, 140, 255, 0.24);
+  background: linear-gradient(165deg, rgba(18, 22, 43, 0.96), rgba(10, 12, 25, 0.98));
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.62), 0 0 0 1px rgba(111, 107, 255, 0.08);
+}
+
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .stat-card,
+html[data-theme="dark"] .hero-card,
+html[data-theme="dark"] .authenticator-card,
+html[data-theme="dark"] .catalog-card,
+html[data-theme="dark"] dialog {
+  border: 1px solid rgba(146, 140, 255, 0.16);
+  border-radius: 1.35rem;
+  background:
+    linear-gradient(168deg, rgba(24, 28, 54, 0.86), rgba(11, 14, 27, 0.94));
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.42);
+}
+
+html[data-theme="dark"] .panel:hover,
+html[data-theme="dark"] .stat-card:hover,
+html[data-theme="dark"] .authenticator-card:hover,
+html[data-theme="dark"] .catalog-card:hover {
+  border-color: rgba(146, 140, 255, 0.42);
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(111, 107, 255, 0.22),
+    0 0 32px rgba(111, 107, 255, 0.16);
+}
+
+html[data-theme="dark"] .sidebar {
+  border-right: 1px solid rgba(146, 140, 255, 0.14);
+  background: linear-gradient(190deg, rgba(13, 16, 32, 0.96), rgba(6, 7, 15, 0.98));
+}
+
+html[data-theme="dark"] .nav-button {
+  border-radius: 0.9rem;
+  color: var(--muted);
+}
+html[data-theme="dark"] .nav-button:hover {
+  color: var(--ink);
+  background: rgba(111, 107, 255, 0.12);
+}
+html[data-theme="dark"] .nav-button.active {
+  color: #ffffff;
+  background: linear-gradient(120deg, rgba(111, 107, 255, 0.95), rgba(160, 92, 255, 0.9));
+  box-shadow: 0 12px 26px rgba(111, 107, 255, 0.32);
+}
+
+html[data-theme="dark"] .button.primary {
+  background: linear-gradient(120deg, #6f6bff, #a05cff);
+  box-shadow: 0 12px 28px rgba(111, 107, 255, 0.34);
+}
+html[data-theme="dark"] .button.primary:hover {
+  background: linear-gradient(120deg, #8079ff, #b26bff);
+  box-shadow: 0 16px 34px rgba(160, 92, 255, 0.42);
+}
+html[data-theme="dark"] .button.secondary {
+  border-color: rgba(146, 140, 255, 0.28);
+  color: var(--ink);
+  background: rgba(20, 24, 46, 0.85);
+}
+html[data-theme="dark"] .button.secondary:hover {
+  border-color: rgba(146, 140, 255, 0.6);
+  box-shadow: 0 0 22px rgba(111, 107, 255, 0.2);
+}
+
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  border-color: rgba(146, 140, 255, 0.2);
+  border-radius: 0.85rem;
+  background: rgba(8, 10, 22, 0.9);
+}
+html[data-theme="dark"] input:focus,
+html[data-theme="dark"] select:focus,
+html[data-theme="dark"] textarea:focus {
+  border-color: #6f6bff;
+  box-shadow: 0 0 0 3px rgba(111, 107, 255, 0.22);
+}
+
+html[data-theme="dark"] .eyebrow { color: #a08bff; }
+html[data-theme="dark"] code { color: #43e0ff; }
+
+/* Catálogo y comandos */
+.catalog-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+}
+
+.catalog-card {
+  display: grid;
+  gap: 0.85rem;
+  align-content: start;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 1.35rem;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  transition: 180ms ease;
+}
+.catalog-card.is-disabled { opacity: 0.62; }
+.catalog-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.catalog-card-heading h3 { margin: 0.35rem 0 0.2rem; }
+.catalog-card-heading p { margin: 0; color: var(--muted); font-size: 0.8rem; }
+.catalog-card-heading > div:first-child { min-width: 0; }
+.catalog-price {
+  flex: 0 1 auto;
+  max-width: 45%;
+  font-size: 1.05rem;
+  letter-spacing: -0.02em;
+  text-align: right;
+  line-height: 1.35;
+  word-break: break-word;
+}
+.catalog-details { margin: 0; color: var(--muted); font-size: 0.82rem; line-height: 1.5; }
+.catalog-includes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.catalog-includes li {
+  padding: 0.28rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--strong-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.pill.violet {
+  color: #c7b0ff;
+  background: rgba(160, 92, 255, 0.16);
+}
+
+/* Accesos 2FA de clientes */
+.access-list { display: grid; gap: 0.6rem; margin-bottom: 1.1rem; }
+.access-empty { margin: 0; font-size: 0.82rem; }
+.access-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.95rem;
+  background: var(--soft-bg);
+}
+.access-row.is-off { opacity: 0.6; }
+.access-row div:first-child { display: grid; gap: 0.15rem; }
+.access-row strong { font-size: 0.88rem; }
+.access-row .muted { font-size: 0.75rem; }
+.access-row-actions { display: flex; align-items: center; gap: 0.4rem; }
+.access-row-actions button {
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  color: var(--strong-muted);
+  background: transparent;
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+.access-row-actions button:hover { border-color: var(--primary); color: var(--primary); }
+.access-row-actions button.danger:hover { border-color: var(--red); color: var(--red); }
+
+@media (max-width: 640px) {
+  .catalog-grid { grid-template-columns: 1fr; }
+  .access-row { align-items: flex-start; }
+}

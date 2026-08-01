@@ -1074,6 +1074,8 @@ class WhatsAppService {
       return;
     }
 
+    if (await this.#handleClientAuthenticatorCommand(socket, message)) return;
+
     const chatId = message.key.remoteJid;
     const content = unwrapMessageContent(message.message);
     const type = this.baileys.getContentType(content) || "";
@@ -1127,6 +1129,100 @@ class WhatsAppService {
       ?.getPNForLID(lid)
       .catch(() => null);
     return extractPhone(mapped);
+  }
+
+  async #handleClientAuthenticatorCommand(socket, message) {
+    const body = extractMessageBody(message.message).trim();
+    if (!/^\/[a-z0-9][a-z0-9_-]{1,31}$/i.test(body)) return false;
+
+    const account = this.authenticator?.findAccountByCommand(body);
+    if (!account) return false;
+
+    const chatId = message.key.remoteJid;
+    const target = normalizeWhatsAppId(chatId);
+    const phone =
+      (await this.#resolveCustomerPhone(socket, message)) ||
+      extractPhone(chatId);
+    const check = this.store.checkAuthenticatorAccess?.(account.id, phone) || {
+      allowed: false,
+      reason: "sin-autorizacion",
+      entry: null
+    };
+
+    if (!check.allowed) {
+      const reasons = {
+        "sin-autorizacion": null,
+        inactivo: "Tu acceso a este código 2FA está desactivado. Escríbenos para reactivarlo.",
+        vencido: "Tu acceso a este código 2FA venció. Renueva para seguir solicitándolo.",
+        "limite-diario": "Ya alcanzaste tu límite de códigos 2FA por hoy. Vuelve a intentarlo mañana."
+      };
+      const reply = reasons[check.reason];
+      this.store.addLog(
+        "authenticator",
+        `Solicitud 2FA rechazada (${check.reason}) para ${phone || target} con ${account.command}`,
+        { command: account.command, authenticatorId: account.id, chatId: target }
+      );
+      this.store.save();
+      if (reply) {
+        await this.sendText(target, reply).catch(() => undefined);
+        return true;
+      }
+      return false;
+    }
+
+    const commandMessageId = String(message.key.id || "");
+    if (
+      commandMessageId &&
+      this.store.isCommandMessageProcessed?.(commandMessageId)
+    ) {
+      return true;
+    }
+
+    try {
+      let fresh = await this.authenticator.getFreshCodeByCommand(
+        account.command,
+        AUTHENTICATOR_SEND_WINDOW
+      );
+      if (!fresh) return true;
+
+      const stopTyping = await this.beginTyping(target);
+      await this.sleepFn(350);
+      await stopTyping();
+
+      fresh = await this.authenticator.getFreshCodeByCommand(
+        account.command,
+        AUTHENTICATOR_SEND_WINDOW
+      );
+      if (!fresh) return true;
+
+      await socket.sendMessage(target, {
+        text: formatAuthenticatorCodeMessage(fresh)
+      });
+      if (commandMessageId) {
+        this.store.markCommandMessageProcessed?.(commandMessageId);
+      }
+      this.store.registerAuthenticatorAccessUsage?.(check.entry.id);
+      this.store.addLog(
+        "authenticator",
+        `Código 2FA entregado al cliente ${check.entry.name || phone} con ${fresh.command} · ${fresh.service}`,
+        {
+          command: fresh.command,
+          authenticatorId: fresh.id,
+          accessId: check.entry.id,
+          chatId: target,
+          secondsRemaining: fresh.secondsRemaining
+        }
+      );
+      this.store.save();
+    } catch (error) {
+      this.store.addLog(
+        "authenticator",
+        `No se envió ${account.command} al cliente ${phone || target}: ${error.message}`,
+        { command: account.command, authenticatorId: account.id, chatId: target }
+      );
+      this.store.save();
+    }
+    return true;
   }
 
   async #handleOwnerCommand(socket, message) {

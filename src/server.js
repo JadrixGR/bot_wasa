@@ -111,7 +111,7 @@ function clientForPanel(client) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.9.1",
+    version: "4.9.2",
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
     authenticator: {
@@ -170,6 +170,43 @@ app.delete("/api/authenticator/:id", requireAuth, noStore, (req, res) => {
     ok: true,
     account: authenticator.deleteAccount(req.params.id)
   });
+});
+
+app.get("/api/authenticator/access", requireAuth, noStore, (req, res) => {
+  res.json({ access: store.listAuthenticatorAccess(req.query.accountId || null) });
+});
+
+app.post(
+  "/api/authenticator/:id/access",
+  requireAuth,
+  noStore,
+  (req, res) => {
+    res.status(201).json(store.createAuthenticatorAccess(req.params.id, req.body));
+  }
+);
+
+app.put("/api/authenticator/access/:accessId", requireAuth, noStore, (req, res) => {
+  res.json(store.updateAuthenticatorAccess(req.params.accessId, req.body));
+});
+
+app.delete("/api/authenticator/access/:accessId", requireAuth, noStore, (req, res) => {
+  res.json({ ok: true, access: store.deleteAuthenticatorAccess(req.params.accessId) });
+});
+
+app.get("/api/catalog", requireAuth, noStore, (_req, res) => {
+  res.json({ items: store.listCatalog() });
+});
+
+app.post("/api/catalog", requireAuth, noStore, (req, res) => {
+  res.status(201).json(store.createCatalogItem(req.body));
+});
+
+app.put("/api/catalog/:id", requireAuth, noStore, (req, res) => {
+  res.json(store.updateCatalogItem(req.params.id, req.body));
+});
+
+app.delete("/api/catalog/:id", requireAuth, noStore, (req, res) => {
+  res.json({ ok: true, item: store.deleteCatalogItem(req.params.id) });
 });
 
 app.get("/api/dashboard", requireAuth, (req, res) => {
@@ -586,7 +623,7 @@ app.use((error, _req, res, _next) => {
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4.9.1 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V4.9.2 disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
   }
