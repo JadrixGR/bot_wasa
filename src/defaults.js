@@ -399,6 +399,7 @@ function createInitialData() {
     clients: [],
     authenticatorAccounts: [],
     authenticatorAccess: [],
+    quickReplies: [],
     catalogVersion: 4.92,
     processedCommandIds: [],
     conversations: {},

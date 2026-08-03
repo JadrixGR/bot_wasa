@@ -30,7 +30,7 @@ function flush() {
 }
 
 async function settleMessageQueue(service) {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
+  for (let attempt = 0; attempt < 250; attempt += 1) {
     await flush();
     if (service.queues.size === 0) return;
   }
@@ -55,6 +55,7 @@ function makeStore() {
       return { ...conversations[chatId] };
     },
     findClientByWhatsApp: () => null,
+    findQuickReplyByCommand: () => null,
     isCommandMessageProcessed: (id) =>
       processedCommandIds.includes(String(id || "")),
     markCommandMessageProcessed: (id) => {
@@ -709,6 +710,119 @@ test("un comando enviado por el propietario registra el número alternativo sin 
   assert.equal(registrations[0].commandMessageId, "owner-command-1");
   assert.equal(socket.calls.sent.length, 0);
   assert.equal(socket.calls.read.length, 0);
+});
+
+test("una respuesta rápida envía todas las imágenes y luego los textos una sola vez", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  const mediaDirectory = path.join(testRuntimeDir, "quick-reply-media");
+  fs.mkdirSync(mediaDirectory, { recursive: true });
+  const firstImage = path.join(mediaDirectory, "primera.png");
+  const secondImage = path.join(mediaDirectory, "segunda.jpg");
+  fs.writeFileSync(firstImage, Buffer.from("primera"));
+  fs.writeFileSync(secondImage, Buffer.from("segunda"));
+  const reply = {
+    id: "respuesta-diferencia",
+    name: "Diferencia",
+    command: "/diferencia",
+    enabled: true,
+    images: [
+      { id: "imagen-1", path: firstImage },
+      { id: "imagen-2", path: secondImage }
+    ],
+    texts: ["Primer texto", "Segundo texto"]
+  };
+  store.findQuickReplyByCommand = (value) =>
+    String(value).trim().toLowerCase() === reply.command ? reply : null;
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "quick-reply-session"),
+    mediaDir: mediaDirectory
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  const event = {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "quick-reply-command-1",
+          remoteJid: "51955556666@s.whatsapp.net",
+          fromMe: true
+        },
+        message: { conversation: "/DIFERENCIA" }
+      }
+    ]
+  };
+  socket.ev.emit("messages.upsert", event);
+  await settleMessageQueue(service);
+
+  assert.deepEqual(
+    socket.calls.sent.map((entry) => Object.keys(entry.content)[0]),
+    ["image", "image", "text", "text"]
+  );
+  assert.equal(socket.calls.sent[2].content.text, "Primer texto");
+  assert.equal(socket.calls.sent[3].content.text, "Segundo texto");
+  assert.equal(store.isCommandMessageProcessed("quick-reply-command-1"), true);
+  assert.ok(
+    store.logs.some(
+      (entry) =>
+        entry.type === "quick-reply" &&
+        entry.message.includes("Respuesta rápida enviada")
+    )
+  );
+
+  socket.ev.emit("messages.upsert", event);
+  await settleMessageQueue(service);
+  assert.equal(socket.calls.sent.length, 4);
+});
+
+test("un cliente no puede ejecutar una respuesta rápida privada", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  let quickReplyLookups = 0;
+  store.findQuickReplyByCommand = () => {
+    quickReplyLookups += 1;
+    return {
+      id: "privada",
+      command: "/diferencia",
+      enabled: true,
+      images: [{ path: "no-debe-enviarse.png" }],
+      texts: ["No debe enviarse"]
+    };
+  };
+  store.findClientByWhatsApp = () => ({ id: "cliente-registrado" });
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "client-quick-reply-session"),
+    mediaDir: path.join(testRuntimeDir, "client-quick-reply-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "client-quick-reply-command",
+          remoteJid: "51933334444@s.whatsapp.net",
+          fromMe: false
+        },
+        message: { conversation: "/diferencia" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(quickReplyLookups, 0);
+  assert.equal(socket.calls.sent.length, 0);
+  assert.equal(store.isCommandMessageProcessed("client-quick-reply-command"), false);
 });
 
 test("el propietario envía un código 2FA con su comando y vigencia segura", async () => {

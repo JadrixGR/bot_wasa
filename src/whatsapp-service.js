@@ -1227,6 +1227,11 @@ class WhatsAppService {
 
   async #handleOwnerCommand(socket, message) {
     const body = extractMessageBody(message.message);
+    const quickReply = this.store.findQuickReplyByCommand?.(body);
+    if (quickReply) {
+      await this.#handleOwnerQuickReply(message, quickReply);
+      return;
+    }
     const authenticatorAccount =
       /^\/[a-z0-9][a-z0-9_-]{1,31}$/i.test(body)
         ? this.authenticator?.findAccountByCommand(body)
@@ -1276,6 +1281,62 @@ class WhatsAppService {
         "command",
         `Comando duplicado ignorado: ${parsed.command}`,
         { commandMessageId: message.key.id || "" }
+      );
+      this.store.save();
+    }
+  }
+
+  async #handleOwnerQuickReply(message, reply) {
+    const commandMessageId = String(message.key.id || "");
+    const target = normalizeWhatsAppId(message.key.remoteJid);
+
+    if (!reply.enabled || !reply.images?.length || !reply.texts?.length) {
+      this.store.addLog(
+        "quick-reply",
+        `Respuesta rápida no enviada porque está incompleta o inactiva: ${reply.command}`,
+        { quickReplyId: reply.id, command: reply.command, chatId: target }
+      );
+      this.store.save();
+      return;
+    }
+    if (
+      commandMessageId &&
+      this.store.isCommandMessageProcessed?.(commandMessageId)
+    ) {
+      return;
+    }
+
+    if (commandMessageId) {
+      this.store.markCommandMessageProcessed?.(commandMessageId);
+    }
+    try {
+      for (const image of reply.images) {
+        await this.sendMedia(target, image.path);
+      }
+      for (const text of reply.texts) {
+        await this.sendText(target, text);
+      }
+      this.store.addLog(
+        "quick-reply",
+        `Respuesta rápida enviada: ${reply.name} (${reply.command})`,
+        {
+          quickReplyId: reply.id,
+          command: reply.command,
+          chatId: target,
+          images: reply.images.length,
+          texts: reply.texts.length
+        }
+      );
+      this.store.save();
+    } catch (error) {
+      this.store.addLog(
+        "quick-reply",
+        `No se completó ${reply.command}: ${error.message}`,
+        {
+          quickReplyId: reply.id,
+          command: reply.command,
+          chatId: target
+        }
       );
       this.store.save();
     }

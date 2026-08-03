@@ -192,6 +192,75 @@ test("guarda y vuelve a cargar respuestas entrenadas editables", () => {
   }
 });
 
+test("crea respuestas rápidas con varias imágenes y textos en orden", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const created = store.createQuickReply({
+      name: "Diferencia entre planes",
+      command: "/diferencia",
+      enabled: true,
+      texts: ["Primer texto", "Segundo texto"]
+    });
+
+    assert.equal(created.enabled, false);
+    assert.deepEqual(created.images, []);
+    store.addQuickReplyImage(created.id, {
+      id: "imagen-1",
+      path: path.join(directory, "primera.png"),
+      originalName: "primera.png",
+      mimetype: "image/png",
+      size: 100
+    });
+    store.addQuickReplyImage(created.id, {
+      id: "imagen-2",
+      path: path.join(directory, "segunda.jpg"),
+      originalName: "segunda.jpg",
+      mimetype: "image/jpeg",
+      size: 200
+    });
+    const active = store.updateQuickReply(created.id, {
+      enabled: true,
+      texts: ["Primer texto", "Segundo texto"]
+    });
+
+    assert.equal(active.enabled, true);
+    assert.deepEqual(active.images.map((image) => image.id), ["imagen-1", "imagen-2"]);
+    assert.deepEqual(active.texts, ["Primer texto", "Segundo texto"]);
+    assert.equal(store.findQuickReplyByCommand(" /DIFERENCIA ").id, created.id);
+    assert.throws(
+      () =>
+        store.createQuickReply({
+          name: "Duplicada",
+          command: "/diferencia",
+          texts: ["Texto"]
+        }),
+      /ya pertenece a la respuesta rápida/
+    );
+    assert.throws(
+      () =>
+        store.createQuickReply({
+          name: "Conflicto catálogo",
+          command: "/claudepro",
+          texts: ["Texto"]
+        }),
+      /ya registra el producto/
+    );
+
+    const reloaded = new JsonStore(directory);
+    assert.deepEqual(
+      reloaded.getQuickReply(created.id).images.map((image) => image.id),
+      ["imagen-1", "imagen-2"]
+    );
+    reloaded.deleteQuickReplyImage(created.id, "imagen-1");
+    const lastImage = reloaded.deleteQuickReplyImage(created.id, "imagen-2");
+    assert.equal(lastImage.id, "imagen-2");
+    assert.equal(reloaded.getQuickReply(created.id).enabled, false);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("un comando crea al cliente estimad@ con días exactos y automatización segura", () => {
   const directory = temporaryDataDir();
   try {

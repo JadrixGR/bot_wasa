@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const express = require("express");
 const helmet = require("helmet");
 const cookieSession = require("cookie-session");
@@ -63,7 +64,7 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-        "img-src": ["'self'", "data:"]
+        "img-src": ["'self'", "data:", "blob:"]
       }
     }
   })
@@ -107,6 +108,47 @@ function clientForPanel(client) {
     // Una fecha inválida se muestra sin cálculo y puede corregirse desde Editar.
   }
   return { ...client, daysRemaining };
+}
+
+function isStoredMediaPath(filePath) {
+  if (!filePath) return false;
+  const relative = path.relative(mediaDir, path.resolve(filePath));
+  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+
+function removeStoredMedia(filePath) {
+  if (isStoredMediaPath(filePath) && fs.existsSync(filePath)) {
+    fs.rmSync(filePath, { force: true });
+  }
+}
+
+function quickReplyForPanel(reply) {
+  return {
+    ...reply,
+    images: (reply.images || []).map(({ path: _privatePath, ...image }) => ({
+      ...image,
+      url: `/api/quick-replies/${encodeURIComponent(reply.id)}/images/${encodeURIComponent(image.id)}`
+    }))
+  };
+}
+
+function validateQuickReplyImage(buffer, extension) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return false;
+  if (extension === ".png") {
+    return buffer.subarray(0, 8).equals(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+    );
+  }
+  if (extension === ".jpg" || extension === ".jpeg") {
+    return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  }
+  if (extension === ".webp") {
+    return (
+      buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+      buffer.subarray(8, 12).toString("ascii") === "WEBP"
+    );
+  }
+  return false;
 }
 
 app.get("/health", (_req, res) => {
@@ -209,6 +251,118 @@ app.put("/api/catalog/:id", requireAuth, noStore, (req, res) => {
 app.delete("/api/catalog/:id", requireAuth, noStore, (req, res) => {
   res.json({ ok: true, item: store.deleteCatalogItem(req.params.id) });
 });
+
+app.get("/api/quick-replies", requireAuth, noStore, (_req, res) => {
+  res.json({ items: store.listQuickReplies().map(quickReplyForPanel) });
+});
+
+app.post("/api/quick-replies", requireAuth, noStore, (req, res) => {
+  res.status(201).json(quickReplyForPanel(store.createQuickReply(req.body)));
+});
+
+app.put("/api/quick-replies/:id", requireAuth, noStore, (req, res) => {
+  res.json(
+    quickReplyForPanel(store.updateQuickReply(req.params.id, req.body))
+  );
+});
+
+app.delete("/api/quick-replies/:id", requireAuth, noStore, (req, res) => {
+  const deleted = store.deleteQuickReply(req.params.id);
+  for (const image of deleted.images || []) removeStoredMedia(image.path);
+  res.json({ ok: true, item: quickReplyForPanel(deleted) });
+});
+
+app.get(
+  "/api/quick-replies/:id/images/:imageId",
+  requireAuth,
+  noStore,
+  (req, res) => {
+    const reply = store.getQuickReply(req.params.id);
+    const image = reply?.images?.find(
+      (entry) => entry.id === String(req.params.imageId || "")
+    );
+    if (!image || !isStoredMediaPath(image.path) || !fs.existsSync(image.path)) {
+      return res.status(404).json({ error: "Imagen no encontrada." });
+    }
+    res.type(image.mimetype || path.extname(image.path));
+    return res.sendFile(path.resolve(image.path));
+  }
+);
+
+app.post(
+  "/api/quick-replies/:id/images",
+  requireAuth,
+  noStore,
+  express.raw({ type: "application/octet-stream", limit: "8mb" }),
+  (req, res) => {
+    if (!store.getQuickReply(req.params.id)) {
+      return res.status(404).json({ error: "Respuesta rápida no encontrada." });
+    }
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ error: "Selecciona una imagen." });
+    }
+    if (req.body.length > 8 * 1024 * 1024) {
+      return res.status(413).json({ error: "La imagen supera el límite de 8 MB." });
+    }
+
+    let originalName = "";
+    try {
+      originalName = decodeURIComponent(String(req.get("X-File-Name") || ""));
+    } catch {
+      return res.status(400).json({ error: "El nombre de la imagen no es válido." });
+    }
+    originalName = path.basename(originalName).slice(0, 180);
+    const extension = path.extname(originalName).toLowerCase();
+    const mimeByExtension = {
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".webp": "image/webp"
+    };
+    if (!mimeByExtension[extension] || !validateQuickReplyImage(req.body, extension)) {
+      return res.status(400).json({
+        error: "La imagen no es válida. Usa un archivo PNG, JPG, JPEG o WEBP real."
+      });
+    }
+
+    const filePath = path.join(
+      mediaDir,
+      `quick-reply-${req.params.id}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}${extension}`
+    );
+    fs.writeFileSync(filePath, req.body);
+    try {
+      const image = store.addQuickReplyImage(req.params.id, {
+        id: crypto.randomUUID(),
+        path: path.resolve(filePath),
+        originalName,
+        mimetype: mimeByExtension[extension],
+        size: req.body.length,
+        uploadedAt: new Date().toISOString()
+      });
+      const reply = store.getQuickReply(req.params.id);
+      return res.status(201).json(
+        quickReplyForPanel(reply).images.find((entry) => entry.id === image.id)
+      );
+    } catch (error) {
+      removeStoredMedia(filePath);
+      throw error;
+    }
+  }
+);
+
+app.delete(
+  "/api/quick-replies/:id/images/:imageId",
+  requireAuth,
+  noStore,
+  (req, res) => {
+    const deleted = store.deleteQuickReplyImage(
+      req.params.id,
+      req.params.imageId
+    );
+    removeStoredMedia(deleted.path);
+    res.json({ ok: true });
+  }
+);
 
 app.get("/api/dashboard", requireAuth, (req, res) => {
   const clients = store.listClients();

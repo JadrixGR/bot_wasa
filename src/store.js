@@ -24,6 +24,9 @@ const {
 
 const MAX_PURCHASES_PER_PHONE = 2;
 const CATALOG_VERSION = 4.92;
+const MAX_QUICK_REPLIES = 50;
+const MAX_QUICK_REPLY_IMAGES = 6;
+const MAX_QUICK_REPLY_TEXTS = 10;
 
 function uniqueAuthenticatorCommand(baseCommand, usedCommands) {
   if (!usedCommands.has(baseCommand)) return baseCommand;
@@ -162,6 +165,59 @@ function normalizeAuthenticatorAccessEntry(entry) {
   };
 }
 
+function normalizeQuickReplyCommand(value) {
+  try {
+    return normalizeAuthenticatorCommand(value);
+  } catch {
+    throw new Error(
+      "El comando rápido debe empezar con / y contener entre 2 y 32 letras, números, guiones o guiones bajos. Ejemplo: /diferencia."
+    );
+  }
+}
+
+function normalizeQuickReplyImage(image) {
+  const source = image && typeof image === "object" ? image : {};
+  const filePath = String(source.path || "").trim();
+  if (!filePath) return null;
+  return {
+    id: String(source.id || crypto.randomUUID()),
+    path: filePath,
+    originalName: String(source.originalName || "imagen").trim().slice(0, 180),
+    mimetype: String(source.mimetype || "application/octet-stream").slice(0, 120),
+    size: Math.max(0, Number(source.size) || 0),
+    uploadedAt: source.uploadedAt || new Date().toISOString()
+  };
+}
+
+function normalizeQuickReplyRecord(input = {}) {
+  const source = input && typeof input === "object" ? input : {};
+  const name = String(source.name || "").trim();
+  const command = normalizeQuickReplyCommand(source.command);
+  const texts = (Array.isArray(source.texts) ? source.texts : [])
+    .map((text) => String(text || "").trim())
+    .filter(Boolean)
+    .slice(0, MAX_QUICK_REPLY_TEXTS)
+    .map((text) => text.slice(0, 4096));
+  const images = (Array.isArray(source.images) ? source.images : [])
+    .map(normalizeQuickReplyImage)
+    .filter(Boolean)
+    .slice(0, MAX_QUICK_REPLY_IMAGES);
+
+  if (!name) throw new Error("Ingresa un nombre para la respuesta rápida.");
+  if (!texts.length) throw new Error("Agrega al menos un mensaje de texto.");
+
+  return {
+    id: String(source.id || crypto.randomUUID()),
+    name: name.slice(0, 120),
+    command,
+    enabled: source.enabled !== false,
+    images,
+    texts,
+    createdAt: source.createdAt || new Date().toISOString(),
+    updatedAt: source.updatedAt || new Date().toISOString()
+  };
+}
+
 function normalizeWhatsAppDigits(value) {
   const localPart = String(value || "")
     .split("@")[0]
@@ -289,6 +345,19 @@ class JsonStore {
           .map((entry) => normalizeAuthenticatorAccessEntry(entry))
           .filter((entry) => entry.accountId && entry.whatsapp)
       : [];
+    const normalizedQuickReplies = (Array.isArray(parsed.quickReplies)
+      ? parsed.quickReplies
+      : []
+    )
+      .map((reply) => {
+        try {
+          return normalizeQuickReplyRecord(reply);
+        } catch {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .slice(0, MAX_QUICK_REPLIES);
     const migrated = {
       ...initial,
       ...parsed,
@@ -327,6 +396,7 @@ class JsonStore {
         : [],
       authenticatorAccounts: authenticatorMigration.accounts,
       authenticatorAccess: normalizedAuthenticatorAccess,
+      quickReplies: normalizedQuickReplies,
       products: catalogMigration.products,
       plans: catalogMigration.plans,
       catalogVersion: CATALOG_VERSION,
@@ -425,6 +495,12 @@ class JsonStore {
           metadata?.path && fs.existsSync(metadata.path) ? metadata : null
         ])
       );
+      data.quickReplies = (data.quickReplies || []).map((reply) => ({
+        ...reply,
+        images: (reply.images || []).filter(
+          (image) => image?.path && fs.existsSync(image.path)
+        )
+      }));
       data.logs.unshift({
         id: crypto.randomUUID(),
         type: "recovery",
@@ -766,9 +842,189 @@ class JsonStore {
         `El comando ${command} ya pertenece a la cuenta 2FA “${duplicate.name}”.`
       );
     }
+    const quickReplyDuplicate = (this.data.quickReplies || []).find(
+      (reply) => String(reply.command || "").toLowerCase() === command
+    );
+    if (quickReplyDuplicate) {
+      throw new Error(
+        `El comando ${command} ya pertenece a la respuesta rápida “${quickReplyDuplicate.name}”.`
+      );
+    }
   }
 
   // ─── Catálogo y comandos ─────────────────────────────────────────────
+  // Respuestas rápidas editables: las imágenes conservan su orden de carga y
+  // los textos su orden en el editor para garantizar un envío determinista.
+  listQuickReplies() {
+    return structuredClone(this.data.quickReplies || []);
+  }
+
+  getQuickReply(id) {
+    return (
+      this.listQuickReplies().find((reply) => reply.id === String(id || "")) ||
+      null
+    );
+  }
+
+  findQuickReplyByCommand(value) {
+    let command;
+    try {
+      command = normalizeQuickReplyCommand(value);
+    } catch {
+      return null;
+    }
+    return (
+      this.listQuickReplies().find((reply) => reply.command === command) || null
+    );
+  }
+
+  #assertQuickReplyCommandAvailable(command, exceptId = null) {
+    const catalogDuplicate = this.listCatalog().find(
+      (item) => item.command === command
+    );
+    if (catalogDuplicate) {
+      throw new Error(
+        `El comando ${command} ya registra el producto “${catalogDuplicate.name}”. Elige otro.`
+      );
+    }
+    const authenticatorDuplicate = (this.data.authenticatorAccounts || []).find(
+      (account) => String(account.command || "").toLowerCase() === command
+    );
+    if (authenticatorDuplicate) {
+      throw new Error(
+        `El comando ${command} ya pertenece a la cuenta 2FA “${authenticatorDuplicate.name}”.`
+      );
+    }
+    const quickReplyDuplicate = (this.data.quickReplies || []).find(
+      (reply) => reply.id !== exceptId && reply.command === command
+    );
+    if (quickReplyDuplicate) {
+      throw new Error(
+        `El comando ${command} ya pertenece a la respuesta rápida “${quickReplyDuplicate.name}”.`
+      );
+    }
+  }
+
+  createQuickReply(input = {}) {
+    this.data.quickReplies ||= [];
+    if (this.data.quickReplies.length >= MAX_QUICK_REPLIES) {
+      throw new Error(
+        `Puedes guardar como máximo ${MAX_QUICK_REPLIES} respuestas rápidas.`
+      );
+    }
+    const now = new Date().toISOString();
+    const reply = normalizeQuickReplyRecord({
+      ...input,
+      id: crypto.randomUUID(),
+      enabled: false,
+      images: [],
+      createdAt: now,
+      updatedAt: now
+    });
+    this.#assertQuickReplyCommandAvailable(reply.command);
+    this.data.quickReplies.push(reply);
+    this.addLog(
+      "quick-reply",
+      `Respuesta rápida creada: ${reply.name} (${reply.command})`,
+      { quickReplyId: reply.id }
+    );
+    this.save();
+    return structuredClone(reply);
+  }
+
+  updateQuickReply(id, input = {}) {
+    this.data.quickReplies ||= [];
+    const index = this.data.quickReplies.findIndex(
+      (reply) => reply.id === String(id || "")
+    );
+    if (index === -1) throw new Error("Respuesta rápida no encontrada.");
+    const current = this.data.quickReplies[index];
+    const updated = normalizeQuickReplyRecord({
+      ...current,
+      ...input,
+      id: current.id,
+      images: current.images,
+      createdAt: current.createdAt,
+      updatedAt: new Date().toISOString()
+    });
+    if (updated.enabled && !updated.images.length) {
+      throw new Error("Carga al menos una imagen antes de activar la respuesta rápida.");
+    }
+    this.#assertQuickReplyCommandAvailable(updated.command, current.id);
+    this.data.quickReplies[index] = updated;
+    this.addLog(
+      "quick-reply",
+      `Respuesta rápida actualizada: ${updated.name} (${updated.command})`,
+      { quickReplyId: updated.id }
+    );
+    this.save();
+    return structuredClone(updated);
+  }
+
+  deleteQuickReply(id) {
+    this.data.quickReplies ||= [];
+    const index = this.data.quickReplies.findIndex(
+      (reply) => reply.id === String(id || "")
+    );
+    if (index === -1) throw new Error("Respuesta rápida no encontrada.");
+    const [deleted] = this.data.quickReplies.splice(index, 1);
+    this.addLog(
+      "quick-reply",
+      `Respuesta rápida eliminada: ${deleted.name} (${deleted.command})`,
+      { quickReplyId: deleted.id }
+    );
+    this.save();
+    return structuredClone(deleted);
+  }
+
+  addQuickReplyImage(id, image) {
+    this.data.quickReplies ||= [];
+    const reply = this.data.quickReplies.find(
+      (entry) => entry.id === String(id || "")
+    );
+    if (!reply) throw new Error("Respuesta rápida no encontrada.");
+    reply.images ||= [];
+    if (reply.images.length >= MAX_QUICK_REPLY_IMAGES) {
+      throw new Error(
+        `Cada respuesta rápida admite hasta ${MAX_QUICK_REPLY_IMAGES} imágenes.`
+      );
+    }
+    const normalized = normalizeQuickReplyImage(image);
+    if (!normalized) throw new Error("La imagen cargada no es válida.");
+    reply.images.push(normalized);
+    reply.updatedAt = new Date().toISOString();
+    this.addLog(
+      "quick-reply",
+      `Imagen agregada a ${reply.name}: ${normalized.originalName}`,
+      { quickReplyId: reply.id, imageId: normalized.id }
+    );
+    this.save();
+    return structuredClone(normalized);
+  }
+
+  deleteQuickReplyImage(id, imageId) {
+    this.data.quickReplies ||= [];
+    const reply = this.data.quickReplies.find(
+      (entry) => entry.id === String(id || "")
+    );
+    if (!reply) throw new Error("Respuesta rápida no encontrada.");
+    reply.images ||= [];
+    const index = reply.images.findIndex(
+      (image) => image.id === String(imageId || "")
+    );
+    if (index === -1) throw new Error("Imagen no encontrada.");
+    const [deleted] = reply.images.splice(index, 1);
+    if (!reply.images.length) reply.enabled = false;
+    reply.updatedAt = new Date().toISOString();
+    this.addLog(
+      "quick-reply",
+      `Imagen eliminada de ${reply.name}: ${deleted.originalName}`,
+      { quickReplyId: reply.id, imageId: deleted.id }
+    );
+    this.save();
+    return structuredClone(deleted);
+  }
+
   listCatalog() {
     const map = (items, itemType) =>
       (Array.isArray(items) ? items : []).map((item) => ({
@@ -811,6 +1067,14 @@ class JsonStore {
     if (authenticatorDuplicate) {
       throw new Error(
         `El comando ${command} ya pertenece a la cuenta 2FA “${authenticatorDuplicate.name}”.`
+      );
+    }
+    const quickReplyDuplicate = (this.data.quickReplies || []).find(
+      (reply) => String(reply.command || "").toLowerCase() === command
+    );
+    if (quickReplyDuplicate) {
+      throw new Error(
+        `El comando ${command} ya pertenece a la respuesta rápida “${quickReplyDuplicate.name}”.`
       );
     }
   }

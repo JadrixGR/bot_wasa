@@ -10,6 +10,8 @@ const state = {
   lookupClients: [],
   authenticatorAccounts: [],
   catalog: [],
+  quickReplies: [],
+  quickReplyPendingFiles: [],
   accessEntries: [],
   accessAccountId: null,
   authenticatorSecurity: null,
@@ -166,6 +168,7 @@ function updateActiveSection(section) {
     clients: "Clientes y cobros",
     lookup: "Buscar celular",
     messages: "Mensajes automáticos",
+    "quick-replies": "Respuestas rápidas",
     afk: "Modo AFK",
     catalog: "Catálogo y comandos",
     authenticator: "Autenticador",
@@ -181,6 +184,12 @@ function loadSectionData(section) {
   }
   if (section === "catalog" && !state.loadedSections.has("catalog")) {
     loadCatalog().catch(reportError);
+  }
+  if (
+    section === "quick-replies" &&
+    !state.loadedSections.has("quick-replies")
+  ) {
+    loadQuickReplies().catch(reportError);
   }
   if (section === "activity" && !state.loadedSections.has("activity")) {
     loadLogs().catch(reportError);
@@ -655,6 +664,298 @@ async function saveAuthenticator(event) {
   } finally {
     button.disabled = false;
     button.textContent = "Guardar cuenta";
+  }
+}
+
+// ─── Respuestas rápidas ────────────────────────────────────────────────
+function normalizeQuickReplyCommandInput(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  const body = raw.startsWith("/") ? raw.slice(1) : raw;
+  const clean = body
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9_-]/g, "");
+  return clean ? `/${clean.slice(0, 32)}` : "";
+}
+
+function formatFileSize(bytes) {
+  const size = Number(bytes) || 0;
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderQuickReplies() {
+  const search = $("#quickReplySearch").value.trim().toLowerCase();
+  const items = state.quickReplies.filter((item) =>
+    `${item.name} ${item.command} ${(item.texts || []).join(" ")}`
+      .toLowerCase()
+      .includes(search)
+  );
+  const total = state.quickReplies.length;
+  $("#quickReplyCount").textContent = `${total} respuesta${total === 1 ? "" : "s"}`;
+  $("#quickReplyEmpty").classList.toggle("hidden", total > 0);
+
+  const grid = $("#quickReplyGrid");
+  if (total > 0 && items.length === 0) {
+    grid.innerHTML = `
+      <article class="panel empty-state">
+        <strong>No hay coincidencias.</strong>
+        <span>Prueba con otro nombre, comando o fragmento de texto.</span>
+      </article>`;
+    return;
+  }
+
+  grid.innerHTML = items
+    .map((item) => {
+      const images = item.images || [];
+      const texts = item.texts || [];
+      return `
+        <article class="quick-reply-card ${item.enabled ? "" : "is-disabled"}">
+          <div class="quick-reply-card-top">
+            <div>
+              <span class="pill ${item.enabled ? "green" : "neutral"}">${item.enabled ? "Activo" : "Inactivo"}</span>
+              <h3>${escapeHtml(item.name)}</h3>
+            </div>
+            <div class="quick-reply-command">
+              <code>${escapeHtml(item.command)}</code>
+              <button data-quick-reply-action="copy" data-id="${escapeHtml(item.id)}" type="button" aria-label="Copiar ${escapeHtml(item.command)}">Copiar</button>
+            </div>
+          </div>
+          <div class="quick-reply-card-media ${images.length ? "" : "is-empty"}">
+            ${images.length
+              ? images.slice(0, 3).map((image, index) => `
+                  <figure>
+                    <img src="${escapeHtml(image.url)}" alt="Vista previa ${index + 1} de ${escapeHtml(item.name)}" loading="lazy">
+                    <figcaption>${index + 1}</figcaption>
+                  </figure>`).join("")
+              : `<span>Sin imágenes</span>`}
+            ${images.length > 3 ? `<strong>+${images.length - 3}</strong>` : ""}
+          </div>
+          <div class="quick-reply-card-sequence">
+            <span>${images.length} ${images.length === 1 ? "imagen" : "imágenes"}</span>
+            <i aria-hidden="true">→</i>
+            <span>${texts.length} texto${texts.length === 1 ? "" : "s"}</span>
+          </div>
+          <div class="quick-reply-card-copy">
+            ${texts.slice(0, 2).map((text, index) => `<p><b>${index + 1}</b><span>${escapeHtml(text)}</span></p>`).join("")}
+            ${texts.length > 2 ? `<small>+ ${texts.length - 2} mensaje${texts.length - 2 === 1 ? "" : "s"} más</small>` : ""}
+          </div>
+          <div class="quick-reply-card-footer">
+            <span>Imágenes primero · textos después</span>
+            <div>
+              <button data-quick-reply-action="edit" data-id="${escapeHtml(item.id)}" type="button">Editar</button>
+              <button class="danger" data-quick-reply-action="delete" data-id="${escapeHtml(item.id)}" type="button">Eliminar</button>
+            </div>
+          </div>
+        </article>`;
+    })
+    .join("");
+}
+
+async function loadQuickReplies() {
+  const payload = await api("/api/quick-replies");
+  state.quickReplies = payload.items || [];
+  state.loadedSections.add("quick-replies");
+  renderQuickReplies();
+}
+
+function clearQuickReplyPendingFiles() {
+  for (const entry of state.quickReplyPendingFiles) {
+    if (entry.url) URL.revokeObjectURL(entry.url);
+  }
+  state.quickReplyPendingFiles = [];
+}
+
+function quickReplyTextValues() {
+  return $$("textarea[data-quick-reply-text]", $("#quickReplyTexts")).map(
+    (textarea) => textarea.value
+  );
+}
+
+function renderQuickReplyTextRows(texts = [""]) {
+  const values = texts.length ? texts : [""];
+  $("#quickReplyTexts").innerHTML = values
+    .map(
+      (text, index) => `
+        <div class="quick-reply-text-row">
+          <div class="quick-reply-text-number">${index + 1}</div>
+          <label>
+            Mensaje ${index + 1}
+            <textarea data-quick-reply-text rows="4" maxlength="4096" placeholder="Escribe el texto que se enviará después de las imágenes…" required>${escapeHtml(text)}</textarea>
+          </label>
+          <div class="quick-reply-text-actions">
+            <button data-quick-text-action="up" data-index="${index}" type="button" aria-label="Subir mensaje ${index + 1}" ${index === 0 ? "disabled" : ""}>↑</button>
+            <button data-quick-text-action="down" data-index="${index}" type="button" aria-label="Bajar mensaje ${index + 1}" ${index === values.length - 1 ? "disabled" : ""}>↓</button>
+            <button class="danger" data-quick-text-action="remove" data-index="${index}" type="button" aria-label="Eliminar mensaje ${index + 1}" ${values.length === 1 ? "disabled" : ""}>×</button>
+          </div>
+        </div>`
+    )
+    .join("");
+}
+
+function currentQuickReply() {
+  const id = $("#quickReplyId").value;
+  return state.quickReplies.find((item) => item.id === id) || null;
+}
+
+function renderQuickReplyImages() {
+  const existing = currentQuickReply()?.images || [];
+  $("#quickReplyExistingImages").innerHTML = existing
+    .map(
+      (image, index) => `
+        <figure class="quick-reply-image-item">
+          <img src="${escapeHtml(image.url)}" alt="Imagen guardada ${index + 1}" loading="lazy">
+          <figcaption><strong>${index + 1}. ${escapeHtml(image.originalName)}</strong><span>${escapeHtml(formatFileSize(image.size))}</span></figcaption>
+          <button data-existing-image-delete="${escapeHtml(image.id)}" type="button" aria-label="Eliminar ${escapeHtml(image.originalName)}">×</button>
+        </figure>`
+    )
+    .join("");
+  $("#quickReplyPendingImages").innerHTML = state.quickReplyPendingFiles
+    .map(
+      (entry, index) => `
+        <figure class="quick-reply-pending-item">
+          <img src="${escapeHtml(entry.url)}" alt="Nueva imagen ${index + 1}">
+          <figcaption><strong>${escapeHtml(entry.file.name)}</strong><span>Nueva · ${escapeHtml(formatFileSize(entry.file.size))}</span></figcaption>
+          <button data-pending-image-delete="${index}" type="button" aria-label="Quitar ${escapeHtml(entry.file.name)}">×</button>
+        </figure>`
+    )
+    .join("");
+  const total = existing.length + state.quickReplyPendingFiles.length;
+  $("#quickReplyImageCounter").textContent = `${total} / 6`;
+  $("#quickReplyImages").disabled = total >= 6;
+}
+
+function openQuickReplyDialog(item = null) {
+  clearQuickReplyPendingFiles();
+  $("#quickReplyDialogTitle").textContent = item ? "Editar respuesta" : "Nueva respuesta";
+  $("#quickReplyId").value = item?.id || "";
+  $("#quickReplyName").value = item?.name || "";
+  const commandInput = $("#quickReplyCommand");
+  commandInput.value = item?.command || "";
+  commandInput.dataset.manual = item ? "true" : "false";
+  $("#quickReplyEnabled").checked = item ? item.enabled !== false : true;
+  $("#quickReplyImages").value = "";
+  renderQuickReplyTextRows(item?.texts || [""]);
+  renderQuickReplyImages();
+  $("#quickReplyDialog").showModal();
+}
+
+function closeQuickReplyDialog() {
+  clearQuickReplyPendingFiles();
+  $("#quickReplyDialog").close();
+}
+
+function addQuickReplyFiles(fileList) {
+  const existingCount = currentQuickReply()?.images?.length || 0;
+  const remaining = 6 - existingCount - state.quickReplyPendingFiles.length;
+  const files = [...(fileList || [])];
+  if (!files.length || remaining <= 0) return;
+  const accepted = [];
+  for (const file of files.slice(0, remaining)) {
+    if (!new Set(["image/png", "image/jpeg", "image/webp"]).has(file.type)) {
+      showToast(`${file.name} no es PNG, JPG ni WEBP.`, true);
+      continue;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      showToast(`${file.name} supera los 8 MB.`, true);
+      continue;
+    }
+    accepted.push({ file, url: URL.createObjectURL(file) });
+  }
+  state.quickReplyPendingFiles.push(...accepted);
+  $("#quickReplyImages").value = "";
+  renderQuickReplyImages();
+  if (files.length > remaining) {
+    showToast("Solo se agregaron las imágenes que caben dentro del límite de 6.", true);
+  }
+}
+
+async function uploadQuickReplyImage(replyId, file) {
+  return api(`/api/quick-replies/${encodeURIComponent(replyId)}/images`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "X-File-Name": encodeURIComponent(file.name)
+    },
+    body: file
+  });
+}
+
+async function saveQuickReply(event) {
+  event.preventDefault();
+  const existingId = $("#quickReplyId").value;
+  const existing = currentQuickReply();
+  const texts = quickReplyTextValues().map((text) => text.trim()).filter(Boolean);
+  const command = normalizeQuickReplyCommandInput($("#quickReplyCommand").value);
+  const finalImageCount = (existing?.images?.length || 0) + state.quickReplyPendingFiles.length;
+  if (!command || !/^\/[a-z0-9][a-z0-9_-]{1,31}$/.test(command)) {
+    showToast("Ingresa un comando válido, por ejemplo /diferencia.", true);
+    return;
+  }
+  if (!finalImageCount) {
+    showToast("Agrega al menos una imagen o captura.", true);
+    return;
+  }
+  if (!texts.length) {
+    showToast("Agrega al menos un mensaje de texto.", true);
+    return;
+  }
+
+  const button = $("#saveQuickReplyButton");
+  const desiredEnabled = $("#quickReplyEnabled").checked;
+  const payload = {
+    name: $("#quickReplyName").value,
+    command,
+    texts,
+    enabled: existing?.images?.length ? desiredEnabled : false
+  };
+  button.disabled = true;
+  button.textContent = "Guardando…";
+  let replyId = existingId;
+  let uploadedCount = 0;
+  const pendingEntries = [...state.quickReplyPendingFiles];
+  try {
+    const saved = await api(
+      existingId ? `/api/quick-replies/${encodeURIComponent(existingId)}` : "/api/quick-replies",
+      { method: existingId ? "PUT" : "POST", body: payload }
+    );
+    replyId = saved.id;
+    for (let index = 0; index < pendingEntries.length; index += 1) {
+      button.textContent = `Subiendo imagen ${index + 1} de ${pendingEntries.length}…`;
+      await uploadQuickReplyImage(replyId, pendingEntries[index].file);
+      uploadedCount += 1;
+    }
+    if (desiredEnabled && !payload.enabled) {
+      button.textContent = "Activando…";
+      await api(`/api/quick-replies/${encodeURIComponent(replyId)}`, {
+        method: "PUT",
+        body: { ...payload, enabled: true }
+      });
+    }
+    closeQuickReplyDialog();
+    await loadQuickReplies();
+    showToast(existingId ? "Respuesta rápida actualizada." : "Respuesta rápida creada y activada.");
+  } catch (error) {
+    if (uploadedCount) {
+      const uploaded = state.quickReplyPendingFiles.splice(0, uploadedCount);
+      uploaded.forEach((entry) => entry.url && URL.revokeObjectURL(entry.url));
+    }
+    await loadQuickReplies().catch(() => undefined);
+    if (replyId) {
+      $("#quickReplyId").value = replyId;
+      $("#quickReplyDialogTitle").textContent = "Editar respuesta";
+      $("#quickReplyEnabled").checked = false;
+      renderQuickReplyImages();
+    }
+    showToast(
+      replyId && !existingId
+        ? `${error.message} La respuesta quedó guardada como inactiva para que puedas completarla.`
+        : error.message,
+      true
+    );
+  } finally {
+    button.disabled = false;
+    button.textContent = "Guardar respuesta";
   }
 }
 
@@ -1145,6 +1446,7 @@ function logLabel(type) {
     reminder: "Recordatorio",
     charge: "Cobranza",
     command: "Comando",
+    "quick-reply": "Respuesta rápida",
     client: "Cliente",
     authenticator: "Autenticador",
     security: "Seguridad",
@@ -1478,6 +1780,127 @@ function bindEvents() {
     }
   });
   $("#refreshLogsButton").addEventListener("click", loadLogs);
+
+  $("#newQuickReplyButton").addEventListener("click", () =>
+    openQuickReplyDialog()
+  );
+  $$('[data-quick-reply-new]').forEach((button) =>
+    button.addEventListener("click", () => openQuickReplyDialog())
+  );
+  $("#refreshQuickRepliesButton").addEventListener("click", async () => {
+    try {
+      await loadQuickReplies();
+      showToast("Respuestas rápidas actualizadas.");
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
+  $("#quickReplySearch").addEventListener("input", renderQuickReplies);
+  $("#quickReplyForm").addEventListener("submit", saveQuickReply);
+  $("#quickReplyName").addEventListener("input", () => {
+    const commandInput = $("#quickReplyCommand");
+    if ($("#quickReplyId").value || commandInput.dataset.manual === "true") return;
+    commandInput.value = normalizeQuickReplyCommandInput(
+      $("#quickReplyName").value
+    );
+  });
+  $("#quickReplyCommand").addEventListener("input", () => {
+    $("#quickReplyCommand").dataset.manual = "true";
+  });
+  $$(".quick-reply-close").forEach((button) =>
+    button.addEventListener("click", closeQuickReplyDialog)
+  );
+  $("#quickReplyImages").addEventListener("change", (event) =>
+    addQuickReplyFiles(event.target.files)
+  );
+  $("#quickReplyPendingImages").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-pending-image-delete]");
+    if (!button) return;
+    const index = Number(button.dataset.pendingImageDelete);
+    const [deleted] = state.quickReplyPendingFiles.splice(index, 1);
+    if (deleted?.url) URL.revokeObjectURL(deleted.url);
+    renderQuickReplyImages();
+  });
+  $("#quickReplyExistingImages").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-existing-image-delete]");
+    const reply = currentQuickReply();
+    if (!button || !reply) return;
+    if (!confirm("¿Eliminar esta imagen de la secuencia?")) return;
+    button.disabled = true;
+    try {
+      await api(
+        `/api/quick-replies/${encodeURIComponent(reply.id)}/images/${encodeURIComponent(button.dataset.existingImageDelete)}`,
+        { method: "DELETE" }
+      );
+      await loadQuickReplies();
+      renderQuickReplyImages();
+      const refreshed = currentQuickReply();
+      if (refreshed && !refreshed.images.length) {
+        $("#quickReplyEnabled").checked = false;
+      }
+      showToast("Imagen eliminada de la secuencia.");
+    } catch (error) {
+      showToast(error.message, true);
+    } finally {
+      button.disabled = false;
+    }
+  });
+  $("#addQuickReplyTextButton").addEventListener("click", () => {
+    const values = quickReplyTextValues();
+    if (values.length >= 10) {
+      showToast("Puedes agregar hasta 10 mensajes de texto.", true);
+      return;
+    }
+    renderQuickReplyTextRows([...values, ""]);
+    $$('textarea[data-quick-reply-text]').at(-1)?.focus();
+  });
+  $("#quickReplyTexts").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-quick-text-action]");
+    if (!button) return;
+    const values = quickReplyTextValues();
+    const index = Number(button.dataset.index);
+    const action = button.dataset.quickTextAction;
+    if (action === "remove" && values.length > 1) values.splice(index, 1);
+    if (action === "up" && index > 0) {
+      [values[index - 1], values[index]] = [values[index], values[index - 1]];
+    }
+    if (action === "down" && index < values.length - 1) {
+      [values[index + 1], values[index]] = [values[index], values[index + 1]];
+    }
+    renderQuickReplyTextRows(values);
+  });
+  $("#quickReplyGrid").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-quick-reply-action]");
+    if (!button) return;
+    const item = state.quickReplies.find((entry) => entry.id === button.dataset.id);
+    if (!item) return;
+    const action = button.dataset.quickReplyAction;
+    if (action === "copy") {
+      try {
+        await copyTextToClipboard(item.command);
+        showToast(`Comando ${item.command} copiado.`);
+      } catch (error) {
+        showToast(error.message, true);
+      }
+      return;
+    }
+    if (action === "edit") {
+      openQuickReplyDialog(item);
+      return;
+    }
+    if (action === "delete") {
+      if (!confirm(`¿Eliminar la respuesta “${item.name}” y todas sus imágenes?`)) return;
+      try {
+        await api(`/api/quick-replies/${encodeURIComponent(item.id)}`, {
+          method: "DELETE"
+        });
+        await loadQuickReplies();
+        showToast("Respuesta rápida eliminada.");
+      } catch (error) {
+        showToast(error.message, true);
+      }
+    }
+  });
 
   $("#newCatalogButton").addEventListener("click", () => openCatalogDialog());
   $$("[data-catalog-new]").forEach((button) =>

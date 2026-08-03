@@ -1,5 +1,27 @@
 # JadrixServs Bot V4.9.3 Profesional
 
+## Respuestas rápidas con imágenes y textos
+
+El panel incluye el apartado **Respuestas rápidas** para crear comandos privados como `/diferencia`.
+
+- Cada respuesta admite de 1 a 6 imágenes PNG, JPG o WEBP, con un máximo de 8 MB por archivo.
+- Después de las imágenes se pueden guardar de 1 a 10 textos; cada bloque se envía como un mensaje separado y en el orden mostrado en el editor.
+- El comando se ejecuta únicamente cuando lo escribe el administrador desde el WhatsApp conectado dentro del chat de destino. Un cliente no puede dispararlo desde su propio teléfono.
+- Los comandos no pueden repetirse ni entrar en conflicto con el catálogo de registro o con el Autenticador 2FA.
+- Los eventos repetidos de WhatsApp no vuelven a enviar la misma secuencia.
+- Al eliminar la última imagen, la respuesta se desactiva automáticamente hasta que se cargue otra.
+
+### Crear y usar una respuesta
+
+1. Abre **Respuestas rápidas → Nueva respuesta**.
+2. Escribe un nombre interno y un comando, por ejemplo `/diferencia`.
+3. Carga las imágenes en el orden en que deben llegar.
+4. Agrega uno o más bloques de texto; usa las flechas del editor para cambiar su orden.
+5. Guarda la respuesta y déjala activa.
+6. Desde tu propio WhatsApp abre el chat del cliente y envía únicamente `/diferencia`.
+
+Las imágenes se guardan en `MEDIA_DIR` (`/data/media` en Render), mientras que la definición, el orden y los textos se guardan en `/data/jadrixservs-v4.json`. Por eso el disco persistente debe conservarse: el respaldo JSON incluye la configuración, pero no incrusta los archivos binarios de las imágenes.
+
 ## Comandos 2FA seguros por WhatsApp · V4.9.1
 
 - Cada cuenta del Autenticador tiene un comando único y editable, por ejemplo `/gpt01`.

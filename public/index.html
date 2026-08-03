@@ -141,6 +141,11 @@
               <svg viewBox="0 0 24 24"><path d="M5 18.5 3.5 21l4.2-.9a9 9 0 1 0-2.7-1.6Z"/><path d="M8 9h8M8 13h5"/></svg>
             </span><span>Mensajes automáticos</span>
           </button>
+          <button class="nav-button" data-section="quick-replies" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="13" rx="2.5"/><path d="m8 17.5-3.5 3v-3M8 9h8M8 13h5"/></svg>
+            </span><span>Respuestas rápidas</span>
+          </button>
           <button class="nav-button" data-section="afk" type="button">
             <span class="nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z"/></svg>
@@ -455,6 +460,47 @@
           </div>
         </section>
 
+        <section id="section-quick-replies" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">ATAJOS DE WHATSAPP</p>
+              <h2>Respuestas rápidas</h2>
+              <p class="muted">Crea comandos privados que envían una o varias imágenes y después uno o más textos.</p>
+            </div>
+            <div class="button-row">
+              <button id="refreshQuickRepliesButton" class="button secondary" type="button">Actualizar</button>
+              <button id="newQuickReplyButton" class="button primary" type="button">+ Nueva respuesta</button>
+            </div>
+          </div>
+
+          <article class="quick-reply-guide" aria-label="Cómo usar respuestas rápidas">
+            <div class="quick-reply-guide-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M5 18.5 3.5 21l4.2-.9a9 9 0 1 0-2.7-1.6Z"/><path d="M8 9h8M8 13h5"/></svg>
+            </div>
+            <div>
+              <span class="pill violet">Solo administrador</span>
+              <h3>Escribe el comando dentro del chat del cliente.</h3>
+              <p>Por ejemplo, al escribir <code>/diferencia</code> desde tu propio WhatsApp, el bot enviará las imágenes en el orden guardado y luego cada bloque de texto como un mensaje separado. Los clientes no pueden ejecutar estos comandos.</p>
+            </div>
+          </article>
+
+          <article class="panel authenticator-toolbar quick-reply-toolbar">
+            <div>
+              <label for="quickReplySearch">Buscar respuesta</label>
+              <input id="quickReplySearch" type="search" autocomplete="off" placeholder="Nombre, comando o texto…">
+            </div>
+            <span id="quickReplyCount" class="pill blue">0 respuestas</span>
+          </article>
+
+          <div id="quickReplyGrid" class="quick-reply-grid"></div>
+          <article id="quickReplyEmpty" class="panel empty-state hidden">
+            <span class="quick-reply-empty-icon" aria-hidden="true">/</span>
+            <strong>Aún no hay respuestas rápidas.</strong>
+            <span>Crea la primera, carga sus imágenes y escribe los mensajes que irán después.</span>
+            <button class="button primary" data-quick-reply-new type="button">Crear primera respuesta</button>
+          </article>
+        </section>
+
         <section id="section-afk" class="page-section">
           <div class="section-intro">
             <div>
@@ -704,6 +750,59 @@
         <div class="dialog-actions">
           <button class="button secondary authenticator-close" type="button">Cancelar</button>
           <button id="saveAuthenticatorButton" class="button primary" type="submit">Guardar cuenta</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="quickReplyDialog" class="quick-reply-dialog">
+      <form id="quickReplyForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">RESPUESTA RÁPIDA</p><h2 id="quickReplyDialogTitle">Nueva respuesta</h2></div>
+          <button class="icon-button quick-reply-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="quickReplyId" type="hidden">
+        <div class="form-grid quick-reply-form-grid">
+          <label>
+            Nombre interno
+            <input id="quickReplyName" type="text" maxlength="120" placeholder="Diferencia entre planes" required>
+          </label>
+          <label>
+            Comando privado
+            <input id="quickReplyCommand" class="authenticator-command-input" type="text" maxlength="33" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="/diferencia" required>
+            <small>Escríbelo tú desde el WhatsApp conectado.</small>
+          </label>
+        </div>
+
+        <section class="quick-reply-editor-block" aria-labelledby="quickReplyImagesTitle">
+          <div class="quick-reply-editor-heading">
+            <div><span class="editor-step">1</span><div><h3 id="quickReplyImagesTitle">Imágenes</h3><p>Se enviarán primero, en este orden.</p></div></div>
+            <span id="quickReplyImageCounter" class="pill blue">0 / 6</span>
+          </div>
+          <div id="quickReplyExistingImages" class="quick-reply-image-list"></div>
+          <label class="quick-reply-dropzone" for="quickReplyImages">
+            <input id="quickReplyImages" type="file" accept="image/png,image/jpeg,image/webp" multiple>
+            <span class="quick-reply-dropzone-icon" aria-hidden="true">＋</span>
+            <strong>Agregar imagen o captura</strong>
+            <small>PNG, JPG o WEBP · máximo 8 MB por imagen · hasta 6</small>
+          </label>
+          <div id="quickReplyPendingImages" class="quick-reply-pending-list"></div>
+        </section>
+
+        <section class="quick-reply-editor-block" aria-labelledby="quickReplyTextsTitle">
+          <div class="quick-reply-editor-heading">
+            <div><span class="editor-step">2</span><div><h3 id="quickReplyTextsTitle">Textos posteriores</h3><p>Cada bloque se enviará como un mensaje separado.</p></div></div>
+            <button id="addQuickReplyTextButton" class="button secondary compact-button" type="button">+ Agregar texto</button>
+          </div>
+          <div id="quickReplyTexts" class="quick-reply-text-list"></div>
+        </section>
+
+        <label class="toggle-row quick-reply-enable-row">
+          <input id="quickReplyEnabled" type="checkbox" checked>
+          <span><strong>Comando activo en WhatsApp</strong><small>Al desactivarlo seguirá guardado, pero no enviará contenido.</small></span>
+        </label>
+        <div class="dialog-actions">
+          <button class="button secondary quick-reply-close" type="button">Cancelar</button>
+          <button id="saveQuickReplyButton" class="button primary" type="submit">Guardar respuesta</button>
         </div>
       </form>
     </dialog>
