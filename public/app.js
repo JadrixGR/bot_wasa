@@ -14,6 +14,7 @@ const state = {
   accessAccountId: null,
   authenticatorSecurity: null,
   activeSection: "dashboard",
+  loadedSections: new Set(),
   poller: null,
   authenticatorTicker: null,
   authenticatorRefreshPending: false
@@ -127,6 +128,7 @@ function showLogin() {
   setSidebarOpen(false);
   clearInterval(state.poller);
   clearInterval(state.authenticatorTicker);
+  state.loadedSections.clear();
 }
 
 async function showApp() {
@@ -149,7 +151,7 @@ function setSidebarOpen(open) {
   menuButton.setAttribute("aria-label", open ? "Cerrar menú" : "Abrir menú");
 }
 
-function navigate(section) {
+function updateActiveSection(section) {
   state.activeSection = section;
   $$(".page-section").forEach((element) => element.classList.toggle("active", element.id === `section-${section}`));
   $$(".nav-button").forEach((button) => {
@@ -170,22 +172,48 @@ function navigate(section) {
     activity: "Actividad"
   };
   $("#pageTitle").textContent = titles[section] || "JadrixServs";
-  setSidebarOpen(false);
-  window.scrollTo({
-    top: 0,
-    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
-  });
-  if (section === "clients") loadClients();
-  if (section === "catalog") {
-    loadCatalog().catch((error) => showToast(error.message, true));
+}
+
+function loadSectionData(section) {
+  const reportError = (error) => showToast(error.message, true);
+  if (section === "clients" && !state.loadedSections.has("clients")) {
+    loadClients().catch(reportError);
   }
-  if (section === "activity") loadLogs();
-  if (section === "messages" || section === "afk") loadSettings();
+  if (section === "catalog" && !state.loadedSections.has("catalog")) {
+    loadCatalog().catch(reportError);
+  }
+  if (section === "activity" && !state.loadedSections.has("activity")) {
+    loadLogs().catch(reportError);
+  }
+  if (
+    (section === "messages" || section === "afk") &&
+    !state.loadedSections.has("settings")
+  ) {
+    loadSettings().catch(reportError);
+  }
   if (section === "authenticator") {
-    loadAuthenticator().catch((error) => showToast(error.message, true));
+    loadAuthenticator().catch(reportError);
   } else {
     clearInterval(state.authenticatorTicker);
   }
+}
+
+function navigate(section) {
+  const currentSection = state.activeSection;
+  const target = $(`#section-${section}`);
+  if (!target) return;
+
+  setSidebarOpen(false);
+  if (currentSection !== section) {
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reducedMotion && typeof document.startViewTransition === "function") {
+      document.startViewTransition(() => updateActiveSection(section));
+    } else {
+      updateActiveSection(section);
+    }
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+  loadSectionData(section);
 }
 
 function statusPresentation(status) {
@@ -338,6 +366,7 @@ function animateStatValue(element, value) {
 
 async function loadClients() {
   state.clients = await api("/api/clients");
+  state.loadedSections.add("clients");
   renderClients();
 }
 
@@ -697,6 +726,7 @@ function renderCatalog() {
 async function loadCatalog() {
   const payload = await api("/api/catalog");
   state.catalog = payload.items || [];
+  state.loadedSections.add("catalog");
   renderCatalog();
 }
 
@@ -1042,6 +1072,7 @@ async function loadSettings() {
   state.settings = payload.settings;
   state.products = payload.products;
   state.plans = payload.plans;
+  state.loadedSections.add("settings");
   $("#greeting1").value = payload.settings.greetingMessages[0] || "";
   $("#greeting2").value = payload.settings.greetingMessages[1] || "";
   $("#greeting3").value = payload.settings.greetingMessages[2] || "";
@@ -1137,6 +1168,7 @@ function renderLogs(logs, target, compact = false) {
 
 async function loadLogs() {
   renderLogs(await api("/api/logs?limit=250"), $("#allLogs"));
+  state.loadedSections.add("activity");
 }
 
 async function refreshDashboardOnly() {

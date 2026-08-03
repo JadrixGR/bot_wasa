@@ -127,6 +127,67 @@ test("el programador envía solo el recordatorio y la cobranza que corresponden"
   assert.deepEqual(logs.map((item) => item.type), ["reminder", "charge"]);
 });
 
+test("cobra por separado dos compras del mismo número en sus propias fechas", async () => {
+  const clients = [
+    {
+      ...baseClient,
+      id: "compra-2-agosto",
+      whatsapp: "51911111111",
+      product: "ChatGPT Pro",
+      expiryDate: "2026-08-02",
+      autoReminder: false,
+      autoCharge: true
+    },
+    {
+      ...baseClient,
+      id: "compra-5-agosto",
+      whatsapp: "51911111111",
+      product: "ChatGPT Pro",
+      expiryDate: "2026-08-05",
+      autoReminder: false,
+      autoCharge: true
+    }
+  ];
+  const sent = [];
+  let currentDate = "2026-08-02";
+  const store = {
+    listClients: () => clients.map((client) => ({ ...client })),
+    getSettings: () => ({
+      reminderTemplate: "Aviso {producto}",
+      chargeTemplate: "Cobro {producto} · {fecha}",
+      chargeStartTime: "09:00"
+    }),
+    updateClient: (id, patch) => Object.assign(
+      clients.find((client) => client.id === id),
+      patch
+    ),
+    addLog: () => undefined,
+    save: () => undefined
+  };
+  const scheduler = new ReminderScheduler({
+    store,
+    whatsapp: {
+      getStatus: () => ({ ready: true }),
+      sendText: async (number, message) => sent.push({ number, message })
+    },
+    todayFn: () => currentDate,
+    minutesFn: () => 9 * 60
+  });
+
+  const firstDay = await scheduler.runOnce();
+  currentDate = "2026-08-05";
+  const secondDay = await scheduler.runOnce();
+
+  assert.equal(firstDay.sent, 1);
+  assert.equal(secondDay.sent, 1);
+  assert.deepEqual(sent, [
+    { number: "51911111111", message: "Cobro ChatGPT Pro · 02/08/2026" },
+    { number: "51911111111", message: "Cobro ChatGPT Pro · 05/08/2026" }
+  ]);
+  assert.equal(clients[0].lastChargeKey, "2026-08-02:charge");
+  assert.equal(clients[1].lastChargeKey, "2026-08-05:charge");
+});
+
 
 test("no envía cobranzas ni recordatorios antes de las 9 AM", async () => {
   const clients = [

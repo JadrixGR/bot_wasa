@@ -5,6 +5,7 @@ const path = require("node:path");
 const express = require("express");
 const helmet = require("helmet");
 const cookieSession = require("cookie-session");
+const { version: appVersion } = require("../package.json");
 const { JsonStore, normalizeWhatsAppDigits } = require("./store");
 const { AiService } = require("./ai-service");
 const { AuthenticatorService } = require("./authenticator-service");
@@ -111,7 +112,7 @@ function clientForPanel(client) {
 app.get("/health", (_req, res) => {
   res.json({
     ok: true,
-    version: "4.9.2",
+    version: appVersion,
     whatsapp: whatsapp.getStatus().state,
     ai: whatsapp.getAiStatus(),
     authenticator: {
@@ -623,7 +624,7 @@ app.use((error, _req, res, _next) => {
 });
 
 const server = app.listen(port, "0.0.0.0", () => {
-  console.log(`JadrixServs V4.9.2 disponible en el puerto ${port}`);
+  console.log(`JadrixServs V${appVersion} disponible en el puerto ${port}`);
   if (!process.env.ADMIN_PASSWORD) {
     console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
   }

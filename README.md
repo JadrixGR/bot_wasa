@@ -1,4 +1,4 @@
-# JadrixServs Bot V4.9.1 Profesional
+# JadrixServs Bot V4.9.3 Profesional
 
 ## Comandos 2FA seguros por WhatsApp · V4.9.1
 
@@ -116,9 +116,9 @@ La primera parte identifica el producto o plan y el número indica los días agr
 - Crea un cliente nuevo con el nombre `estimad@`.
 - Guarda el producto, el precio del catálogo, los días y el vencimiento.
 - Activa el recordatorio de 2 días y deja apagada la cobranza automática.
-- Renueva el registro existente si el mismo número ya tiene el mismo producto.
-- Suma los días desde el vencimiento vigente para que una renovación anticipada no pierda días.
-- Crea otro registro independiente cuando el mismo número compra un producto diferente.
+- Crea una compra independiente por cada comando nuevo, aunque el mismo número repita el producto.
+- Conserva por separado la activación, el vencimiento, el recordatorio y la cobranza de cada compra.
+- Mantiene el botón **Renovar** del panel para extender deliberadamente un registro existente sin perder días.
 - Ignora los comandos escritos por el cliente; solamente los mensajes enviados por el propietario pueden registrar o renovar.
 - Evita sumar dos veces si WhatsApp repite el mismo evento.
 

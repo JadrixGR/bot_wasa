@@ -1085,9 +1085,8 @@ class JsonStore {
       commandMessageId &&
       this.data.processedCommandIds.includes(commandMessageId)
     ) {
-      const duplicate = this.findClientByWhatsAppAndProduct(
-        whatsapp,
-        item.name
+      const duplicate = this.data.clients.find(
+        (client) => client.lastCommandMessageId === commandMessageId
       );
       return {
         client: duplicate ? structuredClone(duplicate) : null,
@@ -1112,10 +1111,6 @@ class JsonStore {
     const today = todayInTimeZone(
       process.env.BOT_TIMEZONE || "America/Lima"
     );
-    const existing = this.findClientByWhatsAppAndProduct(
-      whatsapp,
-      item.name
-    );
     const commandFields = {
       product: item.name,
       price: item.price || "",
@@ -1131,45 +1126,22 @@ class JsonStore {
       lastChargeKey: null
     };
 
-    let client;
-    let created;
-    if (existing) {
-      let periodStart = today;
-      try {
-        if (
-          existing.expiryDate &&
-          compareDateOnly(existing.expiryDate, today) >= 0
-        ) {
-          periodStart = existing.expiryDate;
-        }
-      } catch {
-        periodStart = today;
-      }
-      client = this.updateClient(existing.id, {
-        ...commandFields,
-        startDate: periodStart,
-        expiryDate: addDays(periodStart, durationDays)
-      });
-      created = false;
-    } else {
-      client = this.createClient({
-        ...commandFields,
-        name: "estimad@",
-        whatsapp: normalizeWhatsAppDigits(whatsapp),
-        accountReference: "",
-        paymentMethod: "",
-        startDate: today,
-        expiryDate: addDays(today, durationDays),
-        autoReminder: true,
-        autoCharge: false,
-        notes: `Registrado con ${command} ${durationDays}.`
-      });
-      created = true;
-    }
+    const client = this.createClient({
+      ...commandFields,
+      name: "estimad@",
+      whatsapp: normalizeWhatsAppDigits(whatsapp),
+      accountReference: "",
+      paymentMethod: "",
+      startDate: today,
+      expiryDate: addDays(today, durationDays),
+      autoReminder: true,
+      autoCharge: false,
+      notes: `Compra independiente registrada con ${command} ${durationDays}.`
+    });
 
     this.addLog(
       "command",
-      `${created ? "Cliente registrado" : "Servicio renovado"} con ${command}: ${client.whatsapp} · ${client.product} · ${durationDays} días · vence ${client.expiryDate}`,
+      `Compra registrada con ${command}: ${client.whatsapp} · ${client.product} · ${durationDays} días · vence ${client.expiryDate}`,
       { clientId: client.id, command, durationDays }
     );
     if (commandMessageId) {
@@ -1179,7 +1151,7 @@ class JsonStore {
       ].slice(0, 500);
     }
     this.save();
-    return { client, created, duplicate: false };
+    return { client, created: true, duplicate: false };
   }
 
   createClient(input) {

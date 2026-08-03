@@ -221,7 +221,7 @@ test("un comando crea al cliente estimad@ con días exactos y automatización se
   }
 });
 
-test("repetir el mismo comando renueva sin perder días y un evento duplicado no suma otra vez", () => {
+test("cada comando nuevo crea una compra independiente aunque repita el producto", () => {
   const directory = temporaryDataDir();
   try {
     const store = new JsonStore(directory);
@@ -240,7 +240,7 @@ test("repetir el mismo comando renueva sin perder días y un evento duplicado no
       command: "/gptpro",
       commandMessageId: "mensaje-1"
     });
-    const renewal = store.registerClientFromCommand({
+    const secondPurchase = store.registerClientFromCommand({
       whatsapp: "999888777",
       item,
       days: 30,
@@ -249,13 +249,14 @@ test("repetir el mismo comando renueva sin perder días y un evento duplicado no
     });
 
     assert.equal(duplicate.duplicate, true);
+    assert.equal(duplicate.client.id, first.client.id);
     assert.equal(duplicate.client.expiryDate, first.client.expiryDate);
-    assert.equal(renewal.created, false);
-    assert.equal(
-      renewal.client.expiryDate,
-      addDays(first.client.expiryDate, 30)
-    );
-    assert.equal(store.listClients().length, 1);
+    assert.equal(secondPurchase.created, true);
+    assert.notEqual(secondPurchase.client.id, first.client.id);
+    assert.equal(secondPurchase.client.product, first.client.product);
+    assert.equal(secondPurchase.client.startDate, first.client.startDate);
+    assert.equal(secondPurchase.client.expiryDate, first.client.expiryDate);
+    assert.equal(store.listClients().length, 2);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
