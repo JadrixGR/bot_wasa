@@ -1310,10 +1310,14 @@ class WhatsAppService {
       this.store.markCommandMessageProcessed?.(commandMessageId);
     }
     try {
-      for (const image of reply.images) {
-        await this.sendMedia(target, image.path);
+      const lastImageIndex = reply.images.length - 1;
+      for (let index = 0; index < reply.images.length; index += 1) {
+        const image = reply.images[index];
+        await this.sendMedia(target, image.path, {
+          caption: index === lastImageIndex ? reply.texts[0] : undefined
+        });
       }
-      for (const text of reply.texts) {
+      for (const text of reply.texts.slice(1)) {
         await this.sendText(target, text);
       }
       this.store.addLog(

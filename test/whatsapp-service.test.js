@@ -712,7 +712,7 @@ test("un comando enviado por el propietario registra el número alternativo sin 
   assert.equal(socket.calls.read.length, 0);
 });
 
-test("una respuesta rápida envía todas las imágenes y luego los textos una sola vez", async () => {
+test("una respuesta rápida adjunta el primer texto a la última imagen y envía el resto una sola vez", async () => {
   const fake = makeFakeBaileys({ registered: true });
   const store = makeStore();
   const mediaDirectory = path.join(testRuntimeDir, "quick-reply-media");
@@ -762,10 +762,11 @@ test("una respuesta rápida envía todas las imágenes y luego los textos una so
 
   assert.deepEqual(
     socket.calls.sent.map((entry) => Object.keys(entry.content)[0]),
-    ["image", "image", "text", "text"]
+    ["image", "image", "text"]
   );
-  assert.equal(socket.calls.sent[2].content.text, "Primer texto");
-  assert.equal(socket.calls.sent[3].content.text, "Segundo texto");
+  assert.equal(socket.calls.sent[0].content.caption, undefined);
+  assert.equal(socket.calls.sent[1].content.caption, "Primer texto");
+  assert.equal(socket.calls.sent[2].content.text, "Segundo texto");
   assert.equal(store.isCommandMessageProcessed("quick-reply-command-1"), true);
   assert.ok(
     store.logs.some(
@@ -777,7 +778,7 @@ test("una respuesta rápida envía todas las imágenes y luego los textos una so
 
   socket.ev.emit("messages.upsert", event);
   await settleMessageQueue(service);
-  assert.equal(socket.calls.sent.length, 4);
+  assert.equal(socket.calls.sent.length, 3);
 });
 
 test("un cliente no puede ejecutar una respuesta rápida privada", async () => {

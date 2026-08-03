@@ -5,7 +5,7 @@
 El panel incluye el apartado **Respuestas rápidas** para crear comandos privados como `/diferencia`.
 
 - Cada respuesta admite de 1 a 6 imágenes PNG, JPG o WEBP, con un máximo de 8 MB por archivo.
-- Después de las imágenes se pueden guardar de 1 a 10 textos; cada bloque se envía como un mensaje separado y en el orden mostrado en el editor.
+- Se pueden guardar de 1 a 10 textos: el primero se adjunta como pie de foto de la última imagen y los siguientes se envían como mensajes separados, respetando el orden del editor.
 - El comando se ejecuta únicamente cuando lo escribe el administrador desde el WhatsApp conectado dentro del chat de destino. Un cliente no puede dispararlo desde su propio teléfono.
 - Los comandos no pueden repetirse ni entrar en conflicto con el catálogo de registro o con el Autenticador 2FA.
 - Los eventos repetidos de WhatsApp no vuelven a enviar la misma secuencia.
@@ -16,7 +16,7 @@ El panel incluye el apartado **Respuestas rápidas** para crear comandos privado
 1. Abre **Respuestas rápidas → Nueva respuesta**.
 2. Escribe un nombre interno y un comando, por ejemplo `/diferencia`.
 3. Carga las imágenes en el orden en que deben llegar.
-4. Agrega uno o más bloques de texto; usa las flechas del editor para cambiar su orden.
+4. Agrega uno o más bloques de texto; el primero aparecerá dentro de la última imagen y los demás llegarán por separado. Usa las flechas para cambiar su orden.
 5. Guarda la respuesta y déjala activa.
 6. Desde tu propio WhatsApp abre el chat del cliente y envía únicamente `/diferencia`.
 

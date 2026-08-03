@@ -733,15 +733,16 @@ function renderQuickReplies() {
           </div>
           <div class="quick-reply-card-sequence">
             <span>${images.length} ${images.length === 1 ? "imagen" : "imágenes"}</span>
-            <i aria-hidden="true">→</i>
-            <span>${texts.length} texto${texts.length === 1 ? "" : "s"}</span>
+            <i aria-hidden="true">+</i>
+            <span>primer texto</span>
+            ${texts.length > 1 ? `<i aria-hidden="true">→</i><span>${texts.length - 1} separado${texts.length - 1 === 1 ? "" : "s"}</span>` : ""}
           </div>
           <div class="quick-reply-card-copy">
-            ${texts.slice(0, 2).map((text, index) => `<p><b>${index + 1}</b><span>${escapeHtml(text)}</span></p>`).join("")}
+            ${texts.slice(0, 2).map((text, index) => `<p><b>${index === 0 ? "↳" : index + 1}</b><span>${escapeHtml(text)}</span></p>`).join("")}
             ${texts.length > 2 ? `<small>+ ${texts.length - 2} mensaje${texts.length - 2 === 1 ? "" : "s"} más</small>` : ""}
           </div>
           <div class="quick-reply-card-footer">
-            <span>Imágenes primero · textos después</span>
+            <span>Primer texto unido a la última imagen</span>
             <div>
               <button data-quick-reply-action="edit" data-id="${escapeHtml(item.id)}" type="button">Editar</button>
               <button class="danger" data-quick-reply-action="delete" data-id="${escapeHtml(item.id)}" type="button">Eliminar</button>
@@ -780,8 +781,9 @@ function renderQuickReplyTextRows(texts = [""]) {
         <div class="quick-reply-text-row">
           <div class="quick-reply-text-number">${index + 1}</div>
           <label>
-            Mensaje ${index + 1}
-            <textarea data-quick-reply-text rows="4" maxlength="4096" placeholder="Escribe el texto que se enviará después de las imágenes…" required>${escapeHtml(text)}</textarea>
+            ${index === 0 ? "Mensaje 1 · pie de la imagen" : `Mensaje ${index + 1} · separado`}
+            <textarea data-quick-reply-text rows="4" maxlength="4096" placeholder="${index === 0 ? "Este texto aparecerá dentro de la última imagen…" : "Este texto se enviará como un mensaje separado…"}" required>${escapeHtml(text)}</textarea>
+            <small>${index === 0 ? "WhatsApp lo mostrará en la misma burbuja que la última imagen." : "Se enviará después de la imagen y de los textos anteriores."}</small>
           </label>
           <div class="quick-reply-text-actions">
             <button data-quick-text-action="up" data-index="${index}" type="button" aria-label="Subir mensaje ${index + 1}" ${index === 0 ? "disabled" : ""}>↑</button>
