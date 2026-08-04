@@ -2,11 +2,11 @@
 
 ## Bienvenidas distintas por anuncio
 
-En **Mensajes automáticos → Bienvenidas por anuncio** puedes crear una secuencia diferente de tres mensajes para cada campaña de Meta o Instagram.
+En **Mensajes automáticos → Bienvenidas por anuncio** puedes crear una secuencia de 1 a 20 mensajes para cada campaña de Meta o Instagram.
 
 - El bot inspecciona `externalAdReply`, la referencia que WhatsApp adjunta al primer mensaje proveniente de un anuncio.
 - Puede reconocer la campaña mediante su título, texto, ID estable o enlace de origen.
-- Cada perfil permite configurar varias frases o identificadores, exactamente tres mensajes y un estado activo o inactivo.
+- Cada perfil permite configurar varias frases o identificadores, entre 1 y 20 mensajes, una imagen opcional en cada mensaje y un estado activo o inactivo.
 - La prioridad normal es: **anuncio reconocido → país del número → bienvenida general**.
 - Al desactivar **Detectar anuncio y usar su bienvenida** y guardar, todos los contactos nuevos reciben únicamente la bienvenida general, sin importar el anuncio o el país.
 - Un perfil de anuncio desactivado queda guardado, pero sus contactos pasan a la bienvenida del país o a la general.
@@ -19,10 +19,12 @@ La actualización incluye un perfil inicial para el anuncio **ChatGPT Personal y
 1. Abre **Mensajes automáticos** y pulsa **+ Agregar anuncio**.
 2. Escribe un nombre interno para reconocerlo en el panel.
 3. Copia una o varias frases únicas del anuncio, una por línea. También puedes pegar el ID del anuncio si lo conoces.
-4. Escribe los tres mensajes en el orden exacto en que deben llegar.
+4. Agrega o quita mensajes, ordénalos y adjunta una imagen opcional a cualquiera de ellos.
 5. Deja activo el perfil y guarda.
 
 No uses solamente palabras genéricas como `ChatGPT` o `oferta`, porque podrían coincidir con varias campañas. Es mejor utilizar el encabezado completo, una frase promocional única o el ID que entrega Meta.
+
+Las imágenes de bienvenida se guardan en `MEDIA_DIR` (`/data/media` en Render) y sus referencias se conservan en `/data/jadrixservs-v4.json`. Para no perderlas al desplegar o reiniciar, conserva ambos dentro del disco persistente de Render.
 
 ## Respuestas con Gemini IA
 
@@ -35,7 +37,7 @@ El apartado **IA y entrenamiento** permite conectar Google Gemini sin exponer la
 - La memoria se guarda dentro de `/data/jadrixservs-v4.json`, por lo que sigue disponible al reiniciar el servicio siempre que Render conserve el disco persistente.
 - El panel trae tablas iniciales editables para Perú (`+51`, PEN), México (`+52`, MXN) y Argentina (`+54`, ARS). Son precios comerciales fijos: no dependen de una conversión automática ni de una cotización externa.
 - Las respuestas admiten suficiente espacio para contestar listas completas. Si Gemini informa que cortó la salida por límite de tokens, el bot repite la consulta una vez con un límite mayor.
-- Un contacto nuevo siempre recibe primero la bienvenida de tres mensajes. La IA puede responder desde su siguiente consulta.
+- Un contacto nuevo siempre recibe primero toda la secuencia de bienvenida configurada. La IA puede responder desde su siguiente consulta.
 - El modo AFK conserva prioridad. Si Gemini falla, no se envía una respuesta inventada y el mensaje queda sin leer para atención manual.
 - Los comandos privados, registros de clientes, renovaciones, cobranzas y respuestas rápidas conservan su comportamiento.
 
@@ -174,28 +176,29 @@ Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clie
 
 La V4.9.3 conserva la bienvenida única y permite habilitar respuestas posteriores con Gemini:
 
-1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales del país que coincide con su prefijo internacional.
-2. Los tres se envían por separado, mostrando “escribiendo…” y una pequeña demora antes de cada envío.
+1. El primer mensaje de un contacto nuevo activa la secuencia del país que coincide con su prefijo internacional.
+2. Los elementos se envían en el orden configurado, mostrando “escribiendo…” y una pequeña demora. Si un elemento tiene imagen, el texto se adjunta como pie de esa imagen en una sola burbuja.
 3. Si Gemini está desactivado, los mensajes posteriores quedan sin leer para atención manual, igual que antes.
 4. Si Gemini está activado, responde desde la siguiente consulta usando únicamente la información configurada en **IA y entrenamiento**.
 5. Si el número ya está registrado como cliente, no recibe la bienvenida; con IA activa puede recibir una respuesta contextual.
 6. Los recordatorios y las cobranzas programadas continúan funcionando de forma independiente.
 
-El contenido de los tres mensajes iniciales puede editarse en **Mensajes automáticos**. Allí también puedes crear perfiles por país, por ejemplo `+51` para Perú y `+54` para Argentina, con moneda y tres mensajes propios. Si no existe una coincidencia activa, el bot usa la bienvenida predeterminada. La API de Gemini es opcional y no es necesaria para la bienvenida, los comandos, las renovaciones ni las cobranzas.
+La secuencia inicial puede editarse en **Mensajes automáticos**. Allí también puedes crear perfiles por país, por ejemplo `+51` para Perú y `+54` para Argentina, con moneda, entre 1 y 20 mensajes propios e imágenes opcionales. Si no existe una coincidencia activa, el bot usa la bienvenida predeterminada. La API de Gemini es opcional y no es necesaria para la bienvenida, los comandos, las renovaciones ni las cobranzas.
 
 ## Bienvenidas y precios por país
 
 En **Mensajes automáticos → Bienvenidas y precios por país** puedes:
 
 - Agregar cualquier país con su prefijo internacional y una referencia de moneda.
-- Escribir tres mensajes propios con los precios locales de ese país.
+- Escribir entre 1 y 20 mensajes propios con los precios locales de ese país.
+- Adjuntar una imagen PNG, JPG o WEBP opcional a cada mensaje, con un máximo de 8 MB por archivo.
 - Activar o desactivar un perfil sin eliminarlo.
 - Editar o eliminar perfiles desde sus tarjetas.
 - Mantener una bienvenida predeterminada para números sin coincidencia.
 
 El país se detecta únicamente desde el número real de WhatsApp; también funciona cuando WhatsApp entrega primero un identificador LID y el número aparece como identificador alternativo. Cuando varios perfiles pueden coincidir, se usa el prefijo más específico: por ejemplo, `+1809` tiene prioridad sobre `+1`.
 
-La moneda es una etiqueta informativa y el bot no consulta cotizaciones ni convierte importes automáticamente. Esto permite que tú controles exactamente cada precio escrito en los tres mensajes. Una instalación anterior recibe automáticamente un perfil de Perú (`+51`) con sus tres mensajes actuales, sin perder su configuración.
+La moneda es una etiqueta informativa y el bot no consulta cotizaciones ni convierte importes automáticamente. Esto permite que tú controles exactamente cada precio escrito en la secuencia. Una instalación anterior recibe automáticamente un perfil de Perú (`+51`) con sus mensajes actuales, sin perder su configuración.
 
 ## Registro rápido mediante comandos
 
@@ -254,7 +257,7 @@ La sección **Buscar celular** permite escribir los 9 dígitos peruanos o el nú
 
 ### Modo AFK
 
-La sección **Modo AFK** permite activar o desactivar un mensaje editable para fuera del horario de atención. Durante cada activación, cada contacto recibe el mensaje AFK una sola vez para evitar respuestas repetidas. El modo AFK también responde a clientes registrados y tiene prioridad sobre la bienvenida: mientras esté activo, un contacto nuevo recibe el AFK; al desactivarlo, la bienvenida de tres mensajes vuelve a funcionar cuando ese contacto escriba nuevamente.
+La sección **Modo AFK** permite activar o desactivar un mensaje editable para fuera del horario de atención. Durante cada activación, cada contacto recibe el mensaje AFK una sola vez para evitar respuestas repetidas. El modo AFK también responde a clientes registrados y tiene prioridad sobre la bienvenida: mientras esté activo, un contacto nuevo recibe el AFK; al desactivarlo, la secuencia de bienvenida vuelve a funcionar cuando ese contacto escriba nuevamente.
 
 Al pulsar **Renovar**, el nuevo periodo comienza desde el vencimiento vigente si el cliente pagó antes; así no pierde días. También puedes actualizar la cuenta asociada durante la renovación.
 
@@ -276,8 +279,8 @@ No elimines el disco persistente, no cambies su punto de montaje y no crees otro
 
 En **Mensajes automáticos** puedes editar:
 
-- La bienvenida predeterminada de tres mensajes.
-- Las bienvenidas de tres mensajes por país, con prefijo y moneda propios.
+- La secuencia de bienvenida predeterminada.
+- Las secuencias por país, con prefijo, moneda e imágenes opcionales.
 - El recordatorio de 2 días antes.
 - La cobranza del día de vencimiento.
 - La hora mínima para iniciar cobranzas, configurada inicialmente a las 09:00.
@@ -394,7 +397,7 @@ Para probar el Autenticador:
 Desde un número que no esté registrado como cliente:
 
 1. Envía cualquier mensaje.
-2. Debes recibir tres mensajes separados.
+2. Debes recibir todos los mensajes configurados, en el mismo orden; cuando un mensaje tenga imagen, su texto llegará como pie de esa imagen.
 3. Con IA desactivada, envía una segunda consulta: el bot debe permanecer en silencio y dejarla sin leer.
 4. Configura y activa Gemini, luego envía otra consulta desde un chat de prueba: debe llegar una sola respuesta y el mensaje debe quedar marcado como atendido.
 

@@ -17,6 +17,44 @@ function whatsappPhoneDigits(value) {
   return localPart.replace(/\D/g, "");
 }
 
+function welcomeSequence(source, fallbackMessages = []) {
+  if (Array.isArray(source?.sequence) && source.sequence.length) {
+    const normalizedSequence = source.sequence
+      .map((item) => ({
+        id: String(item?.id || ""),
+        text: String(item?.text || "").trim(),
+        image: item?.image || null
+      }))
+      .filter((item) => item.text);
+    const legacyMessages = Array.isArray(source?.messages)
+      ? source.messages.map((text) => String(text || "").trim()).filter(Boolean)
+      : [];
+    const sequenceTexts = normalizedSequence.map((item) => item.text);
+    if (
+      legacyMessages.length &&
+      (legacyMessages.length !== sequenceTexts.length ||
+        legacyMessages.some((text, index) => text !== sequenceTexts[index]))
+    ) {
+      return legacyMessages.map((text, index) => ({
+        id: `legacy-message-${index + 1}`,
+        text,
+        image: null
+      }));
+    }
+    return normalizedSequence;
+  }
+  const messages = Array.isArray(source?.messages)
+    ? source.messages
+    : fallbackMessages;
+  return (Array.isArray(messages) ? messages : [])
+    .map((text, index) => ({
+      id: `legacy-message-${index + 1}`,
+      text: String(text || "").trim(),
+      image: null
+    }))
+    .filter((item) => item.text);
+}
+
 function resolveWelcomeProfile(
   settings,
   { customerPhone = "", chatId = "", alternateChatId = "", profileId = "" } = {}
@@ -56,14 +94,22 @@ function resolveWelcomeProfile(
           second.profileOrder - first.profileOrder
       )[0] ||
     null;
-  const fallbackMessages = Array.isArray(settings?.greetingMessages)
-    ? settings.greetingMessages
-    : [];
+  const fallbackSequence = welcomeSequence(
+    {
+      sequence: settings?.greetingSequence,
+      messages: settings?.greetingMessages
+    },
+    settings?.greetingMessages
+  );
+  const sequence = matchedProfile
+    ? welcomeSequence(matchedProfile, fallbackSequence.map((item) => item.text))
+    : fallbackSequence;
 
   return {
     profile: matchedProfile,
     phoneDigits,
-    messages: (matchedProfile?.messages || fallbackMessages).slice(0, 3)
+    sequence,
+    messages: sequence.map((item) => item.text)
   };
 }
 
@@ -133,9 +179,13 @@ function resolveWelcomeSelection(
     adReferral = null
   } = {}
 ) {
-  const fallbackMessages = Array.isArray(settings?.greetingMessages)
-    ? settings.greetingMessages.slice(0, 3)
-    : [];
+  const fallbackSequence = welcomeSequence(
+    {
+      sequence: settings?.greetingSequence,
+      messages: settings?.greetingMessages
+    },
+    settings?.greetingMessages
+  );
   const countryWelcome = resolveWelcomeProfile(settings, {
     customerPhone,
     chatId,
@@ -148,7 +198,8 @@ function resolveWelcomeSelection(
       adProfile: null,
       profile: null,
       phoneDigits: countryWelcome.phoneDigits,
-      messages: fallbackMessages
+      sequence: fallbackSequence,
+      messages: fallbackSequence.map((item) => item.text)
     };
   }
   const adProfile = resolveAdWelcomeProfile(settings, {
@@ -156,12 +207,17 @@ function resolveWelcomeSelection(
     profileId: adProfileId
   });
   if (adProfile) {
+    const sequence = welcomeSequence(
+      adProfile,
+      fallbackSequence.map((item) => item.text)
+    );
     return {
       source: "ad",
       adProfile,
       profile: countryWelcome.profile,
       phoneDigits: countryWelcome.phoneDigits,
-      messages: adProfile.messages.slice(0, 3)
+      sequence,
+      messages: sequence.map((item) => item.text)
     };
   }
   return {
@@ -215,10 +271,11 @@ function resolveCountryPriceBook(
 }
 
 class BotEngine {
-  constructor({ store, ai = null, sendText }) {
+  constructor({ store, ai = null, sendText, sendMedia = null }) {
     this.store = store;
     this.ai = ai;
     this.sendText = sendText;
+    this.sendMedia = sendMedia;
   }
 
   async handleIncoming({
@@ -353,10 +410,13 @@ class BotEngine {
         adProfileId: conversation.welcomeAdGreetingId || "",
         adReferral
       });
-      const messages = welcome.messages;
+      const sequence = welcome.sequence || welcome.messages.map((text) => ({
+        text,
+        image: null
+      }));
       const previousCount = Math.max(
         0,
-        Math.min(3, Number(conversation.welcomeMessagesSent) || 0)
+        Math.min(sequence.length, Number(conversation.welcomeMessagesSent) || 0)
       );
 
       updateConversations({
@@ -370,8 +430,24 @@ class BotEngine {
       });
 
       let sentNow = 0;
-      for (let index = previousCount; index < messages.length; index += 1) {
-        await this.sendText(chatId, messages[index]);
+      for (let index = previousCount; index < sequence.length; index += 1) {
+        const item = sequence[index];
+        if (item.image?.path && this.sendMedia) {
+          try {
+            await this.sendMedia(chatId, item.image.path, {
+              caption: item.text
+            });
+          } catch (error) {
+            this.store.addLog(
+              "welcome-media",
+              `No se pudo enviar la imagen de bienvenida; se envió el texto: ${error.message}`,
+              { chatId, messageId: item.id || null }
+            );
+            await this.sendText(chatId, item.text);
+          }
+        } else {
+          await this.sendText(chatId, item.text);
+        }
         sentNow += 1;
         updateConversations({
           welcomeMessagesSent: index + 1
@@ -379,7 +455,7 @@ class BotEngine {
       }
 
       updateConversations({
-        welcomeMessagesSent: 3,
+        welcomeMessagesSent: sequence.length,
         welcomeSequenceSentAt: new Date().toISOString()
       });
       this.store.addLog(

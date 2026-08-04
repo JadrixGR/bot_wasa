@@ -30,6 +30,7 @@ const MAX_QUICK_REPLY_TEXTS = 10;
 const MAX_COUNTRY_GREETINGS = 80;
 const MAX_COUNTRY_PRICE_BOOKS = 80;
 const MAX_AD_GREETINGS = 50;
+const MAX_WELCOME_MESSAGES = 20;
 
 function uniqueAuthenticatorCommand(baseCommand, usedCommands) {
   if (!usedCommands.has(baseCommand)) return baseCommand;
@@ -192,6 +193,75 @@ function normalizeQuickReplyImage(image) {
   };
 }
 
+function normalizeWelcomeSequence(
+  input,
+  { previousSequence = [], label = "La bienvenida" } = {}
+) {
+  const source = Array.isArray(input) ? input : [];
+  if (!source.length || source.length > MAX_WELCOME_MESSAGES) {
+    throw new Error(
+      `${label} debe contener entre 1 y ${MAX_WELCOME_MESSAGES} mensajes.`
+    );
+  }
+
+  const previousByMessageId = new Map(
+    (Array.isArray(previousSequence) ? previousSequence : []).map((item) => [
+      String(item?.id || ""),
+      item
+    ])
+  );
+  const usedIds = new Set();
+  return source.map((entry, index) => {
+    const objectEntry =
+      entry && typeof entry === "object" && !Array.isArray(entry)
+        ? entry
+        : { text: entry };
+    const id = String(objectEntry.id || crypto.randomUUID()).slice(0, 120);
+    const text = String(objectEntry.text ?? entry ?? "").trim();
+    if (!text) throw new Error(`${label}: el mensaje ${index + 1} está vacío.`);
+    if (usedIds.has(id)) {
+      throw new Error(`${label} contiene dos mensajes con el mismo identificador.`);
+    }
+    usedIds.add(id);
+
+    const previous = previousByMessageId.get(id);
+    let image = null;
+    if (Object.prototype.hasOwnProperty.call(objectEntry, "image")) {
+      if (objectEntry.image) {
+        image = normalizeQuickReplyImage(objectEntry.image);
+        if (!image?.path && previous?.image) {
+          const requestedImageId = String(objectEntry.image.id || "");
+          if (!requestedImageId || requestedImageId === String(previous.image.id)) {
+            image = normalizeQuickReplyImage(previous.image);
+          }
+        }
+      }
+    } else if (previous?.image) {
+      image = normalizeQuickReplyImage(previous.image);
+    }
+
+    return {
+      id,
+      text: text.slice(0, 4096),
+      image
+    };
+  });
+}
+
+function sequenceSource(source, previousSequence = []) {
+  if (Array.isArray(source?.sequence)) return source.sequence;
+  if (Array.isArray(source?.messages)) {
+    return source.messages.map((text, index) => ({
+      id: previousSequence[index]?.id || crypto.randomUUID(),
+      text,
+      ...(previousSequence[index]?.image
+        ? { image: previousSequence[index].image }
+        : {})
+    }));
+  }
+  return [];
+}
+
 function normalizeQuickReplyRecord(input = {}) {
   const source = input && typeof input === "object" ? input : {};
   const name = String(source.name || "").trim();
@@ -229,24 +299,23 @@ function normalizeCountryCallingCode(value) {
   return `+${digits}`;
 }
 
-function normalizeCountryGreetingProfile(input = {}) {
+function normalizeCountryGreetingProfile(input = {}, previousProfile = null) {
   const source = input && typeof input === "object" ? input : {};
   const country = String(source.country || "").trim();
   const callingCode = normalizeCountryCallingCode(source.callingCode);
   const currency = String(source.currency || "").trim();
-  const messages = (Array.isArray(source.messages) ? source.messages : []).map(
-    (message) => String(message || "").trim()
-  );
 
   if (!country) throw new Error("Ingresa el nombre del país.");
   if (!currency) {
     throw new Error("Ingresa la moneda que usarás en esta bienvenida.");
   }
-  if (messages.length !== 3 || messages.some((message) => !message)) {
-    throw new Error(
-      `La bienvenida de ${country} debe contener exactamente 3 mensajes.`
-    );
-  }
+  const sequence = normalizeWelcomeSequence(
+    sequenceSource(source, previousProfile?.sequence),
+    {
+      previousSequence: previousProfile?.sequence,
+      label: `La bienvenida de ${country}`
+    }
+  );
 
   return {
     id: String(source.id || crypto.randomUUID()),
@@ -254,13 +323,14 @@ function normalizeCountryGreetingProfile(input = {}) {
     callingCode,
     currency: currency.slice(0, 40),
     enabled: source.enabled !== false,
-    messages: messages.map((message) => message.slice(0, 12000)),
+    messages: sequence.map((message) => message.text),
+    sequence,
     createdAt: source.createdAt || new Date().toISOString(),
     updatedAt: source.updatedAt || new Date().toISOString()
   };
 }
 
-function normalizeCountryGreetings(profiles) {
+function normalizeCountryGreetings(profiles, previousProfiles = []) {
   if (!Array.isArray(profiles)) {
     throw new Error("La configuración de bienvenidas por país no es válida.");
   }
@@ -271,7 +341,10 @@ function normalizeCountryGreetings(profiles) {
   }
   const usedCodes = new Set();
   return profiles.map((profile) => {
-    const normalized = normalizeCountryGreetingProfile(profile);
+    const previous = (Array.isArray(previousProfiles) ? previousProfiles : []).find(
+      (entry) => String(entry?.id || "") === String(profile?.id || "")
+    );
+    const normalized = normalizeCountryGreetingProfile(profile, previous);
     if (usedCodes.has(normalized.callingCode)) {
       throw new Error(
         `El prefijo ${normalized.callingCode} está repetido. Cada perfil debe usar uno diferente.`
@@ -282,12 +355,9 @@ function normalizeCountryGreetings(profiles) {
   });
 }
 
-function normalizeAdGreetingProfile(input = {}) {
+function normalizeAdGreetingProfile(input = {}, previousProfile = null) {
   const source = input && typeof input === "object" ? input : {};
   const name = String(source.name || "").trim();
-  const messages = (Array.isArray(source.messages) ? source.messages : []).map(
-    (message) => String(message || "").trim()
-  );
   const usedTerms = new Set();
   const matchTerms = (Array.isArray(source.matchTerms) ? source.matchTerms : [])
     .map((term) => String(term || "").trim())
@@ -306,24 +376,27 @@ function normalizeAdGreetingProfile(input = {}) {
       `Agrega al menos una frase o identificador para reconocer el anuncio ${name}.`
     );
   }
-  if (messages.length !== 3 || messages.some((message) => !message)) {
-    throw new Error(
-      `La bienvenida del anuncio ${name} debe contener exactamente 3 mensajes.`
-    );
-  }
+  const sequence = normalizeWelcomeSequence(
+    sequenceSource(source, previousProfile?.sequence),
+    {
+      previousSequence: previousProfile?.sequence,
+      label: `La bienvenida del anuncio ${name}`
+    }
+  );
 
   return {
     id: String(source.id || crypto.randomUUID()),
     name: name.slice(0, 120),
     enabled: source.enabled !== false,
     matchTerms,
-    messages: messages.map((message) => message.slice(0, 12000)),
+    messages: sequence.map((message) => message.text),
+    sequence,
     createdAt: source.createdAt || new Date().toISOString(),
     updatedAt: source.updatedAt || new Date().toISOString()
   };
 }
 
-function normalizeAdGreetings(profiles) {
+function normalizeAdGreetings(profiles, previousProfiles = []) {
   if (!Array.isArray(profiles)) {
     throw new Error("La configuración de bienvenidas por anuncio no es válida.");
   }
@@ -334,7 +407,10 @@ function normalizeAdGreetings(profiles) {
   }
   const usedIds = new Set();
   return profiles.map((profile) => {
-    const normalized = normalizeAdGreetingProfile(profile);
+    const previous = (Array.isArray(previousProfiles) ? previousProfiles : []).find(
+      (entry) => String(entry?.id || "") === String(profile?.id || "")
+    );
+    const normalized = normalizeAdGreetingProfile(profile, previous);
     if (usedIds.has(normalized.id)) {
       throw new Error("Hay dos bienvenidas de anuncio con el mismo identificador.");
     }
@@ -528,6 +604,16 @@ class JsonStore {
     const catalogMigration = migrateCatalog(parsed, initial);
     const countryPriceBooksMigrated = !Array.isArray(parsed.countryPriceBooks);
     const adGreetingsMigrated = !Array.isArray(parsed.settings?.adGreetings);
+    const welcomeSequencesMigrated =
+      !Array.isArray(parsed.settings?.greetingSequence) ||
+      (Array.isArray(parsed.settings?.countryGreetings) &&
+        parsed.settings.countryGreetings.some(
+          (profile) => !Array.isArray(profile?.sequence)
+        )) ||
+      (Array.isArray(parsed.settings?.adGreetings) &&
+        parsed.settings.adGreetings.some(
+          (profile) => !Array.isArray(profile?.sequence)
+        ));
     const welcomeRoutingMigrated = !["smart", "general"].includes(
       String(parsed.settings?.welcomeRoutingMode || "")
     );
@@ -646,11 +732,18 @@ class JsonStore {
         })
       )
     };
-    const legacyGreetingMessages = Array.isArray(
-      migrated.settings.greetingMessages
-    )
-      ? migrated.settings.greetingMessages.slice(0, 3)
+    const legacyGreetingMessages = Array.isArray(migrated.settings.greetingMessages)
+      ? migrated.settings.greetingMessages
       : structuredClone(defaultSettings.greetingMessages);
+    migrated.settings.greetingSequence = normalizeWelcomeSequence(
+      Array.isArray(parsed.settings?.greetingSequence)
+        ? parsed.settings.greetingSequence
+        : legacyGreetingMessages,
+      { label: "La bienvenida general" }
+    );
+    migrated.settings.greetingMessages = migrated.settings.greetingSequence.map(
+      (message) => message.text
+    );
     const countryGreetingsMigrated = !Array.isArray(
       parsed.settings?.countryGreetings
     );
@@ -692,7 +785,8 @@ class JsonStore {
       migrated.settings.countryGreetings = [
         normalizeCountryGreetingProfile({
           ...defaultSettings.countryGreetings[0],
-          messages: legacyGreetingMessages
+          messages: legacyGreetingMessages,
+          sequence: legacyGreetingMessages
         }),
         ...defaultSettings.countryGreetings
           .slice(1)
@@ -744,6 +838,7 @@ class JsonStore {
         countryGreetingsMigrated ||
         countryPriceBooksMigrated ||
         adGreetingsMigrated ||
+        welcomeSequencesMigrated ||
         welcomeRoutingMigrated ||
         aiConfigMigrated
     };
@@ -834,6 +929,35 @@ class JsonStore {
   updateSettings(patch) {
     const previousAfkEnabled = Boolean(this.data.settings.afkEnabled);
     const previousAfkMessage = String(this.data.settings.afkMessage || "");
+    const greetingPatch =
+      patch.greetingSequence !== undefined
+        ? patch.greetingSequence
+        : patch.greetingMessages !== undefined
+          ? (Array.isArray(patch.greetingMessages)
+              ? patch.greetingMessages.map((text, index) => ({
+                  id:
+                    this.data.settings.greetingSequence?.[index]?.id ||
+                    crypto.randomUUID(),
+                  text,
+                  ...(this.data.settings.greetingSequence?.[index]?.image
+                    ? {
+                        image:
+                          this.data.settings.greetingSequence[index].image
+                      }
+                    : {})
+                }))
+              : patch.greetingMessages)
+          : undefined;
+    if (greetingPatch !== undefined) {
+      const sequence = normalizeWelcomeSequence(greetingPatch, {
+        previousSequence: this.data.settings.greetingSequence,
+        label: "La bienvenida general"
+      });
+      this.data.settings.greetingSequence = sequence;
+      this.data.settings.greetingMessages = sequence.map(
+        (message) => message.text
+      );
+    }
     const allowed = [
       "businessName",
       "inboundMode",
@@ -851,7 +975,6 @@ class JsonStore {
       "reminderStartTime",
       "afkEnabled",
       "afkMessage",
-      "greetingMessages",
       "countryGreetings",
       "welcomeRoutingMode",
       "adGreetings"
@@ -860,29 +983,19 @@ class JsonStore {
     for (const key of allowed) {
       if (patch[key] === undefined) continue;
 
-      if (key === "greetingMessages") {
-        if (!Array.isArray(patch[key]) || patch[key].length !== 3) {
-          throw new Error("El saludo debe contener exactamente 3 mensajes.");
-        }
-        const messages = patch[key].map((message) =>
-          String(message || "").trim()
-        );
-        if (messages.some((message) => !message)) {
-          throw new Error("Los 3 mensajes de bienvenida son obligatorios.");
-        }
-        this.data.settings[key] = messages;
-        continue;
-      }
-
       if (key === "countryGreetings") {
         this.data.settings.countryGreetings = normalizeCountryGreetings(
-          patch[key]
+          patch[key],
+          this.data.settings.countryGreetings
         );
         continue;
       }
 
       if (key === "adGreetings") {
-        this.data.settings.adGreetings = normalizeAdGreetings(patch[key]);
+        this.data.settings.adGreetings = normalizeAdGreetings(
+          patch[key],
+          this.data.settings.adGreetings
+        );
         continue;
       }
 
@@ -1370,6 +1483,98 @@ class JsonStore {
       `Imagen eliminada de ${reply.name}: ${deleted.originalName}`,
       { quickReplyId: reply.id, imageId: deleted.id }
     );
+    this.save();
+    return structuredClone(deleted);
+  }
+
+  getWelcomeMessage(scope, profileId, messageId) {
+    const normalizedScope = String(scope || "").toLowerCase();
+    let sequence;
+    if (normalizedScope === "general") {
+      sequence = this.data.settings.greetingSequence;
+    } else if (normalizedScope === "country") {
+      sequence = this.data.settings.countryGreetings?.find(
+        (profile) => String(profile.id) === String(profileId || "")
+      )?.sequence;
+    } else if (normalizedScope === "ad") {
+      sequence = this.data.settings.adGreetings?.find(
+        (profile) => String(profile.id) === String(profileId || "")
+      )?.sequence;
+    } else {
+      throw new Error("Tipo de bienvenida no permitido.");
+    }
+    const message = (Array.isArray(sequence) ? sequence : []).find(
+      (entry) => String(entry.id) === String(messageId || "")
+    );
+    return message ? structuredClone(message) : null;
+  }
+
+  setWelcomeMessageImage(scope, profileId, messageId, image) {
+    const normalizedScope = String(scope || "").toLowerCase();
+    let sequence;
+    let targetName = "general";
+    if (normalizedScope === "general") {
+      sequence = this.data.settings.greetingSequence;
+    } else if (normalizedScope === "country") {
+      const profile = this.data.settings.countryGreetings?.find(
+        (entry) => String(entry.id) === String(profileId || "")
+      );
+      sequence = profile?.sequence;
+      targetName = profile?.country || "país";
+    } else if (normalizedScope === "ad") {
+      const profile = this.data.settings.adGreetings?.find(
+        (entry) => String(entry.id) === String(profileId || "")
+      );
+      sequence = profile?.sequence;
+      targetName = profile?.name || "anuncio";
+    } else {
+      throw new Error("Tipo de bienvenida no permitido.");
+    }
+    const message = (Array.isArray(sequence) ? sequence : []).find(
+      (entry) => String(entry.id) === String(messageId || "")
+    );
+    if (!message) throw new Error("Mensaje de bienvenida no encontrado.");
+    const normalized = normalizeQuickReplyImage(image);
+    if (!normalized) throw new Error("La imagen cargada no es válida.");
+    const previous = message.image ? structuredClone(message.image) : null;
+    message.image = normalized;
+    this.addLog(
+      "welcome-media",
+      `Imagen agregada a la bienvenida de ${targetName}: ${normalized.originalName}`,
+      { scope: normalizedScope, profileId: profileId || null, messageId: message.id }
+    );
+    this.save();
+    return { image: structuredClone(normalized), previous };
+  }
+
+  deleteWelcomeMessageImage(scope, profileId, messageId) {
+    const message = this.getWelcomeMessage(scope, profileId, messageId);
+    if (!message) throw new Error("Mensaje de bienvenida no encontrado.");
+    if (!message.image) throw new Error("Este mensaje no tiene una imagen.");
+
+    const normalizedScope = String(scope || "").toLowerCase();
+    let sequence;
+    if (normalizedScope === "general") {
+      sequence = this.data.settings.greetingSequence;
+    } else if (normalizedScope === "country") {
+      sequence = this.data.settings.countryGreetings.find(
+        (profile) => String(profile.id) === String(profileId || "")
+      )?.sequence;
+    } else if (normalizedScope === "ad") {
+      sequence = this.data.settings.adGreetings.find(
+        (profile) => String(profile.id) === String(profileId || "")
+      )?.sequence;
+    }
+    const stored = sequence.find(
+      (entry) => String(entry.id) === String(messageId || "")
+    );
+    const deleted = stored.image;
+    stored.image = null;
+    this.addLog("welcome-media", "Imagen eliminada de una bienvenida", {
+      scope: normalizedScope,
+      profileId: profileId || null,
+      messageId: stored.id
+    });
     this.save();
     return structuredClone(deleted);
   }

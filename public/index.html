@@ -426,7 +426,7 @@
           </div>
 
           <div class="notice mode-notice">
-            <strong>Detección automática:</strong> el bot puede reconocer primero el anuncio de Meta o Instagram y, si no coincide, usar el país del número. Siempre envía una sola secuencia de tres mensajes.
+            <strong>Detección automática:</strong> el bot puede reconocer primero el anuncio de Meta o Instagram y, si no coincide, usar el país del número. Cada bienvenida puede tener entre 1 y 20 mensajes, con una imagen opcional por mensaje.
           </div>
 
           <article id="adGreetingsPanel" class="panel ad-greetings-panel">
@@ -434,7 +434,7 @@
               <div>
                 <span class="pill cyan">Meta · Instagram · WhatsApp</span>
                 <h3>Bienvenidas por anuncio</h3>
-                <p>Cada anuncio puede responder con tres mensajes propios. El bot compara el título, texto, ID y enlace que WhatsApp adjunta al primer mensaje del cliente.</p>
+                <p>Cada anuncio puede responder con una secuencia propia de textos e imágenes opcionales. El bot compara el título, texto, ID y enlace que WhatsApp adjunta al primer mensaje del cliente.</p>
               </div>
               <button id="newAdGreetingButton" class="button primary" type="button">+ Agregar anuncio</button>
             </div>
@@ -469,7 +469,7 @@
               <div>
                 <span class="pill violet">Por prefijo internacional</span>
                 <h3>Bienvenidas y precios por país</h3>
-                <p>Edita tres mensajes independientes para cada moneda. Los precios se escriben directamente en los mensajes y no se convierten automáticamente.</p>
+                <p>Agrega o quita mensajes para cada moneda y adjunta imágenes cuando las necesites. Los precios se escriben directamente y no se convierten automáticamente.</p>
               </div>
               <button id="newCountryGreetingButton" class="button primary" type="button">+ Agregar país</button>
             </div>
@@ -478,7 +478,7 @@
               <i aria-hidden="true">→</i>
               <span><b>2</b> Se detecta el prefijo</span>
               <i aria-hidden="true">→</i>
-              <span><b>3</b> Se envían sus 3 mensajes</span>
+              <span><b>3</b> Se envía su secuencia</span>
             </div>
             <div id="countryGreetingGrid" class="country-greeting-grid"></div>
             <div id="countryGreetingEmpty" class="country-greeting-empty hidden">
@@ -492,9 +492,11 @@
             <article class="panel">
               <div class="panel-heading"><h3>Bienvenida predeterminada</h3><span class="pill blue">Respaldo</span></div>
               <div class="notice country-fallback-notice">Se usa cuando el número no coincide con ningún país activo. Así ningún contacto nuevo queda sin respuesta.</div>
-              <label>Mensaje 1 · Catálogo<textarea id="greeting1" rows="12"></textarea><small>Se envía primero y aparece “escribiendo…” antes del mensaje.</small></label>
-              <label>Mensaje 2 · Combos<textarea id="greeting2" rows="9"></textarea><small>Se envía después del catálogo, como un mensaje separado.</small></label>
-              <label>Mensaje 3 · Entrega y soporte<textarea id="greeting3" rows="8"></textarea><small>Tercer y último mensaje de la secuencia inicial.</small></label>
+              <div class="welcome-sequence-heading">
+                <div><strong>Secuencia general</strong><small>Ordena los mensajes y agrega una imagen solo cuando quieras.</small></div>
+                <button id="addGeneralGreetingMessage" class="button secondary compact-button" type="button">+ Agregar mensaje</button>
+              </div>
+              <div id="generalGreetingMessages" class="welcome-message-list" data-welcome-editor="general"></div>
             </article>
             <article class="panel">
               <div class="panel-heading"><h3>Renovaciones</h3><span class="pill green">Programadas</span></div>
@@ -546,7 +548,7 @@
               <div>
                 <span id="aiStatusPill" class="pill violet">Cargando estado</span>
                 <h3>Gemini responde con el contexto de JadrixServs</h3>
-                <p>La bienvenida de tres mensajes se conserva. Desde el siguiente mensaje, la IA puede responder usando solamente la información que configures aquí.</p>
+                <p>La secuencia de bienvenida configurada se conserva. Desde el siguiente mensaje, la IA puede responder usando solamente la información que configures aquí.</p>
               </div>
             </div>
             <div class="ai-status-grid">
@@ -591,7 +593,7 @@
             <article class="panel ai-flow-panel">
               <div class="panel-heading"><div><span class="eyebrow">ORDEN DE RESPUESTA</span><h3>Flujo del bot</h3></div></div>
               <ol class="ai-flow-list">
-                <li><span>1</span><div><strong>Bienvenida por país</strong><small>Un contacto nuevo recibe los tres mensajes configurados.</small></div></li>
+                <li><span>1</span><div><strong>Bienvenida por país</strong><small>Un contacto nuevo recibe la secuencia configurada, incluidas sus imágenes opcionales.</small></div></li>
                 <li><span>2</span><div><strong>Pregunta del cliente</strong><small>El mensaje posterior se envía a Gemini con el contexto del negocio.</small></div></li>
                 <li><span>3</span><div><strong>Respuesta entrenada</strong><small>La IA usa catálogo, moneda local, pagos y reglas confirmadas.</small></div></li>
               </ol>
@@ -971,12 +973,10 @@
         </div>
         <section class="country-greeting-editor" aria-labelledby="countryGreetingMessagesTitle">
           <div class="country-greeting-editor-heading">
-            <div><span class="editor-step">3</span><div><h3 id="countryGreetingMessagesTitle">Mensajes para este país</h3><p>Se enviarán una sola vez y exactamente en este orden.</p></div></div>
-            <span class="pill blue">3 mensajes</span>
+            <div><span class="editor-step">3</span><div><h3 id="countryGreetingMessagesTitle">Mensajes para este país</h3><p>Puedes usar entre 1 y 20. La imagen de cada mensaje es opcional.</p></div></div>
+            <button id="addCountryGreetingMessage" class="button secondary compact-button" type="button">+ Agregar mensaje</button>
           </div>
-          <label>Mensaje 1 · Catálogo y precios<textarea id="countryGreeting1" rows="9" required></textarea></label>
-          <label>Mensaje 2 · Planes o promociones<textarea id="countryGreeting2" rows="7" required></textarea></label>
-          <label>Mensaje 3 · Entrega y soporte<textarea id="countryGreeting3" rows="6" required></textarea></label>
+          <div id="countryGreetingMessages" class="welcome-message-list" data-welcome-editor="country"></div>
         </section>
         <label class="toggle-row country-greeting-enable-row">
           <input id="countryGreetingEnabled" type="checkbox" checked>
@@ -1013,12 +1013,10 @@
         </div>
         <section class="country-greeting-editor" aria-labelledby="adGreetingMessagesTitle">
           <div class="country-greeting-editor-heading">
-            <div><span class="editor-step">3</span><div><h3 id="adGreetingMessagesTitle">Tres mensajes para este anuncio</h3><p>Se enviarán una sola vez, exactamente en este orden.</p></div></div>
-            <span class="pill violet">3 mensajes</span>
+            <div><span class="editor-step">3</span><div><h3 id="adGreetingMessagesTitle">Mensajes para este anuncio</h3><p>Puedes usar entre 1 y 20. Cada mensaje admite una imagen opcional.</p></div></div>
+            <button id="addAdGreetingMessage" class="button secondary compact-button" type="button">+ Agregar mensaje</button>
           </div>
-          <label>Mensaje 1 · Saludo y contexto<textarea id="adGreeting1" rows="6" required></textarea></label>
-          <label>Mensaje 2 · Oferta del anuncio<textarea id="adGreeting2" rows="9" required></textarea></label>
-          <label>Mensaje 3 · Proceso y cierre<textarea id="adGreeting3" rows="8" required></textarea></label>
+          <div id="adGreetingMessages" class="welcome-message-list" data-welcome-editor="ad"></div>
         </section>
         <label class="toggle-row country-greeting-enable-row">
           <input id="adGreetingEnabled" type="checkbox" checked>

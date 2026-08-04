@@ -137,6 +137,64 @@ function quickReplyForPanel(reply) {
   };
 }
 
+function welcomeSequenceForPanel(sequence, scope, profileId) {
+  return (Array.isArray(sequence) ? sequence : []).map((message) => ({
+    ...message,
+    image: message.image
+      ? {
+          ...Object.fromEntries(
+            Object.entries(message.image).filter(([key]) => key !== "path")
+          ),
+          url: `/api/welcome-images/${encodeURIComponent(scope)}/${encodeURIComponent(profileId || "general")}/${encodeURIComponent(message.id)}`
+        }
+      : null
+  }));
+}
+
+function settingsForPanel(settings) {
+  const panelSettings = structuredClone(settings);
+  panelSettings.greetingSequence = welcomeSequenceForPanel(
+    settings.greetingSequence,
+    "general",
+    "general"
+  );
+  panelSettings.countryGreetings = (settings.countryGreetings || []).map(
+    (profile) => ({
+      ...profile,
+      sequence: welcomeSequenceForPanel(
+        profile.sequence,
+        "country",
+        profile.id
+      )
+    })
+  );
+  panelSettings.adGreetings = (settings.adGreetings || []).map((profile) => ({
+    ...profile,
+    sequence: welcomeSequenceForPanel(profile.sequence, "ad", profile.id)
+  }));
+  return panelSettings;
+}
+
+function welcomeImagePaths(settings) {
+  const sequences = [
+    settings?.greetingSequence,
+    ...(settings?.countryGreetings || []).map((profile) => profile.sequence),
+    ...(settings?.adGreetings || []).map((profile) => profile.sequence)
+  ];
+  return new Set(
+    sequences
+      .flatMap((sequence) => (Array.isArray(sequence) ? sequence : []))
+      .map((message) => message?.image?.path)
+      .filter(Boolean)
+      .map((filePath) => path.resolve(filePath))
+  );
+}
+
+function validWelcomeScope(value) {
+  const scope = String(value || "").toLowerCase();
+  return new Set(["general", "country", "ad"]).has(scope) ? scope : null;
+}
+
 function validateQuickReplyImage(buffer, extension) {
   if (!Buffer.isBuffer(buffer) || buffer.length < 12) return false;
   if (extension === ".png") {
@@ -597,7 +655,7 @@ app.post(
 
 app.get("/api/settings", requireAuth, (_req, res) => {
   res.json({
-    settings: store.getSettings(),
+    settings: settingsForPanel(store.getSettings()),
     products: store.snapshot().products,
     plans: store.snapshot().plans,
     countryPriceBooks: store.getCountryPriceBooks(),
@@ -619,13 +677,146 @@ app.put("/api/settings", requireAuth, (req, res) => {
       req.body.countryPriceBooks === undefined
         ? store.getCountryPriceBooks()
         : store.updateCountryPriceBooks(req.body.countryPriceBooks);
-    res.json({ settings, knowledgeBase, countryPriceBooks });
+    const activeWelcomeImages = welcomeImagePaths(store.getSettings());
+    for (const oldPath of welcomeImagePaths(previous.settings)) {
+      if (!activeWelcomeImages.has(oldPath)) removeStoredMedia(oldPath);
+    }
+    res.json({
+      settings: settingsForPanel(settings),
+      knowledgeBase,
+      countryPriceBooks
+    });
   } catch (error) {
     store.data = previous;
     store.save();
     throw error;
   }
 });
+
+app.get(
+  "/api/welcome-images/:scope/:profileId/:messageId",
+  requireAuth,
+  noStore,
+  (req, res) => {
+    const scope = validWelcomeScope(req.params.scope);
+    if (!scope) {
+      return res.status(400).json({ error: "Tipo de bienvenida no permitido." });
+    }
+    const message = store.getWelcomeMessage(
+      scope,
+      req.params.profileId,
+      req.params.messageId
+    );
+    const image = message?.image;
+    if (!image || !isStoredMediaPath(image.path) || !fs.existsSync(image.path)) {
+      return res.status(404).json({ error: "Imagen no encontrada." });
+    }
+    res.type(image.mimetype || path.extname(image.path));
+    return res.sendFile(path.resolve(image.path));
+  }
+);
+
+app.post(
+  "/api/welcome-images/:scope/:profileId/:messageId",
+  requireAuth,
+  noStore,
+  express.raw({ type: "application/octet-stream", limit: "8mb" }),
+  (req, res) => {
+    const scope = validWelcomeScope(req.params.scope);
+    if (!scope) {
+      return res.status(400).json({ error: "Tipo de bienvenida no permitido." });
+    }
+    const message = store.getWelcomeMessage(
+      scope,
+      req.params.profileId,
+      req.params.messageId
+    );
+    if (!message) {
+      return res.status(404).json({ error: "Mensaje de bienvenida no encontrado." });
+    }
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ error: "Selecciona una imagen." });
+    }
+    if (req.body.length > 8 * 1024 * 1024) {
+      return res.status(413).json({ error: "La imagen supera el límite de 8 MB." });
+    }
+
+    let originalName = "";
+    try {
+      originalName = decodeURIComponent(String(req.get("X-File-Name") || ""));
+    } catch {
+      return res.status(400).json({ error: "El nombre de la imagen no es válido." });
+    }
+    originalName = path.basename(originalName).slice(0, 180);
+    const extension = path.extname(originalName).toLowerCase();
+    const mimeByExtension = {
+      ".png": "image/png",
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".webp": "image/webp"
+    };
+    if (!mimeByExtension[extension] || !validateQuickReplyImage(req.body, extension)) {
+      return res.status(400).json({
+        error: "La imagen no es válida. Usa un archivo PNG, JPG, JPEG o WEBP real."
+      });
+    }
+
+    const filePath = path.join(
+      mediaDir,
+      `welcome-${scope}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}${extension}`
+    );
+    fs.writeFileSync(filePath, req.body);
+    try {
+      const result = store.setWelcomeMessageImage(
+        scope,
+        req.params.profileId,
+        req.params.messageId,
+        {
+          id: crypto.randomUUID(),
+          path: path.resolve(filePath),
+          originalName,
+          mimetype: mimeByExtension[extension],
+          size: req.body.length,
+          uploadedAt: new Date().toISOString()
+        }
+      );
+      if (result.previous?.path) removeStoredMedia(result.previous.path);
+      const refreshed = store.getWelcomeMessage(
+        scope,
+        req.params.profileId,
+        req.params.messageId
+      );
+      const [panelMessage] = welcomeSequenceForPanel(
+        [refreshed],
+        scope,
+        req.params.profileId
+      );
+      return res.status(201).json(panelMessage.image);
+    } catch (error) {
+      removeStoredMedia(filePath);
+      throw error;
+    }
+  }
+);
+
+app.delete(
+  "/api/welcome-images/:scope/:profileId/:messageId",
+  requireAuth,
+  noStore,
+  (req, res) => {
+    const scope = validWelcomeScope(req.params.scope);
+    if (!scope) {
+      return res.status(400).json({ error: "Tipo de bienvenida no permitido." });
+    }
+    const deleted = store.deleteWelcomeMessageImage(
+      scope,
+      req.params.profileId,
+      req.params.messageId
+    );
+    removeStoredMedia(deleted.path);
+    res.json({ ok: true });
+  }
+);
 
 app.post(
   "/api/ai/test",

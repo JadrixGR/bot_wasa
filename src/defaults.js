@@ -437,6 +437,14 @@ function buildGreetingMessages(priceBook = countryPriceBooks[0]) {
   ];
 }
 
+function buildWelcomeSequence(messages, prefix) {
+  return messages.map((text, index) => ({
+    id: `${prefix}-message-${index + 1}`,
+    text,
+    image: null
+  }));
+}
+
 const adGreetings = [
   {
     id: "ad-chatgpt-personal-plan-pro",
@@ -473,10 +481,15 @@ const adGreetings = [
         "¿Prefieres ChatGPT Personal o Plan Pro?"
       ].join("\n")
     ],
+    sequence: [],
     createdAt: null,
     updatedAt: null
   }
 ];
+
+for (const profile of adGreetings) {
+  profile.sequence = buildWelcomeSequence(profile.messages, profile.id);
+}
 
 const defaultSettings = {
   businessName: "JadrixServs",
@@ -509,6 +522,7 @@ const defaultSettings = {
     "👋 Gracias por escribir a JadrixServs. En este momento estamos fuera del horario de atención. Apenas volvamos, revisaremos tu mensaje y te responderemos por este chat.",
   afkSessionId: null,
   greetingMessages: buildGreetingMessages(countryPriceBooks[0]),
+  greetingSequence: [],
   adGreetings: structuredClone(adGreetings),
   countryGreetings: countryPriceBooks.map((priceBook) => ({
     id: `country-${priceBook.country.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^a-z]+/g, "-")}-${priceBook.callingCode.replace(/\D/g, "")}`,
@@ -524,6 +538,17 @@ const defaultSettings = {
     messages: buildGreetingMessages(priceBook)
   }))
 };
+
+defaultSettings.greetingSequence = buildWelcomeSequence(
+  defaultSettings.greetingMessages,
+  "general"
+);
+for (const profile of defaultSettings.countryGreetings) {
+  profile.sequence = buildWelcomeSequence(profile.messages, profile.id);
+}
+for (const profile of defaultSettings.adGreetings) {
+  profile.sequence = buildWelcomeSequence(profile.messages, profile.id);
+}
 
 function createInitialData() {
   return {

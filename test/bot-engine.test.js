@@ -12,7 +12,12 @@ const {
 } = require("../src/bot-engine");
 const { createInitialData } = require("../src/defaults");
 
-function makeHarness(conversation = {}, registeredClient = null, ai = null) {
+function makeHarness(
+  conversation = {},
+  registeredClient = null,
+  ai = null,
+  { sendMedia = null } = {}
+) {
   const data = createInitialData();
   const sent = [];
   const logs = [];
@@ -35,13 +40,51 @@ function makeHarness(conversation = {}, registeredClient = null, ai = null) {
   const engine = new BotEngine({
     store,
     ai,
-    sendText: async (_chatId, text) => sent.push(text)
+    sendText: async (_chatId, text) => sent.push(text),
+    sendMedia
   });
   return { engine, sent, logs, conversation, conversations, data };
 }
 
 test("normaliza acentos y signos", () => {
   assert.equal(normalizeText("¡RENOVACIÓN, por favor!"), "renovacion por favor");
+});
+
+test("envía una secuencia flexible y adjunta el texto a su imagen opcional", async () => {
+  const deliveries = [];
+  const { engine, sent, data, conversation } = makeHarness(
+    {},
+    null,
+    null,
+    {
+      sendMedia: async (_chatId, filePath, options) => {
+        deliveries.push({ type: "image", filePath, caption: options.caption });
+      }
+    }
+  );
+  data.settings.welcomeRoutingMode = "general";
+  data.settings.greetingSequence = [
+    { id: "flex-1", text: "Mensaje con imagen", image: { path: "promo.webp" } },
+    { id: "flex-2", text: "Segundo texto", image: null },
+    { id: "flex-3", text: "Tercer texto", image: null },
+    { id: "flex-4", text: "Cuarto texto", image: null }
+  ];
+  data.settings.greetingMessages = data.settings.greetingSequence.map(
+    (message) => message.text
+  );
+
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "Hola"
+  });
+
+  assert.deepEqual(deliveries, [
+    { type: "image", filePath: "promo.webp", caption: "Mensaje con imagen" }
+  ]);
+  assert.deepEqual(sent, ["Segundo texto", "Tercer texto", "Cuarto texto"]);
+  assert.equal(result.messages, 4);
+  assert.equal(conversation.welcomeMessagesSent, 4);
+  assert.ok(conversation.welcomeSequenceSentAt);
 });
 
 test("el primer mensaje de cualquier contacto nuevo recibe exactamente la secuencia de tres mensajes", async () => {

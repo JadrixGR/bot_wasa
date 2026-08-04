@@ -15,6 +15,11 @@ const state = {
   countryPriceBooks: [],
   aiStatus: null,
   quickReplyPendingFiles: [],
+  welcomeEditors: {
+    general: [],
+    country: [],
+    ad: []
+  },
   accessEntries: [],
   accessAccountId: null,
   authenticatorSecurity: null,
@@ -1400,6 +1405,214 @@ const COUNTRY_GREETING_PRESETS = {
   espana: { country: "España", callingCode: "+34", currency: "EUR (€)" }
 };
 
+const WELCOME_EDITOR_CONTAINERS = {
+  general: "#generalGreetingMessages",
+  country: "#countryGreetingMessages",
+  ad: "#adGreetingMessages"
+};
+
+function createWelcomeMessage(text = "", image = null, id = "") {
+  return {
+    id: id || crypto.randomUUID(),
+    text: String(text || ""),
+    image: image || null,
+    pendingFile: null,
+    pendingUrl: ""
+  };
+}
+
+function normalizeWelcomeEditorItems(sequence, fallbackMessages = []) {
+  const source = Array.isArray(sequence) && sequence.length
+    ? sequence
+    : (Array.isArray(fallbackMessages) ? fallbackMessages : []);
+  const items = source.map((entry) =>
+    entry && typeof entry === "object" && !Array.isArray(entry)
+      ? createWelcomeMessage(entry.text, entry.image, entry.id)
+      : createWelcomeMessage(entry)
+  );
+  return items.length ? items : [createWelcomeMessage()];
+}
+
+function clearWelcomeEditor(kind) {
+  for (const item of state.welcomeEditors[kind] || []) {
+    if (item.pendingUrl) URL.revokeObjectURL(item.pendingUrl);
+  }
+  state.welcomeEditors[kind] = [];
+}
+
+function setWelcomeEditor(kind, sequence, fallbackMessages = []) {
+  clearWelcomeEditor(kind);
+  state.welcomeEditors[kind] = normalizeWelcomeEditorItems(
+    sequence,
+    fallbackMessages
+  );
+  renderWelcomeEditor(kind);
+}
+
+function welcomeEditorImageMarkup(item, index) {
+  const url = item.pendingUrl || item.image?.url || "";
+  const name = item.pendingFile?.name || item.image?.originalName || "";
+  if (!url) {
+    return `<div class="welcome-message-image-empty"><span>Sin imagen</span><small>Opcional</small></div>`;
+  }
+  return `
+    <figure class="welcome-message-image-preview">
+      <img src="${escapeHtml(url)}" alt="Imagen del mensaje ${index + 1}">
+      <figcaption><strong>${escapeHtml(name || `Imagen ${index + 1}`)}</strong><small>${item.pendingFile ? "Nueva imagen" : formatFileSize(item.image?.size)}</small></figcaption>
+      <button data-welcome-action="remove-image" data-message-id="${escapeHtml(item.id)}" type="button" aria-label="Quitar imagen del mensaje ${index + 1}">×</button>
+    </figure>`;
+}
+
+function renderWelcomeEditor(kind) {
+  const container = $(WELCOME_EDITOR_CONTAINERS[kind]);
+  if (!container) return;
+  const items = state.welcomeEditors[kind] || [];
+  container.innerHTML = items.map((item, index) => `
+    <article class="welcome-message-row" data-message-id="${escapeHtml(item.id)}">
+      <div class="welcome-message-number">${index + 1}</div>
+      <div class="welcome-message-content">
+        <label>
+          Mensaje ${index + 1}
+          <textarea data-welcome-text data-message-id="${escapeHtml(item.id)}" rows="5" maxlength="4096" placeholder="Escribe el contenido que recibirá el cliente…" required>${escapeHtml(item.text)}</textarea>
+        </label>
+        <div class="welcome-message-media">
+          ${welcomeEditorImageMarkup(item, index)}
+          <label class="welcome-image-picker">
+            <input data-welcome-file data-message-id="${escapeHtml(item.id)}" type="file" accept="image/png,image/jpeg,image/webp">
+            <span>${item.pendingFile || item.image ? "Cambiar imagen" : "+ Agregar imagen"}</span>
+            <small>PNG, JPG o WEBP · máx. 8 MB</small>
+          </label>
+        </div>
+      </div>
+      <div class="welcome-message-actions">
+        <button data-welcome-action="up" data-message-id="${escapeHtml(item.id)}" type="button" aria-label="Subir mensaje ${index + 1}" ${index === 0 ? "disabled" : ""}>↑</button>
+        <button data-welcome-action="down" data-message-id="${escapeHtml(item.id)}" type="button" aria-label="Bajar mensaje ${index + 1}" ${index === items.length - 1 ? "disabled" : ""}>↓</button>
+        <button class="danger" data-welcome-action="remove" data-message-id="${escapeHtml(item.id)}" type="button" aria-label="Eliminar mensaje ${index + 1}" ${items.length === 1 ? "disabled" : ""}>×</button>
+      </div>
+    </article>`).join("");
+}
+
+function addWelcomeEditorMessage(kind) {
+  const items = state.welcomeEditors[kind] || [];
+  if (items.length >= 20) {
+    showToast("Puedes agregar como máximo 20 mensajes de bienvenida.", true);
+    return;
+  }
+  items.push(createWelcomeMessage());
+  renderWelcomeEditor(kind);
+  $$('textarea[data-welcome-text]', $(WELCOME_EDITOR_CONTAINERS[kind])).at(-1)?.focus();
+}
+
+function handleWelcomeEditorInput(kind, event) {
+  const textarea = event.target.closest("textarea[data-welcome-text]");
+  if (!textarea) return;
+  const item = state.welcomeEditors[kind].find(
+    (entry) => entry.id === textarea.dataset.messageId
+  );
+  if (item) item.text = textarea.value;
+}
+
+function handleWelcomeEditorAction(kind, event) {
+  const button = event.target.closest("button[data-welcome-action]");
+  if (!button) return;
+  const items = state.welcomeEditors[kind];
+  const index = items.findIndex(
+    (entry) => entry.id === button.dataset.messageId
+  );
+  if (index < 0) return;
+  const action = button.dataset.welcomeAction;
+  if (action === "remove-image") {
+    const item = items[index];
+    if (item.pendingUrl) URL.revokeObjectURL(item.pendingUrl);
+    item.pendingFile = null;
+    item.pendingUrl = "";
+    item.image = null;
+  }
+  if (action === "remove" && items.length > 1) {
+    const [removed] = items.splice(index, 1);
+    if (removed.pendingUrl) URL.revokeObjectURL(removed.pendingUrl);
+  }
+  if (action === "up" && index > 0) {
+    [items[index - 1], items[index]] = [items[index], items[index - 1]];
+  }
+  if (action === "down" && index < items.length - 1) {
+    [items[index + 1], items[index]] = [items[index], items[index + 1]];
+  }
+  renderWelcomeEditor(kind);
+}
+
+function handleWelcomeEditorFile(kind, event) {
+  const input = event.target.closest("input[data-welcome-file]");
+  if (!input) return;
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!new Set(["image/png", "image/jpeg", "image/webp"]).has(file.type)) {
+    showToast(`${file.name} no es PNG, JPG ni WEBP.`, true);
+    input.value = "";
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    showToast(`${file.name} supera los 8 MB.`, true);
+    input.value = "";
+    return;
+  }
+  const item = state.welcomeEditors[kind].find(
+    (entry) => entry.id === input.dataset.messageId
+  );
+  if (!item) return;
+  if (item.pendingUrl) URL.revokeObjectURL(item.pendingUrl);
+  item.pendingFile = file;
+  item.pendingUrl = URL.createObjectURL(file);
+  renderWelcomeEditor(kind);
+}
+
+function welcomeEditorSequence(kind) {
+  const items = state.welcomeEditors[kind] || [];
+  if (!items.length || items.length > 20) {
+    throw new Error("La bienvenida debe contener entre 1 y 20 mensajes.");
+  }
+  return items.map((item, index) => {
+    const text = String(item.text || "").trim();
+    if (!text) throw new Error(`El mensaje ${index + 1} está vacío.`);
+    return {
+      id: item.id,
+      text,
+      image: item.image
+        ? {
+            id: item.image.id,
+            originalName: item.image.originalName,
+            mimetype: item.image.mimetype,
+            size: item.image.size,
+            uploadedAt: item.image.uploadedAt
+          }
+        : null
+    };
+  });
+}
+
+async function uploadWelcomeEditorImages(kind, profileId, button) {
+  const pending = (state.welcomeEditors[kind] || []).filter(
+    (item) => item.pendingFile
+  );
+  for (let index = 0; index < pending.length; index += 1) {
+    const item = pending[index];
+    if (button) {
+      button.textContent = `Subiendo imagen ${index + 1} de ${pending.length}…`;
+    }
+    await api(
+      `/api/welcome-images/${encodeURIComponent(kind)}/${encodeURIComponent(profileId || "general")}/${encodeURIComponent(item.id)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-File-Name": encodeURIComponent(item.pendingFile.name)
+        },
+        body: item.pendingFile
+      }
+    );
+  }
+}
+
 function countryGreetingKey(value) {
   return String(value || "")
     .trim()
@@ -1445,7 +1658,12 @@ function renderAdGreetings() {
   grid.classList.toggle("hidden", profiles.length === 0);
   grid.innerHTML = profiles.map((profile) => {
     const terms = (profile.matchTerms || []).slice(0, 3).join(" · ");
-    const preview = (profile.messages || [])[0] || "";
+    const sequence = normalizeWelcomeEditorItems(
+      profile.sequence,
+      profile.messages
+    );
+    const preview = sequence[0]?.text || "";
+    const imageCount = sequence.filter((message) => message.image).length;
     return `
       <article class="ad-greeting-card ${profile.enabled === false ? "is-disabled" : ""}">
         <div class="ad-greeting-card-top">
@@ -1456,7 +1674,7 @@ function renderAdGreetings() {
         <p class="ad-match-preview"><strong>Reconoce:</strong> ${escapeHtml(terms || "Sin identificadores")}</p>
         <p class="country-message-preview">${escapeHtml(preview)}</p>
         <div class="country-greeting-card-footer">
-          <span>3 mensajes · ${(profile.matchTerms || []).length} coincidencia${(profile.matchTerms || []).length === 1 ? "" : "s"}</span>
+          <span>${sequence.length} mensaje${sequence.length === 1 ? "" : "s"} · ${imageCount} ${imageCount === 1 ? "imagen" : "imágenes"} · ${(profile.matchTerms || []).length} coincidencia${(profile.matchTerms || []).length === 1 ? "" : "s"}</span>
           <div>
             <button class="button secondary compact-button" data-ad-greeting-action="edit" data-id="${escapeHtml(profile.id)}" type="button">Editar</button>
             <button class="button danger-ghost compact-button" data-ad-greeting-action="delete" data-id="${escapeHtml(profile.id)}" type="button">Eliminar</button>
@@ -1472,17 +1690,18 @@ function openAdGreetingDialog(profile = null) {
     showToast("Espera a que termine de cargar la configuración.", true);
     return;
   }
-  const fallback = state.settings.greetingMessages || ["", "", ""];
-  const messages = profile?.messages || fallback;
+  const fallback = state.settings.greetingSequence || [];
   $("#adGreetingDialogTitle").textContent = profile
     ? `Editar ${profile.name}`
     : "Agregar anuncio";
   $("#adGreetingId").value = profile?.id || "";
   $("#adGreetingName").value = profile?.name || "";
   $("#adGreetingMatchTerms").value = (profile?.matchTerms || []).join("\n");
-  $("#adGreeting1").value = messages[0] || "";
-  $("#adGreeting2").value = messages[1] || "";
-  $("#adGreeting3").value = messages[2] || "";
+  setWelcomeEditor(
+    "ad",
+    profile?.sequence || fallback,
+    profile?.messages || state.settings.greetingMessages
+  );
   $("#adGreetingEnabled").checked = profile?.enabled !== false;
   $("#saveAdGreetingButton").textContent = profile
     ? "Guardar cambios"
@@ -1493,23 +1712,27 @@ function openAdGreetingDialog(profile = null) {
 
 async function saveAdGreeting(event) {
   event.preventDefault();
-  const id = $("#adGreetingId").value;
+  const id = $("#adGreetingId").value || crypto.randomUUID();
   const previous = adGreetings().find((profile) => profile.id === id);
   const now = new Date().toISOString();
+  let sequence;
+  try {
+    sequence = welcomeEditorSequence("ad");
+  } catch (error) {
+    showToast(error.message, true);
+    return;
+  }
   const nextProfile = {
     ...(previous || {}),
-    ...(id ? { id } : {}),
+    id,
     name: $("#adGreetingName").value.trim(),
     enabled: $("#adGreetingEnabled").checked,
     matchTerms: $("#adGreetingMatchTerms").value
       .split(/\r?\n/)
       .map((term) => term.trim())
       .filter(Boolean),
-    messages: [
-      $("#adGreeting1").value,
-      $("#adGreeting2").value,
-      $("#adGreeting3").value
-    ],
+    messages: sequence.map((message) => message.text),
+    sequence,
     createdAt: previous?.createdAt || now,
     updatedAt: now
   };
@@ -1527,8 +1750,13 @@ async function saveAdGreeting(event) {
       body: { adGreetings: profiles }
     });
     state.settings = payload.settings;
-    renderAdGreetings();
+    await uploadWelcomeEditorImages("ad", id, button);
+    clearWelcomeEditor("ad");
     $("#adGreetingDialog").close();
+    const refreshed = await api("/api/settings");
+    state.settings = refreshed.settings;
+    renderAdGreetings();
+    renderCountryGreetings();
     showToast(
       previous
         ? `Bienvenida de ${nextProfile.name} actualizada.`
@@ -1569,7 +1797,12 @@ function renderCountryGreetings() {
   empty.classList.toggle("hidden", profiles.length > 0);
   grid.classList.toggle("hidden", profiles.length === 0);
   grid.innerHTML = profiles.map((profile) => {
-    const preview = (profile.messages || [])[0] || "";
+    const sequence = normalizeWelcomeEditorItems(
+      profile.sequence,
+      profile.messages
+    );
+    const preview = sequence[0]?.text || "";
+    const imageCount = sequence.filter((message) => message.image).length;
     return `
       <article class="country-greeting-card ${profile.enabled === false ? "is-disabled" : ""}">
         <div class="country-greeting-card-top">
@@ -1582,7 +1815,7 @@ function renderCountryGreetings() {
         </div>
         <p class="country-message-preview">${escapeHtml(preview)}</p>
         <div class="country-greeting-card-footer">
-          <span>3 mensajes · coincidencia ${escapeHtml(profile.callingCode)}</span>
+          <span>${sequence.length} mensaje${sequence.length === 1 ? "" : "s"} · ${imageCount} ${imageCount === 1 ? "imagen" : "imágenes"} · coincidencia ${escapeHtml(profile.callingCode)}</span>
           <div>
             <button class="button secondary compact-button" data-country-greeting-action="edit" data-id="${escapeHtml(profile.id)}" type="button">Editar</button>
             <button class="button danger-ghost compact-button" data-country-greeting-action="delete" data-id="${escapeHtml(profile.id)}" type="button">Eliminar</button>
@@ -1607,12 +1840,12 @@ function openCountryGreetingDialog(profile = null) {
     showToast("Espera a que termine de cargar la configuración.", true);
     return;
   }
-  const fallback = [
-    $("#greeting1")?.value || state.settings.greetingMessages?.[0] || "",
-    $("#greeting2")?.value || state.settings.greetingMessages?.[1] || "",
-    $("#greeting3")?.value || state.settings.greetingMessages?.[2] || ""
-  ];
-  const messages = profile?.messages || fallback;
+  const fallback = state.welcomeEditors.general?.length
+    ? state.welcomeEditors.general
+    : normalizeWelcomeEditorItems(
+        state.settings.greetingSequence,
+        state.settings.greetingMessages
+      );
   $("#countryGreetingDialogTitle").textContent = profile
     ? `Editar ${profile.country}`
     : "Agregar país";
@@ -1620,9 +1853,11 @@ function openCountryGreetingDialog(profile = null) {
   $("#countryGreetingCountry").value = profile?.country || "";
   $("#countryGreetingCallingCode").value = profile?.callingCode || "";
   $("#countryGreetingCurrency").value = profile?.currency || "";
-  $("#countryGreeting1").value = messages[0] || "";
-  $("#countryGreeting2").value = messages[1] || "";
-  $("#countryGreeting3").value = messages[2] || "";
+  setWelcomeEditor(
+    "country",
+    profile?.sequence || fallback,
+    profile?.messages || fallback.map((message) => message.text)
+  );
   $("#countryGreetingEnabled").checked = profile?.enabled !== false;
   $("#saveCountryGreetingButton").textContent = profile
     ? "Guardar cambios"
@@ -1647,18 +1882,23 @@ async function saveCountryGreeting(event) {
   }
   const previous = countryGreetings().find((profile) => profile.id === id);
   const now = new Date().toISOString();
+  let sequence;
+  try {
+    sequence = welcomeEditorSequence("country");
+  } catch (error) {
+    showToast(error.message, true);
+    return;
+  }
+  const profileId = id || crypto.randomUUID();
   const nextProfile = {
     ...(previous || {}),
-    ...(id ? { id } : {}),
+    id: profileId,
     country: $("#countryGreetingCountry").value.trim(),
     callingCode,
     currency: $("#countryGreetingCurrency").value.trim(),
     enabled: $("#countryGreetingEnabled").checked,
-    messages: [
-      $("#countryGreeting1").value,
-      $("#countryGreeting2").value,
-      $("#countryGreeting3").value
-    ],
+    messages: sequence.map((message) => message.text),
+    sequence,
     createdAt: previous?.createdAt || now,
     updatedAt: now
   };
@@ -1676,8 +1916,13 @@ async function saveCountryGreeting(event) {
       body: { countryGreetings: profiles }
     });
     state.settings = payload.settings;
-    renderCountryGreetings();
+    await uploadWelcomeEditorImages("country", profileId, button);
+    clearWelcomeEditor("country");
     $("#countryGreetingDialog").close();
+    const refreshed = await api("/api/settings");
+    state.settings = refreshed.settings;
+    renderAdGreetings();
+    renderCountryGreetings();
     showToast(
       previous
         ? `Bienvenida de ${nextProfile.country} actualizada.`
@@ -1963,9 +2208,11 @@ async function loadSettings() {
   state.countryPriceBooks = payload.countryPriceBooks || [];
   state.aiStatus = payload.ai || null;
   state.loadedSections.add("settings");
-  $("#greeting1").value = payload.settings.greetingMessages[0] || "";
-  $("#greeting2").value = payload.settings.greetingMessages[1] || "";
-  $("#greeting3").value = payload.settings.greetingMessages[2] || "";
+  setWelcomeEditor(
+    "general",
+    payload.settings.greetingSequence,
+    payload.settings.greetingMessages
+  );
   $("#adGreetingRoutingEnabled").checked =
     payload.settings.welcomeRoutingMode !== "general";
   $("#reminderTemplate").value = payload.settings.reminderTemplate || "";
@@ -1991,6 +2238,16 @@ async function loadSettings() {
 }
 
 async function saveSettings() {
+  let greetingSequence;
+  try {
+    greetingSequence = welcomeEditorSequence("general");
+  } catch (error) {
+    showToast(error.message, true);
+    return;
+  }
+  const button = $("#saveSettingsButton");
+  button.disabled = true;
+  button.textContent = "Guardando…";
   try {
     const payload = await api("/api/settings", {
       method: "PUT",
@@ -1999,7 +2256,8 @@ async function saveSettings() {
         welcomeRoutingMode: $("#adGreetingRoutingEnabled").checked
           ? "smart"
           : "general",
-        greetingMessages: [$("#greeting1").value, $("#greeting2").value, $("#greeting3").value],
+        greetingMessages: greetingSequence.map((message) => message.text),
+        greetingSequence,
         reminderTemplate: $("#reminderTemplate").value,
         chargeTemplate: $("#chargeTemplate").value,
         chargeStartTime: $("#chargeStartTime").value,
@@ -2009,15 +2267,20 @@ async function saveSettings() {
       }
     });
     state.settings = payload.settings;
-    renderAdGreetings();
-    renderCountryGreetings();
+    await uploadWelcomeEditorImages("general", "general", button);
+    clearWelcomeEditor("general");
+    await loadSettings();
     showToast(
       payload.settings.welcomeRoutingMode === "general"
         ? "Bienvenida general activada para todos y mensajes guardados."
         : "Detección por anuncio activada y mensajes guardados."
     );
   } catch (error) {
+    await loadSettings().catch(() => undefined);
     showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Guardar cambios";
   }
 }
 
@@ -2393,7 +2656,16 @@ function bindEvents() {
   );
   $("#adGreetingForm").addEventListener("submit", saveAdGreeting);
   $$(".ad-greeting-close").forEach((button) =>
-    button.addEventListener("click", () => $("#adGreetingDialog").close())
+    button.addEventListener("click", () => {
+      clearWelcomeEditor("ad");
+      $("#adGreetingDialog").close();
+    })
+  );
+  $("#adGreetingDialog").addEventListener("close", () =>
+    clearWelcomeEditor("ad")
+  );
+  $("#addAdGreetingMessage").addEventListener("click", () =>
+    addWelcomeEditorMessage("ad")
   );
   $("#adGreetingGrid").addEventListener("click", async (event) => {
     const button = event.target.closest("button[data-ad-greeting-action]");
@@ -2416,7 +2688,16 @@ function bindEvents() {
   );
   $("#countryGreetingForm").addEventListener("submit", saveCountryGreeting);
   $$(".country-greeting-close").forEach((button) =>
-    button.addEventListener("click", () => $("#countryGreetingDialog").close())
+    button.addEventListener("click", () => {
+      clearWelcomeEditor("country");
+      $("#countryGreetingDialog").close();
+    })
+  );
+  $("#countryGreetingDialog").addEventListener("close", () =>
+    clearWelcomeEditor("country")
+  );
+  $("#addCountryGreetingMessage").addEventListener("click", () =>
+    addWelcomeEditorMessage("country")
   );
   $("#countryGreetingCountry").addEventListener(
     "input",
@@ -2442,6 +2723,21 @@ function bindEvents() {
       await deleteCountryGreeting(profile);
     }
   });
+  $("#addGeneralGreetingMessage").addEventListener("click", () =>
+    addWelcomeEditorMessage("general")
+  );
+  for (const kind of ["general", "country", "ad"]) {
+    const container = $(WELCOME_EDITOR_CONTAINERS[kind]);
+    container.addEventListener("input", (event) =>
+      handleWelcomeEditorInput(kind, event)
+    );
+    container.addEventListener("change", (event) =>
+      handleWelcomeEditorFile(kind, event)
+    );
+    container.addEventListener("click", (event) =>
+      handleWelcomeEditorAction(kind, event)
+    );
+  }
   $("#saveAfkButton").addEventListener("click", saveAfkSettings);
   $("#afkEnabled").addEventListener("change", () => {
     renderAfkStatus({ ...state.settings, afkEnabled: $("#afkEnabled").checked });

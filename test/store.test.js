@@ -249,7 +249,7 @@ test("guarda bienvenidas por anuncio y permite activar el modo general", () => {
   }
 });
 
-test("rechaza anuncios sin identificadores o sin sus tres mensajes", () => {
+test("acepta secuencias variables y rechaza anuncios sin identificadores o mensajes", () => {
   const directory = temporaryDataDir();
   try {
     const store = new JsonStore(directory);
@@ -273,18 +273,30 @@ test("rechaza anuncios sin identificadores o sin sus tres mensajes", () => {
             {
               name: "Incompleto",
               matchTerms: ["anuncio único"],
-              messages: ["uno", "dos"]
+              messages: []
             }
           ]
         }),
-      /exactamente 3 mensajes/i
+      /entre 1 y 20 mensajes/i
     );
+    const settings = store.updateSettings({
+      adGreetings: [
+        {
+          id: "anuncio-dos-mensajes",
+          name: "Dos mensajes",
+          matchTerms: ["promoción dos mensajes"],
+          messages: ["uno", "dos"]
+        }
+      ]
+    });
+    assert.deepEqual(settings.adGreetings[0].messages, ["uno", "dos"]);
+    assert.equal(settings.adGreetings[0].sequence.length, 2);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
 
-test("rechaza prefijos repetidos y perfiles que no tengan tres mensajes", () => {
+test("rechaza prefijos repetidos y perfiles sin mensajes", () => {
   const directory = temporaryDataDir();
   try {
     const store = new JsonStore(directory);
@@ -316,11 +328,11 @@ test("rechaza prefijos repetidos y perfiles que no tengan tres mensajes", () => 
               country: "Argentina",
               callingCode: "+54",
               currency: "ARS",
-              messages: ["uno", "dos"]
+              messages: []
             }
           ]
         }),
-      /exactamente 3 mensajes/i
+      /entre 1 y 20 mensajes/i
     );
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
@@ -332,6 +344,7 @@ test("una instalación existente conserva sus tres mensajes dentro del perfil de
   try {
     const initial = createInitialData();
     delete initial.settings.countryGreetings;
+    delete initial.settings.greetingSequence;
     initial.settings.greetingMessages = [
       "catálogo peruano anterior",
       "combos peruanos anteriores",
@@ -359,6 +372,75 @@ test("una instalación existente conserva sus tres mensajes dentro del perfil de
       fs.readFileSync(path.join(directory, "jadrixservs-v4.json"), "utf8")
     );
     assert.equal(persisted.settings.countryGreetings[0].callingCode, "+51");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("guarda, reemplaza y elimina una imagen opcional de bienvenida", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const settings = store.updateSettings({
+      greetingSequence: [
+        { id: "general-flex-1", text: "Primer mensaje", image: null },
+        { id: "general-flex-2", text: "Segundo mensaje", image: null },
+        { id: "general-flex-3", text: "Tercer mensaje", image: null },
+        { id: "general-flex-4", text: "Cuarto mensaje", image: null }
+      ]
+    });
+    assert.equal(settings.greetingSequence.length, 4);
+    assert.deepEqual(settings.greetingMessages, [
+      "Primer mensaje",
+      "Segundo mensaje",
+      "Tercer mensaje",
+      "Cuarto mensaje"
+    ]);
+
+    const first = store.setWelcomeMessageImage(
+      "general",
+      "general",
+      "general-flex-1",
+      {
+        id: "welcome-image-1",
+        path: path.join(directory, "welcome-1.png"),
+        originalName: "promocion.png",
+        mimetype: "image/png",
+        size: 120
+      }
+    );
+    assert.equal(first.previous, null);
+    assert.equal(first.image.originalName, "promocion.png");
+
+    const panelLikeSequence = store.getSettings().greetingSequence.map(
+      (message) => ({
+        id: message.id,
+        text: message.text,
+        image: message.image
+          ? {
+              id: message.image.id,
+              originalName: message.image.originalName,
+              size: message.image.size
+            }
+          : null
+      })
+    );
+    store.updateSettings({ greetingSequence: panelLikeSequence });
+    assert.equal(
+      store.getWelcomeMessage("general", "general", "general-flex-1").image.path,
+      path.join(directory, "welcome-1.png")
+    );
+
+    const deleted = store.deleteWelcomeMessageImage(
+      "general",
+      "general",
+      "general-flex-1"
+    );
+    assert.equal(deleted.id, "welcome-image-1");
+    assert.equal(
+      store.getWelcomeMessage("general", "general", "general-flex-1").image,
+      null
+    );
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

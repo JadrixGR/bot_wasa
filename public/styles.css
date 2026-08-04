@@ -5435,3 +5435,128 @@ html[data-theme="dark"] .notice.error-notice { color: #ff9ba8; }
   .secret-input-row { grid-template-columns: 1fr; }
   .secret-input-row .button { width: 100%; }
 }
+
+/* Editor flexible de secuencias de bienvenida */
+.welcome-sequence-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin: 1rem 0 0.75rem;
+}
+.welcome-sequence-heading > div { display: grid; gap: 0.18rem; }
+.welcome-sequence-heading small { color: var(--muted); font-size: 0.7rem; }
+.welcome-message-list { display: grid; gap: 0.8rem; min-width: 0; }
+.welcome-message-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  padding: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--line) 84%, var(--primary));
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--panel) 90%, var(--primary) 2%);
+  transition: transform 190ms ease-out, border-color 190ms ease-out, box-shadow 190ms ease-out;
+}
+.welcome-message-row:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--primary) 38%, var(--line));
+  box-shadow: 0 12px 28px rgba(20, 30, 70, 0.08);
+}
+.welcome-message-number {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  margin-top: 1.45rem;
+  border-radius: 0.7rem;
+  color: #fff;
+  background: linear-gradient(135deg, #178bff, #8257ff);
+  font-size: 0.72rem;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(58, 105, 255, 0.22);
+}
+.welcome-message-content { display: grid; gap: 0.65rem; min-width: 0; }
+.welcome-message-content textarea { min-height: 7rem; resize: vertical; }
+.welcome-message-media {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.72fr);
+  gap: 0.6rem;
+  min-width: 0;
+}
+.welcome-message-image-empty,
+.welcome-message-image-preview,
+.welcome-image-picker {
+  min-height: 4.4rem;
+  border: 1px dashed color-mix(in srgb, var(--line) 86%, var(--primary));
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--panel-2) 88%, transparent);
+}
+.welcome-message-image-empty {
+  display: grid;
+  place-content: center;
+  gap: 0.1rem;
+  text-align: center;
+  color: var(--muted);
+}
+.welcome-message-image-empty span { color: var(--ink); font-size: 0.72rem; font-weight: 800; }
+.welcome-message-image-empty small { font-size: 0.64rem; }
+.welcome-message-image-preview {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4.4rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0;
+  padding-right: 0.5rem;
+  overflow: hidden;
+  border-style: solid;
+}
+.welcome-message-image-preview img { width: 4.4rem; height: 4.4rem; object-fit: cover; display: block; }
+.welcome-message-image-preview figcaption { display: grid; min-width: 0; gap: 0.15rem; }
+.welcome-message-image-preview figcaption strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; }
+.welcome-message-image-preview figcaption small { color: var(--muted); font-size: 0.62rem; }
+.welcome-message-image-preview > button,
+.welcome-message-actions button {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  transition: color 180ms ease-out, border-color 180ms ease-out, transform 180ms ease-out;
+}
+.welcome-message-image-preview > button { width: 1.8rem; height: 1.8rem; border-radius: 0.55rem; }
+.welcome-message-image-preview > button:hover,
+.welcome-message-actions button.danger:hover { color: var(--red); border-color: var(--red); }
+.welcome-image-picker {
+  position: relative;
+  display: grid;
+  place-content: center;
+  gap: 0.12rem;
+  padding: 0.65rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 180ms ease-out, background 180ms ease-out, transform 180ms ease-out;
+}
+.welcome-image-picker:hover { transform: translateY(-1px); border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.welcome-image-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.welcome-image-picker span { color: var(--primary); font-size: 0.72rem; font-weight: 850; }
+.welcome-image-picker small { color: var(--muted); font-size: 0.61rem; }
+.welcome-message-actions { display: grid; align-content: start; gap: 0.3rem; margin-top: 1.45rem; }
+.welcome-message-actions button { width: 2rem; height: 2rem; border-radius: 0.6rem; }
+.welcome-message-actions button:hover:not(:disabled) { color: var(--primary); border-color: var(--primary); transform: translateY(-1px); }
+.welcome-message-actions button:disabled { opacity: 0.28; cursor: default; }
+html[data-theme="dark"] .welcome-message-row { background: rgba(8, 12, 27, 0.62); }
+html[data-theme="dark"] .welcome-message-image-empty,
+html[data-theme="dark"] .welcome-message-image-preview,
+html[data-theme="dark"] .welcome-image-picker { background: rgba(13, 17, 34, 0.88); }
+
+@media (max-width: 720px) {
+  .welcome-sequence-heading,
+  .country-greeting-editor-heading { align-items: stretch; flex-direction: column; }
+  .welcome-sequence-heading .button,
+  .country-greeting-editor-heading .button { width: 100%; }
+  .welcome-message-row { grid-template-columns: auto minmax(0, 1fr); }
+  .welcome-message-number { margin-top: 1.45rem; }
+  .welcome-message-actions { grid-column: 2; display: flex; margin-top: 0; }
+  .welcome-message-media { grid-template-columns: 1fr; }
+}

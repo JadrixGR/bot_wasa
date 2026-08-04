@@ -724,6 +724,65 @@ test("un contacto de anuncio recibe la secuencia específica detectada por exter
   );
 });
 
+test("una bienvenida envía la imagen y el primer texto dentro de la misma burbuja", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  const mediaDirectory = path.join(testRuntimeDir, "welcome-sequence-media");
+  fs.mkdirSync(mediaDirectory, { recursive: true });
+  const imagePath = path.join(mediaDirectory, "bienvenida.png");
+  fs.writeFileSync(imagePath, Buffer.from("imagen-de-prueba"));
+  store.getSettings = () => ({
+    welcomeRoutingMode: "general",
+    greetingMessages: ["Oferta visual", "¿Qué producto deseas?"],
+    greetingSequence: [
+      {
+        id: "welcome-visual-1",
+        text: "Oferta visual",
+        image: { path: imagePath }
+      },
+      {
+        id: "welcome-visual-2",
+        text: "¿Qué producto deseas?",
+        image: null
+      }
+    ],
+    countryGreetings: [],
+    adGreetings: []
+  });
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "welcome-sequence-session"),
+    mediaDir: mediaDirectory
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "welcome-visual-incoming-1",
+          remoteJid: "51955556666@s.whatsapp.net",
+          fromMe: false
+        },
+        message: { conversation: "Hola" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(socket.calls.sent.length, 2);
+  assert.ok(Buffer.isBuffer(socket.calls.sent[0].content.image));
+  assert.equal(socket.calls.sent[0].content.caption, "Oferta visual");
+  assert.equal(
+    socket.calls.sent[1].content.text,
+    "¿Qué producto deseas?"
+  );
+});
+
 test("la respuesta de un cliente registrado queda sin leer y no activa la bienvenida", async () => {
   const fake = makeFakeBaileys({ registered: true });
   const store = makeStore();

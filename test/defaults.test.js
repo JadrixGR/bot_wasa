@@ -69,6 +69,12 @@ test("la V4.7 usa el modo de bienvenida única", () => {
   assert.equal(defaultSettings.welcomeRoutingMode, "smart");
   assert.equal(defaultSettings.adGreetings.length, 1);
   assert.equal(defaultSettings.adGreetings[0].messages.length, 3);
+  assert.equal(defaultSettings.adGreetings[0].sequence.length, 3);
+  assert.ok(
+    defaultSettings.adGreetings[0].sequence.every(
+      (message) => message.text && message.image === null
+    )
+  );
   assert.match(defaultSettings.adGreetings[0].messages[1], /S\/30 al mes/);
   assert.match(defaultSettings.adGreetings[0].messages[1], /S\/45 al mes/);
   assert.ok(
@@ -85,6 +91,8 @@ test("la V4.7 usa el modo de bienvenida única", () => {
   assert.equal(defaultSettings.countryGreetings[0].callingCode, "+51");
   assert.equal(defaultSettings.countryGreetings[0].country, "Perú");
   assert.equal(defaultSettings.countryGreetings[0].messages.length, 3);
+  assert.equal(defaultSettings.countryGreetings[0].sequence.length, 3);
+  assert.equal(defaultSettings.greetingSequence.length, 3);
   assert.deepEqual(
     defaultSettings.countryGreetings.map((profile) => profile.callingCode),
     ["+51", "+52", "+54"]
