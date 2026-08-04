@@ -66,8 +66,9 @@ function resolveWelcomeProfile(
 }
 
 class BotEngine {
-  constructor({ store, sendText }) {
+  constructor({ store, ai = null, sendText }) {
     this.store = store;
+    this.ai = ai;
     this.sendText = sendText;
   }
 
@@ -77,7 +78,8 @@ class BotEngine {
     customerPhone = "",
     body = "",
     hasMedia = false,
-    fromName = ""
+    fromName = "",
+    messageId = ""
   }) {
     const conversationIds = [...new Set([chatId, alternateChatId].filter(Boolean))];
     const conversations = conversationIds.map((id) =>
@@ -107,6 +109,22 @@ class BotEngine {
     const settings = this.store.getSettings();
     const client =
       this.store.findClientByWhatsApp?.(chatId, alternateChatId) || null;
+    const normalizedMessageId = String(messageId || "").trim();
+    if (
+      normalizedMessageId &&
+      conversations.some(
+        (item) => String(item.lastInboundMessageId || "") === normalizedMessageId
+      )
+    ) {
+      return { action: "duplicate-inbound" };
+    }
+    const currentMessage = String(body || "").trim();
+    const recentUserMessages = [
+      ...(Array.isArray(conversation.recentUserMessages)
+        ? conversation.recentUserMessages
+        : []),
+      ...(currentMessage ? [currentMessage.slice(0, 1200)] : [])
+    ].slice(-4);
 
     updateConversations({
       firstInboundAt: conversation.firstInboundAt || now,
@@ -114,6 +132,10 @@ class BotEngine {
       lastInboundPreview: String(body || "").slice(0, 180),
       lastInboundHadMedia: Boolean(hasMedia),
       firstInboundName: conversation.firstInboundName || fromName || "",
+      recentUserMessages,
+      ...(normalizedMessageId
+        ? { lastInboundMessageId: normalizedMessageId }
+        : {}),
       ...(client ? { registeredClientId: client.id } : {})
     });
 
@@ -147,67 +169,131 @@ class BotEngine {
       };
     }
 
-    if (client) {
-      return { action: "registered-client", clientId: client.id };
-    }
-
-    if (conversation.welcomeSequenceSentAt) {
-      return { action: "welcome-already-sent" };
-    }
-
-    const welcome = resolveWelcomeProfile(settings, {
-      customerPhone,
-      chatId,
-      alternateChatId,
-      profileId: conversation.welcomeCountryGreetingId || ""
-    });
-    const messages = welcome.messages;
-    const previousCount = Math.max(
-      0,
-      Math.min(3, Number(conversation.welcomeMessagesSent) || 0)
-    );
-
-    updateConversations({
-      welcomeCountryGreetingId: welcome.profile?.id || null,
-      welcomeCountry: welcome.profile?.country || null,
-      welcomeCallingCode: welcome.profile?.callingCode || null,
-      welcomeCurrency: welcome.profile?.currency || null
-    });
-
-    let sentNow = 0;
-    for (let index = previousCount; index < messages.length; index += 1) {
-      await this.sendText(chatId, messages[index]);
-      sentNow += 1;
-      updateConversations({
-        welcomeMessagesSent: index + 1
-      });
-    }
-
-    updateConversations({
-      welcomeMessagesSent: 3,
-      welcomeSequenceSentAt: new Date().toISOString()
-    });
-    this.store.addLog(
-      "welcome",
-      `Bienvenida enviada a ${fromName || chatId}`,
-      {
+    if (!client && !conversation.welcomeSequenceSentAt) {
+      const welcome = resolveWelcomeProfile(settings, {
+        customerPhone,
         chatId,
+        alternateChatId,
+        profileId: conversation.welcomeCountryGreetingId || ""
+      });
+      const messages = welcome.messages;
+      const previousCount = Math.max(
+        0,
+        Math.min(3, Number(conversation.welcomeMessagesSent) || 0)
+      );
+
+      updateConversations({
+        welcomeCountryGreetingId: welcome.profile?.id || null,
+        welcomeCountry: welcome.profile?.country || null,
+        welcomeCallingCode: welcome.profile?.callingCode || null,
+        welcomeCurrency: welcome.profile?.currency || null
+      });
+
+      let sentNow = 0;
+      for (let index = previousCount; index < messages.length; index += 1) {
+        await this.sendText(chatId, messages[index]);
+        sentNow += 1;
+        updateConversations({
+          welcomeMessagesSent: index + 1
+        });
+      }
+
+      updateConversations({
+        welcomeMessagesSent: 3,
+        welcomeSequenceSentAt: new Date().toISOString()
+      });
+      this.store.addLog(
+        "welcome",
+        `Bienvenida enviada a ${fromName || chatId}`,
+        {
+          chatId,
+          messages: sentNow,
+          country: welcome.profile?.country || null,
+          callingCode: welcome.profile?.callingCode || null,
+          currency: welcome.profile?.currency || null,
+          usedFallback: !welcome.profile
+        }
+      );
+      this.store.save();
+
+      return {
+        action: previousCount ? "welcome-resumed" : "welcome-sequence",
         messages: sentNow,
         country: welcome.profile?.country || null,
         callingCode: welcome.profile?.callingCode || null,
-        currency: welcome.profile?.currency || null,
         usedFallback: !welcome.profile
-      }
-    );
-    this.store.save();
+      };
+    }
 
-    return {
-      action: previousCount ? "welcome-resumed" : "welcome-sequence",
-      messages: sentNow,
-      country: welcome.profile?.country || null,
-      callingCode: welcome.profile?.callingCode || null,
-      usedFallback: !welcome.profile
-    };
+    if (this.ai?.isReplyEnabled?.() && currentMessage) {
+      const detectedWelcome = resolveWelcomeProfile(settings, {
+        customerPhone,
+        chatId,
+        alternateChatId,
+        profileId: conversation.welcomeCountryGreetingId || ""
+      });
+      try {
+        const answer = await this.ai.answer({
+          question: currentMessage,
+          conversation: {
+            ...conversation,
+            recentUserMessages,
+            welcomeCountry:
+              conversation.welcomeCountry || detectedWelcome.profile?.country || null,
+            welcomeCallingCode:
+              conversation.welcomeCallingCode || detectedWelcome.profile?.callingCode || null,
+            welcomeCurrency:
+              conversation.welcomeCurrency || detectedWelcome.profile?.currency || null,
+            registeredClientId: client?.id || conversation.registeredClientId || null
+          }
+        });
+        if (answer) {
+          await this.sendText(chatId, answer);
+          updateConversations({
+            lastAiReplyAt: new Date().toISOString(),
+            lastAiReplyPreview: String(answer).slice(0, 180)
+          });
+          this.store.addLog(
+            "ai",
+            `Gemini respondió a ${fromName || chatId}`,
+            {
+              chatId,
+              clientId: client?.id || null,
+              provider: this.ai.getStatus?.().provider || "gemini"
+            }
+          );
+          this.store.save();
+          return {
+            action: "ai-reply",
+            messages: 1,
+            clientId: client?.id || null
+          };
+        }
+      } catch (error) {
+        this.store.addLog(
+          "ai",
+          `La IA no respondió a ${fromName || chatId}: ${error.message}`,
+          {
+            chatId,
+            clientId: client?.id || null,
+            code: error.code || "ai_error"
+          }
+        );
+        this.store.save();
+        return {
+          action: "ai-error",
+          messages: 0,
+          clientId: client?.id || null,
+          errorCode: error.code || "ai_error"
+        };
+      }
+    }
+
+    this.store.save();
+    if (client) {
+      return { action: "registered-client", clientId: client.id };
+    }
+    return { action: "welcome-already-sent" };
   }
 }
 

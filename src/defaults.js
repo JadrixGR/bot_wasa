@@ -376,6 +376,8 @@ const defaultSettings = {
     "🙋 He avisado que necesitas atención personal. Un asesor de JadrixServs continuará contigo por este chat.",
   fallbackReply:
     "No tengo ese dato confirmado. Si deseas, puedo comunicarte con un asesor de JadrixServs.",
+  aiInstructions:
+    "Da respuestas breves, amables y directas. Usa únicamente la información confirmada y deriva a un asesor cuando falte un dato.",
   reminderTemplate:
     "Hola {nombre} 👋 Te recordamos que tu servicio *{producto}* vence en 2 días, el *{fecha}*. Puedes renovar anticipadamente sin perder ningún día; el nuevo periodo comienza desde tu fecha de vencimiento actual.",
   chargeTemplate:
@@ -406,6 +408,13 @@ function createInitialData() {
     products: structuredClone(products),
     plans: structuredClone(plans),
     knowledgeBase: structuredClone(knowledgeBase),
+    aiConfig: {
+      provider: "gemini",
+      enabled: false,
+      model: "gemini-3.6-flash",
+      encryptedApiKey: "",
+      updatedAt: null
+    },
     clients: [],
     authenticatorAccounts: [],
     authenticatorAccess: [],

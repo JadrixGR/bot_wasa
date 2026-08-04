@@ -9,7 +9,7 @@ const {
 } = require("../src/bot-engine");
 const { createInitialData } = require("../src/defaults");
 
-function makeHarness(conversation = {}, registeredClient = null) {
+function makeHarness(conversation = {}, registeredClient = null, ai = null) {
   const data = createInitialData();
   const sent = [];
   const logs = [];
@@ -31,6 +31,7 @@ function makeHarness(conversation = {}, registeredClient = null) {
   };
   const engine = new BotEngine({
     store,
+    ai,
     sendText: async (_chatId, text) => sent.push(text)
   });
   return { engine, sent, logs, conversation, conversations, data };
@@ -73,6 +74,115 @@ test("después de la bienvenida no vuelve a responder mensajes entrantes", async
 
   assert.equal(second.action, "welcome-already-sent");
   assert.equal(sent.length, 3);
+});
+
+test("la IA responde desde el segundo mensaje y conserva primero la bienvenida", async () => {
+  const calls = [];
+  const ai = {
+    isReplyEnabled: () => true,
+    answer: async (payload) => {
+      calls.push(payload);
+      return "Claro, ChatGPT Pro está disponible.";
+    },
+    getStatus: () => ({ provider: "gemini" })
+  };
+  const { engine, sent, logs } = makeHarness({}, null, ai);
+
+  const first = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "Hola",
+    messageId: "mensaje-1"
+  });
+  const second = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "¿Tienen ChatGPT Pro?",
+    messageId: "mensaje-2"
+  });
+
+  assert.equal(first.action, "welcome-sequence");
+  assert.equal(second.action, "ai-reply");
+  assert.equal(sent.length, 4);
+  assert.equal(sent.at(-1), "Claro, ChatGPT Pro está disponible.");
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].conversation.welcomeCountry, "Perú");
+  assert.equal(calls[0].conversation.welcomeCallingCode, "+51");
+  assert.ok(logs.some((log) => log.type === "ai"));
+});
+
+test("la IA responde a un cliente registrado y detecta su país por el número", async () => {
+  let receivedConversation = null;
+  const ai = {
+    isReplyEnabled: () => true,
+    answer: async ({ conversation }) => {
+      receivedConversation = conversation;
+      return "Te indico el medio de pago para Perú.";
+    },
+    getStatus: () => ({ provider: "gemini" })
+  };
+  const client = { id: "cliente-1", name: "Ana", whatsapp: "51900000000" };
+  const { engine, sent } = makeHarness({}, client, ai);
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "¿Cómo pago?"
+  });
+
+  assert.equal(result.action, "ai-reply");
+  assert.equal(sent.length, 1);
+  assert.equal(receivedConversation.welcomeCountry, "Perú");
+  assert.equal(receivedConversation.welcomeCurrency, "PEN (S/)");
+});
+
+test("si Gemini falla no envía texto inventado y deja el mensaje para atención manual", async () => {
+  const providerError = new Error("Gemini temporalmente no disponible");
+  providerError.code = "connection";
+  const ai = {
+    isReplyEnabled: () => true,
+    answer: async () => { throw providerError; },
+    getStatus: () => ({ provider: "gemini" })
+  };
+  const { engine, sent, logs } = makeHarness(
+    { welcomeSequenceSentAt: new Date().toISOString(), welcomeMessagesSent: 3 },
+    null,
+    ai
+  );
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "¿Tienen soporte?"
+  });
+
+  assert.equal(result.action, "ai-error");
+  assert.equal(result.errorCode, "connection");
+  assert.equal(sent.length, 0);
+  assert.ok(logs.some((log) => log.type === "ai" && /no respondió/i.test(log.message)));
+});
+
+test("un evento repetido no provoca dos respuestas de Gemini", async () => {
+  let calls = 0;
+  const ai = {
+    isReplyEnabled: () => true,
+    answer: async () => {
+      calls += 1;
+      return "Respuesta única.";
+    },
+    getStatus: () => ({ provider: "gemini" })
+  };
+  const { engine, sent } = makeHarness(
+    { welcomeSequenceSentAt: new Date().toISOString(), welcomeMessagesSent: 3 },
+    null,
+    ai
+  );
+  const message = {
+    chatId: "51900000000@s.whatsapp.net",
+    body: "¿Precio?",
+    messageId: "wa-mensaje-repetido"
+  };
+  const first = await engine.handleIncoming(message);
+  const duplicate = await engine.handleIncoming(message);
+
+  assert.equal(first.action, "ai-reply");
+  assert.equal(duplicate.action, "duplicate-inbound");
+  assert.equal(calls, 1);
+  assert.deepEqual(sent, ["Respuesta única."]);
 });
 
 test("la bienvenida no se repite si WhatsApp alterna entre LID y número", async () => {

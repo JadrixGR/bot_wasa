@@ -31,6 +31,11 @@ const dedicatedAuthenticatorKeyConfigured = Boolean(
 );
 const authenticatorEncryptionKey =
   process.env.AUTHENTICATOR_ENCRYPTION_KEY || cookieSecret;
+const dedicatedGeminiEncryptionKeyConfigured = Boolean(
+  process.env.GEMINI_ENCRYPTION_KEY
+);
+const geminiEncryptionKey =
+  process.env.GEMINI_ENCRYPTION_KEY || authenticatorEncryptionKey;
 const persistentDiskConfigured =
   dataDir === "/data" || dataDir.startsWith(`/data${path.sep}`);
 
@@ -38,7 +43,7 @@ fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(mediaDir, { recursive: true });
 
 const store = new JsonStore(dataDir);
-const ai = new AiService({ store });
+const ai = new AiService({ store, encryptionKey: geminiEncryptionKey });
 const authenticator = new AuthenticatorService({
   store,
   encryptionKey: authenticatorEncryptionKey
@@ -625,6 +630,14 @@ app.post(
   })
 );
 
+app.put("/api/ai/config", requireAuth, (req, res) => {
+  res.json({ ai: ai.configureGemini(req.body) });
+});
+
+app.delete("/api/ai/key", requireAuth, (_req, res) => {
+  res.json({ ai: ai.clearGeminiApiKey() });
+});
+
 const allowedMedia = {
   dicloakAudio: {
     extensions: new Set([".ogg", ".opus", ".mp3", ".wav", ".m4a"]),
@@ -792,6 +805,11 @@ const server = app.listen(port, "0.0.0.0", () => {
       "AUTHENTICATOR_ENCRYPTION_KEY no está configurada; las claves 2FA se cifrarán usando COOKIE_SECRET."
     );
   }
+  if (!dedicatedGeminiEncryptionKeyConfigured) {
+    console.warn(
+      "GEMINI_ENCRYPTION_KEY no está configurada; la API key de Gemini se cifrará usando AUTHENTICATOR_ENCRYPTION_KEY o COOKIE_SECRET."
+    );
+  }
   scheduler.start();
   whatsapp.initialize().catch((error) => {
     console.error("WhatsApp no pudo iniciar:", error.message);
@@ -816,4 +834,4 @@ async function shutdown() {
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
-module.exports = { app, store, whatsapp, scheduler, authenticator };
+module.exports = { app, store, whatsapp, scheduler, authenticator, ai };

@@ -11,6 +11,8 @@ const state = {
   authenticatorAccounts: [],
   catalog: [],
   quickReplies: [],
+  knowledgeBase: [],
+  aiStatus: null,
   quickReplyPendingFiles: [],
   accessEntries: [],
   accessAccountId: null,
@@ -168,6 +170,7 @@ function updateActiveSection(section) {
     clients: "Clientes y cobros",
     lookup: "Buscar celular",
     messages: "Mensajes automáticos",
+    "ai-training": "IA y entrenamiento",
     "quick-replies": "Respuestas rápidas",
     afk: "Modo AFK",
     catalog: "Catálogo y comandos",
@@ -190,6 +193,9 @@ function loadSectionData(section) {
     !state.loadedSections.has("quick-replies")
   ) {
     loadQuickReplies().catch(reportError);
+  }
+  if (section === "ai-training" && !state.loadedSections.has("settings")) {
+    loadSettings().catch(reportError);
   }
   if (section === "activity" && !state.loadedSections.has("activity")) {
     loadLogs().catch(reportError);
@@ -1563,11 +1569,189 @@ async function deleteCountryGreeting(profile) {
   }
 }
 
+function renderAiStatus(ai = {}) {
+  if (!$("#aiStatusPill")) return;
+  state.aiStatus = ai;
+  const active = Boolean(ai.replyEnabled);
+  const configured = Boolean(ai.configured || ai.keyConfigured);
+  const hasError = Boolean(ai.lastError);
+  const pill = $("#aiStatusPill");
+  pill.className = `pill ${hasError ? "red" : active ? "green" : configured ? "blue" : "violet"}`;
+  pill.textContent = hasError
+    ? "Requiere atención"
+    : active
+      ? "Respuestas activas"
+      : configured
+        ? "Listo para activar"
+        : "Falta API key";
+  $("#aiProviderText").textContent = ai.provider === "openai" ? "OpenAI" : "Google Gemini";
+  $("#aiModelText").textContent = ai.model || "gemini-3.6-flash";
+  $("#aiKeyText").textContent = ai.keyConfigured
+    ? ai.encryptedAtRest
+      ? "Cifrada en el panel"
+      : "Variable de entorno"
+    : "Sin configurar";
+  $("#geminiModel").value = ai.provider === "gemini" && ai.model
+    ? ai.model
+    : "gemini-3.6-flash";
+  $("#aiReplyEnabled").checked = active || Boolean(ai.requestedEnabled);
+  $("#deleteGeminiKeyButton").classList.toggle(
+    "hidden",
+    !ai.keyConfigured || ai.keySource !== "panel_encrypted"
+  );
+  $("#geminiKeyHelp").textContent = ai.keyConfigured
+    ? "Ya existe una clave configurada. Deja este campo vacío para conservarla."
+    : "La clave se cifra antes de guardarse y nunca vuelve al navegador.";
+  const notice = $("#aiConfigurationNotice");
+  notice.classList.toggle("error-notice", hasError);
+  notice.classList.toggle("success-notice", active && !hasError);
+  notice.textContent = hasError
+    ? ai.lastError
+    : active
+      ? "Gemini está activo y responderá después de la bienvenida inicial."
+      : configured
+        ? "La conexión está configurada. Activa el interruptor y guarda cuando quieras usarla."
+        : "Guarda una API key para habilitar las respuestas con IA.";
+}
+
+function renderKnowledgeBase() {
+  if (!$("#knowledgeList")) return;
+  const entries = Array.isArray(state.knowledgeBase) ? state.knowledgeBase : [];
+  $("#knowledgeCount").textContent = `${entries.length} respuesta${entries.length === 1 ? "" : "s"}`;
+  $("#knowledgeEmpty").classList.toggle("hidden", entries.length > 0);
+  $("#knowledgeList").innerHTML = entries.map((entry, index) => `
+    <article class="knowledge-card" data-knowledge-id="${escapeHtml(entry.id || "")}">
+      <div class="knowledge-card-heading">
+        <span class="knowledge-number">${index + 1}</span>
+        <strong>${escapeHtml(entry.title || "Nueva respuesta")}</strong>
+        <label class="knowledge-enabled">
+          <input data-knowledge-enabled type="checkbox" ${entry.enabled === false ? "" : "checked"}>
+          Activa
+        </label>
+        <button class="button danger-ghost knowledge-remove" data-knowledge-remove type="button">Eliminar</button>
+      </div>
+      <div class="knowledge-fields">
+        <label>Tema o pregunta<input data-knowledge-title type="text" maxlength="120" value="${escapeHtml(entry.title || "")}" placeholder="Ejemplo: Pago con Yape"></label>
+        <label>Palabras o frases relacionadas<textarea data-knowledge-triggers rows="4" placeholder="precio, pagar, Yape">${escapeHtml((entry.triggers || []).join(", "))}</textarea><small>Sepáralas con comas o saltos de línea.</small></label>
+        <label>Respuesta e información correcta<textarea data-knowledge-answer rows="5" maxlength="3000" placeholder="Escribe lo que Gemini debe saber...">${escapeHtml(entry.answer || "")}</textarea></label>
+      </div>
+    </article>
+  `).join("");
+}
+
+function knowledgeFromForm() {
+  return $$(".knowledge-card", $("#knowledgeList")).map((card) => ({
+    id: card.dataset.knowledgeId || undefined,
+    title: $("[data-knowledge-title]", card).value.trim(),
+    triggers: $("[data-knowledge-triggers]", card).value
+      .split(/[\n,]+/)
+      .map((value) => value.trim())
+      .filter(Boolean),
+    answer: $("[data-knowledge-answer]", card).value.trim(),
+    enabled: $("[data-knowledge-enabled]", card).checked
+  }));
+}
+
+function addKnowledgeEntry(entry = {}) {
+  state.knowledgeBase = knowledgeFromForm();
+  state.knowledgeBase.push({
+    id: entry.id || (globalThis.crypto?.randomUUID?.() || `knowledge-${Date.now()}`),
+    title: entry.title || "",
+    triggers: entry.triggers || [],
+    answer: entry.answer || "",
+    enabled: entry.enabled !== false
+  });
+  renderKnowledgeBase();
+  const lastCard = $$(".knowledge-card", $("#knowledgeList")).at(-1);
+  lastCard?.scrollIntoView({ behavior: "smooth", block: "center" });
+  $("[data-knowledge-title]", lastCard)?.focus();
+}
+
+async function saveGeminiConfiguration() {
+  const apiKey = $("#geminiApiKey").value.trim();
+  const body = {
+    model: $("#geminiModel").value.trim() || "gemini-3.6-flash",
+    enabled: $("#aiReplyEnabled").checked
+  };
+  if (apiKey) body.apiKey = apiKey;
+  const payload = await api("/api/ai/config", { method: "PUT", body });
+  $("#geminiApiKey").value = "";
+  renderAiStatus(payload.ai);
+  return payload.ai;
+}
+
+async function saveAiSettings() {
+  const button = $("#saveAiButton");
+  button.disabled = true;
+  button.textContent = "Guardando…";
+  try {
+    const settingsPayload = await api("/api/settings", {
+      method: "PUT",
+      body: {
+        peruPayment: $("#aiPeruPayment").value,
+        internationalPayment: $("#aiInternationalPayment").value,
+        aiInstructions: $("#aiInstructions").value,
+        knowledgeBase: knowledgeFromForm()
+      }
+    });
+    state.settings = settingsPayload.settings;
+    state.knowledgeBase = settingsPayload.knowledgeBase;
+    renderKnowledgeBase();
+    await saveGeminiConfiguration();
+    showToast("Configuración y entrenamiento de Gemini guardados.");
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Guardar configuración";
+  }
+}
+
+async function testAiConnection() {
+  const button = $("#testAiButton");
+  button.disabled = true;
+  button.textContent = "Probando…";
+  try {
+    if ($("#geminiApiKey").value.trim()) await saveGeminiConfiguration();
+    const result = await api("/api/ai/test", { method: "POST" });
+    renderAiStatus({
+      ...(state.aiStatus || {}),
+      provider: result.provider || state.aiStatus?.provider,
+      model: result.model || state.aiStatus?.model,
+      lastSuccessAt: result.testedAt,
+      lastError: null,
+      lastErrorType: null,
+      health: "ready"
+    });
+    showToast(`Conexión correcta con ${result.model || "Gemini"}.`);
+  } catch (error) {
+    showToast(error.message, true);
+    await loadSettings().catch(() => undefined);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Probar conexión";
+  }
+}
+
+async function deleteGeminiKey() {
+  if (!confirm("¿Eliminar la API key guardada? Las respuestas con IA quedarán desactivadas.")) return;
+  try {
+    const payload = await api("/api/ai/key", { method: "DELETE" });
+    $("#geminiApiKey").value = "";
+    renderAiStatus(payload.ai);
+    showToast("API key de Gemini eliminada.");
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 async function loadSettings() {
   const payload = await api("/api/settings");
   state.settings = payload.settings;
   state.products = payload.products;
   state.plans = payload.plans;
+  state.knowledgeBase = payload.knowledgeBase || [];
+  state.aiStatus = payload.ai || null;
   state.loadedSections.add("settings");
   $("#greeting1").value = payload.settings.greetingMessages[0] || "";
   $("#greeting2").value = payload.settings.greetingMessages[1] || "";
@@ -1583,6 +1767,11 @@ async function loadSettings() {
   $("#afkMessage").value = payload.settings.afkMessage || "";
   renderAfkStatus(payload.settings);
   renderCountryGreetings();
+  $("#aiPeruPayment").value = payload.settings.peruPayment || "";
+  $("#aiInternationalPayment").value = payload.settings.internationalPayment || "";
+  $("#aiInstructions").value = payload.settings.aiInstructions || "";
+  renderAiStatus(payload.ai || {});
+  renderKnowledgeBase();
   $("#productOptions").innerHTML = [...payload.products, ...payload.plans]
     .map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join("");
 }
@@ -1644,6 +1833,8 @@ function logLabel(type) {
     charge: "Cobranza",
     command: "Comando",
     "quick-reply": "Respuesta rápida",
+    ai: "Gemini IA",
+    training: "Entrenamiento IA",
     client: "Cliente",
     authenticator: "Autenticador",
     security: "Seguridad",
@@ -1931,6 +2122,34 @@ function bindEvents() {
     }
   });
   $("#saveSettingsButton").addEventListener("click", saveSettings);
+  $("#saveAiButton").addEventListener("click", saveAiSettings);
+  $("#testAiButton").addEventListener("click", testAiConnection);
+  $("#deleteGeminiKeyButton").addEventListener("click", deleteGeminiKey);
+  $("#toggleGeminiKeyButton").addEventListener("click", () => {
+    const field = $("#geminiApiKey");
+    const button = $("#toggleGeminiKeyButton");
+    const visible = field.type === "password";
+    field.type = visible ? "text" : "password";
+    button.textContent = visible ? "Ocultar" : "Mostrar";
+    button.setAttribute("aria-pressed", String(visible));
+    field.focus();
+  });
+  $("#addKnowledgeButton").addEventListener("click", () => addKnowledgeEntry());
+  $("#knowledgeList").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-knowledge-remove]");
+    if (!button) return;
+    const cards = $$(".knowledge-card", $("#knowledgeList"));
+    const card = button.closest(".knowledge-card");
+    const index = cards.indexOf(card);
+    state.knowledgeBase = knowledgeFromForm();
+    if (index >= 0) state.knowledgeBase.splice(index, 1);
+    renderKnowledgeBase();
+  });
+  $("#knowledgeList").addEventListener("input", (event) => {
+    if (!event.target.matches("[data-knowledge-title]")) return;
+    const heading = event.target.closest(".knowledge-card")?.querySelector(".knowledge-card-heading strong");
+    if (heading) heading.textContent = event.target.value.trim() || "Nueva respuesta";
+  });
   $("#newCountryGreetingButton").addEventListener("click", () =>
     openCountryGreetingDialog()
   );

@@ -1,5 +1,26 @@
 # JadrixServs Bot V4.9.3 Profesional
 
+## Respuestas con Gemini IA
+
+El apartado **IA y entrenamiento** permite conectar Google Gemini sin exponer la API key al navegador:
+
+- Pega la API key desde el panel, selecciona el modelo y activa o desactiva las respuestas con IA.
+- La clave se cifra con AES-256-GCM antes de guardarse en `/data/jadrixservs-v4.json`; el panel nunca vuelve a recibirla.
+- Gemini recibe como contexto el catálogo, los precios y mensajes por país, los métodos de pago, las instrucciones del negocio y las respuestas entrenadas activas.
+- El entrenamiento es una base de conocimiento editable de temas, frases relacionadas y respuestas confirmadas. No realiza fine-tuning ni envía archivos a Google.
+- Un contacto nuevo siempre recibe primero la bienvenida de tres mensajes. La IA puede responder desde su siguiente consulta.
+- El modo AFK conserva prioridad. Si Gemini falla, no se envía una respuesta inventada y el mensaje queda sin leer para atención manual.
+- Los comandos privados, registros de clientes, renovaciones, cobranzas y respuestas rápidas conservan su comportamiento.
+
+### Configuración recomendada en Render
+
+1. Crea `GEMINI_ENCRYPTION_KEY` con un valor largo, aleatorio y estable.
+2. Despliega la actualización y abre **IA y entrenamiento**.
+3. Pega la API key de Google AI Studio, conserva `gemini-3.6-flash` o selecciona otro modelo disponible para tu proyecto y guarda.
+4. Pulsa **Probar conexión**. Activa las respuestas solamente cuando la prueba sea correcta.
+
+`GEMINI_ENCRYPTION_KEY` debe conservar siempre el mismo valor. Si cambia, la API key cifrada no podrá recuperarse y deberá ingresarse otra vez. Como alternativa avanzada, `GEMINI_API_KEY` puede configurarse directamente en Render; nunca debe escribirse en archivos que se suban al repositorio.
+
 ## Respuestas rápidas con imágenes y textos
 
 El panel incluye el apartado **Respuestas rápidas** para crear comandos privados como `/diferencia`.
@@ -112,15 +133,16 @@ Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clie
 
 ## Flujo de mensajes
 
-La V4.9.1 funciona en modo **solo bienvenida**:
+La V4.9.3 conserva la bienvenida única y permite habilitar respuestas posteriores con Gemini:
 
 1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales del país que coincide con su prefijo internacional.
 2. Los tres se envían por separado, mostrando “escribiendo…” y una pequeña demora antes de cada envío.
-3. Después de completar esa secuencia, el bot no vuelve a responder los mensajes entrantes de ese contacto y los deja sin leer para que aparezcan pendientes de atención manual.
-4. Si el número ya está registrado como cliente, sus respuestas tampoco activan la bienvenida.
-5. Desde ese momento, el bot solamente envía recordatorios o cobranzas programadas desde el panel.
+3. Si Gemini está desactivado, los mensajes posteriores quedan sin leer para atención manual, igual que antes.
+4. Si Gemini está activado, responde desde la siguiente consulta usando únicamente la información configurada en **IA y entrenamiento**.
+5. Si el número ya está registrado como cliente, no recibe la bienvenida; con IA activa puede recibir una respuesta contextual.
+6. Los recordatorios y las cobranzas programadas continúan funcionando de forma independiente.
 
-El contenido de los tres mensajes iniciales puede editarse en **Mensajes automáticos**. Allí también puedes crear perfiles por país, por ejemplo `+51` para Perú y `+54` para Argentina, con moneda y tres mensajes propios. Si no existe una coincidencia activa, el bot usa la bienvenida predeterminada. Los datos antiguos de productos y entrenamiento se conservan al actualizar, pero no generan respuestas en este modo. `OPENAI_API_KEY` no es necesaria para la bienvenida ni para las renovaciones.
+El contenido de los tres mensajes iniciales puede editarse en **Mensajes automáticos**. Allí también puedes crear perfiles por país, por ejemplo `+51` para Perú y `+54` para Argentina, con moneda y tres mensajes propios. Si no existe una coincidencia activa, el bot usa la bienvenida predeterminada. La API de Gemini es opcional y no es necesaria para la bienvenida, los comandos, las renovaciones ni las cobranzas.
 
 ## Bienvenidas y precios por país
 
@@ -264,6 +286,10 @@ En **Render → tu servicio → Environment** revisa:
 | `ADMIN_PASSWORD` | Contraseña segura para el panel |
 | `COOKIE_SECRET` | Texto largo y secreto |
 | `AUTHENTICATOR_ENCRYPTION_KEY` | Clave larga, aleatoria y estable para cifrar las cuentas 2FA |
+| `GEMINI_ENCRYPTION_KEY` | Clave larga, aleatoria y estable para cifrar la API key guardada desde el panel |
+| `GEMINI_API_KEY` | Opcional; déjala sin crear si ingresarás la clave desde el panel |
+| `GEMINI_MODEL` | `gemini-3.6-flash` |
+| `GEMINI_TIMEOUT_MS` | `25000` |
 | `DATA_DIR` | `/data` |
 | `MEDIA_DIR` | `/data/media` |
 | `BOT_TIMEZONE` | `America/Lima` |
@@ -330,7 +356,8 @@ Desde un número que no esté registrado como cliente:
 
 1. Envía cualquier mensaje.
 2. Debes recibir tres mensajes separados.
-3. Envía una segunda consulta: el bot debe permanecer en silencio y ese mensaje debe quedar sin leer.
+3. Con IA desactivada, envía una segunda consulta: el bot debe permanecer en silencio y dejarla sin leer.
+4. Configura y activa Gemini, luego envía otra consulta desde un chat de prueba: debe llegar una sola respuesta y el mensaje debe quedar marcado como atendido.
 
 Luego registra un cliente con vencimiento dentro de 2 días, deja activo el recordatorio y pulsa **Procesar vencimientos**. Para probar la cobranza, usa un vencimiento de hoy y activa manualmente **Cobranza automática**.
 

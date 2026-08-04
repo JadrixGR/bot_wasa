@@ -71,6 +71,14 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
       3
     );
     assert.ok(store.getKnowledgeBase().length >= 14);
+    assert.deepEqual(store.data.aiConfig, {
+      provider: "gemini",
+      enabled: false,
+      model: "gemini-3.6-flash",
+      encryptedApiKey: "",
+      updatedAt: null
+    });
+    assert.match(store.getSettings().aiInstructions, /respuestas breves/i);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

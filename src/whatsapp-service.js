@@ -1105,12 +1105,15 @@ class WhatsAppService {
       body,
       hasMedia,
       mediaType: type.replace(/Message$/, ""),
-      fromName
+      fromName,
+      messageId: message.key.id || ""
     });
 
     if (
       Number(result?.messages || 0) > 0 &&
-      ["welcome-sequence", "welcome-resumed"].includes(result?.action)
+      ["welcome-sequence", "welcome-resumed", "ai-reply"].includes(
+        result?.action
+      )
     ) {
       await socket.readMessages([message.key]).catch(() => undefined);
     }

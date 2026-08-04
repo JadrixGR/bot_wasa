@@ -72,6 +72,14 @@ test("la V4.7 usa el modo de bienvenida única", () => {
   assert.equal(defaultSettings.countryGreetings[0].callingCode, "+51");
   assert.equal(defaultSettings.countryGreetings[0].country, "Perú");
   assert.equal(defaultSettings.countryGreetings[0].messages.length, 3);
+  assert.match(defaultSettings.aiInstructions, /respuestas breves/i);
+  assert.deepEqual(createInitialData().aiConfig, {
+    provider: "gemini",
+    enabled: false,
+    model: "gemini-3.6-flash",
+    encryptedApiKey: "",
+    updatedAt: null
+  });
 });
 
 test("incluye respuestas locales para consultas frecuentes aun sin OpenAI", () => {

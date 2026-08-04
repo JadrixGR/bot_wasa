@@ -439,6 +439,19 @@ class JsonStore {
       knowledgeBase: Array.isArray(parsed.knowledgeBase)
         ? parsed.knowledgeBase
         : initial.knowledgeBase,
+      aiConfig: {
+        ...initial.aiConfig,
+        ...(parsed.aiConfig && typeof parsed.aiConfig === "object"
+          ? parsed.aiConfig
+          : {}),
+        provider: "gemini",
+        enabled: Boolean(parsed.aiConfig?.enabled),
+        model: String(
+          parsed.aiConfig?.model || initial.aiConfig.model
+        ).slice(0, 80),
+        encryptedApiKey: String(parsed.aiConfig?.encryptedApiKey || ""),
+        updatedAt: parsed.aiConfig?.updatedAt || null
+      },
       clients: Array.isArray(parsed.clients)
         ? parsed.clients.map((client) => ({
             ...client,
@@ -493,6 +506,11 @@ class JsonStore {
     const countryGreetingsMigrated = !Array.isArray(
       parsed.settings?.countryGreetings
     );
+    const aiConfigMigrated = !(
+      parsed.aiConfig &&
+      typeof parsed.aiConfig === "object" &&
+      !Array.isArray(parsed.aiConfig)
+    );
     if (!countryGreetingsMigrated) {
       migrated.settings.countryGreetings = parsed.settings.countryGreetings
         .map((profile) => {
@@ -537,7 +555,8 @@ class JsonStore {
       isUpgrade:
         isVersionUpgrade ||
         authenticatorMigration.changed ||
-        countryGreetingsMigrated
+        countryGreetingsMigrated ||
+        aiConfigMigrated
     };
   }
 
@@ -636,6 +655,7 @@ class JsonStore {
       "receiptReply",
       "humanReply",
       "fallbackReply",
+      "aiInstructions",
       "reminderTemplate",
       "chargeTemplate",
       "chargeStartTime",

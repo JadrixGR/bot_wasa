@@ -180,7 +180,7 @@ function makeService(fake, options = {}) {
     sessionDir:
       options.sessionDir || path.join(testRuntimeDir, "whatsapp-session"),
     mediaDir: options.mediaDir || path.join(testRuntimeDir, "media"),
-    ai: null,
+    ai: options.ai || null,
     authenticator: options.authenticator || null,
     baileysLoader: async () => fake.module,
     qrEncoder: async (value) => `data:image/png;base64,${value}`,
@@ -664,6 +664,50 @@ test("la respuesta de un cliente registrado queda sin leer y no activa la bienve
     store.data.conversations["200000000000@lid"].registeredClientId,
     "cliente-1"
   );
+});
+
+test("una respuesta de Gemini se envía una vez y marca el mensaje como atendido", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  store.findClientByWhatsApp = () => ({ id: "cliente-ia" });
+  const questions = [];
+  const ai = {
+    isReplyEnabled: () => true,
+    answer: async ({ question }) => {
+      questions.push(question);
+      return "Sí, tenemos soporte durante todo el periodo.";
+    },
+    getStatus: () => ({ provider: "gemini", replyEnabled: true })
+  };
+  const service = makeService(fake, {
+    store,
+    ai,
+    sessionDir: path.join(testRuntimeDir, "gemini-incoming-session"),
+    mediaDir: path.join(testRuntimeDir, "gemini-incoming-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  const key = {
+    id: "gemini-message-1",
+    remoteJid: "51933334444@s.whatsapp.net",
+    fromMe: false
+  };
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [{ key, message: { conversation: "¿Incluye soporte?" } }]
+  });
+  await settleMessageQueue(service);
+
+  assert.deepEqual(questions, ["¿Incluye soporte?"]);
+  assert.deepEqual(
+    socket.calls.sent.map((item) => item.content.text),
+    ["Sí, tenemos soporte durante todo el periodo."]
+  );
+  assert.equal(socket.calls.read.length, 1);
+  assert.equal(socket.calls.read[0][0].id, "gemini-message-1");
 });
 
 test("un comando enviado por el propietario registra el número alternativo sin responder al chat", async () => {
