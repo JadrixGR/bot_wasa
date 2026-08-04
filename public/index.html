@@ -564,6 +564,26 @@
             </article>
           </div>
 
+          <article class="panel ai-pricing-panel">
+            <div class="ai-pricing-heading">
+              <div>
+                <span class="eyebrow">MONEDA SEGÚN WHATSAPP</span>
+                <h3>Precios locales por país</h3>
+                <p class="muted">Gemini selecciona esta tabla mediante el prefijo real del cliente. Edita aquí el precio final que deseas ofrecer en cada moneda.</p>
+              </div>
+              <span id="countryPriceBookCount" class="pill violet">3 países</span>
+            </div>
+            <div class="notice ai-pricing-notice">
+              <strong>Precios controlados:</strong> los importes quedan guardados en <code>data</code> y no cambian con el tipo de cambio. Gemini no convertirá ni mezclará monedas automáticamente.
+            </div>
+            <div class="ai-prefix-flow" aria-label="Selección de precios por prefijo">
+              <span><b>+51</b> Soles peruanos</span>
+              <span><b>+52</b> Pesos mexicanos</span>
+              <span><b>+54</b> Pesos argentinos</span>
+            </div>
+            <div id="countryPriceBookList" class="country-price-book-list"></div>
+          </article>
+
           <div class="two-column ai-business-grid">
             <article class="panel">
               <div class="panel-heading"><div><span class="eyebrow">VENTAS</span><h3>Métodos de pago</h3></div><span class="pill blue">Contexto IA</span></div>
@@ -579,19 +599,20 @@
           <article class="panel training-panel ai-training-panel">
             <div class="ai-training-heading">
               <div>
-                <span class="eyebrow">CONOCIMIENTO EDITABLE</span>
-                <h3>Entrenar respuestas</h3>
-                <p class="training-copy muted">Agrega preguntas frecuentes y la respuesta correcta. Las palabras clave ayudan a Gemini a entender cuándo aplicar cada dato.</p>
+                <span class="eyebrow">MEMORIA PERMANENTE EN DATA</span>
+                <h3>Enseñar cómo debe responder</h3>
+                <p class="training-copy muted">Escribe una pregunta o tema, sus frases relacionadas y una respuesta modelo completa. Se guardará en la memoria del bot y Gemini la priorizará cuando un cliente consulte algo relacionado.</p>
               </div>
               <div class="button-row">
-                <span id="knowledgeCount" class="pill blue">0 respuestas</span>
-                <button id="addKnowledgeButton" class="button secondary" type="button">+ Agregar respuesta</button>
+                <span id="knowledgeCount" class="pill blue">0 recuerdos</span>
+                <button id="addKnowledgeButton" class="button secondary" type="button">+ Enseñar respuesta</button>
               </div>
             </div>
+            <div class="notice ai-memory-notice"><strong>Memoria activa:</strong> guardar aquí no entrena un modelo externo; conserva tus respuestas en el disco persistente y las entrega como contexto prioritario en cada consulta relacionada.</div>
             <div id="knowledgeList" class="knowledge-list"></div>
             <div id="knowledgeEmpty" class="empty-state compact hidden">
-              <strong>No hay respuestas entrenadas.</strong>
-              <span>Agrega preguntas frecuentes para darle contexto específico a Gemini.</span>
+              <strong>La memoria todavía está vacía.</strong>
+              <span>Enseña la primera respuesta para que Gemini conozca tu forma de atender.</span>
             </div>
           </article>
         </section>

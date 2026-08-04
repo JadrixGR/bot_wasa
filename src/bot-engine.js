@@ -40,8 +40,9 @@ function resolveWelcomeProfile(
   const matchedProfile = savedProfile ||
     profiles
       .filter((profile) => profile.enabled !== false)
-      .map((profile) => ({
+      .map((profile, index) => ({
         ...profile,
+        profileOrder: index,
         callingCodeDigits: String(profile.callingCode || "").replace(/\D/g, "")
       }))
       .filter(
@@ -51,7 +52,8 @@ function resolveWelcomeProfile(
       )
       .sort(
         (first, second) =>
-          second.callingCodeDigits.length - first.callingCodeDigits.length
+          second.callingCodeDigits.length - first.callingCodeDigits.length ||
+          second.profileOrder - first.profileOrder
       )[0] ||
     null;
   const fallbackMessages = Array.isArray(settings?.greetingMessages)
@@ -63,6 +65,49 @@ function resolveWelcomeProfile(
     phoneDigits,
     messages: (matchedProfile?.messages || fallbackMessages).slice(0, 3)
   };
+}
+
+function resolveCountryPriceBook(
+  data,
+  { customerPhone = "", chatId = "", alternateChatId = "", priceBookId = "" } = {}
+) {
+  const priceBooks = Array.isArray(data?.countryPriceBooks)
+    ? data.countryPriceBooks
+    : [];
+  const savedBook = priceBookId
+    ? priceBooks.find(
+        (book) =>
+          String(book.id) === String(priceBookId) && book.enabled !== false
+      )
+    : null;
+  const phoneCandidates = [
+    customerPhone,
+    ...[alternateChatId, chatId].filter((value) =>
+      /@(s\.whatsapp\.net|c\.us)$/i.test(String(value || ""))
+    )
+  ]
+    .filter(Boolean)
+    .map(whatsappPhoneDigits)
+    .filter(Boolean);
+  const phoneDigits = phoneCandidates[0] || "";
+  const book = savedBook ||
+    priceBooks
+      .filter((entry) => entry.enabled !== false)
+      .map((entry) => ({
+        ...entry,
+        callingCodeDigits: String(entry.callingCode || "").replace(/\D/g, "")
+      }))
+      .filter(
+        (entry) =>
+          entry.callingCodeDigits &&
+          phoneDigits.startsWith(entry.callingCodeDigits)
+      )
+      .sort(
+        (first, second) =>
+          second.callingCodeDigits.length - first.callingCodeDigits.length
+      )[0] ||
+    null;
+  return { book, phoneDigits };
 }
 
 class BotEngine {
@@ -107,6 +152,13 @@ class BotEngine {
     };
     const now = new Date().toISOString();
     const settings = this.store.getSettings();
+    const storeData = this.store.snapshot?.() || this.store.data || {};
+    const localPricing = resolveCountryPriceBook(storeData, {
+      customerPhone,
+      chatId,
+      alternateChatId,
+      priceBookId: conversation.localPriceBookId || ""
+    });
     const client =
       this.store.findClientByWhatsApp?.(chatId, alternateChatId) || null;
     const normalizedMessageId = String(messageId || "").trim();
@@ -136,7 +188,16 @@ class BotEngine {
       ...(normalizedMessageId
         ? { lastInboundMessageId: normalizedMessageId }
         : {}),
-      ...(client ? { registeredClientId: client.id } : {})
+      ...(client ? { registeredClientId: client.id } : {}),
+      ...(localPricing.book
+        ? {
+            localPriceBookId: localPricing.book.id,
+            localCountry: localPricing.book.country,
+            localCallingCode: localPricing.book.callingCode,
+            localCurrency: localPricing.book.currency,
+            localCurrencySymbol: localPricing.book.symbol
+          }
+        : {})
     });
 
     if (settings.afkEnabled) {
@@ -244,6 +305,16 @@ class BotEngine {
               conversation.welcomeCallingCode || detectedWelcome.profile?.callingCode || null,
             welcomeCurrency:
               conversation.welcomeCurrency || detectedWelcome.profile?.currency || null,
+            localPriceBookId:
+              conversation.localPriceBookId || localPricing.book?.id || null,
+            localCountry:
+              conversation.localCountry || localPricing.book?.country || null,
+            localCallingCode:
+              conversation.localCallingCode || localPricing.book?.callingCode || null,
+            localCurrency:
+              conversation.localCurrency || localPricing.book?.currency || null,
+            localCurrencySymbol:
+              conversation.localCurrencySymbol || localPricing.book?.symbol || null,
             registeredClientId: client?.id || conversation.registeredClientId || null
           }
         });
@@ -301,5 +372,6 @@ module.exports = {
   BotEngine,
   normalizeText,
   resolveWelcomeProfile,
+  resolveCountryPriceBook,
   whatsappPhoneDigits
 };

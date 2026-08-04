@@ -5192,12 +5192,67 @@ html[data-theme="dark"] .country-greeting-editor { background: rgba(8, 12, 27, 0
 .ai-flow-list li div { display: grid; gap: 0.14rem; }
 .ai-flow-list small { color: var(--muted); font-size: 0.68rem; line-height: 1.45; }
 .ai-safety-notice { font-size: 0.71rem; line-height: 1.55; }
+.ai-pricing-panel { margin-bottom: 1rem; }
+.ai-pricing-heading,
+.ai-prefix-flow,
+.country-price-book summary,
+.country-price-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.ai-pricing-heading { justify-content: space-between; align-items: flex-start; }
+.ai-pricing-heading h3 { margin: 0.2rem 0 0.35rem; }
+.ai-pricing-heading p { max-width: 55rem; margin: 0; font-size: 0.75rem; line-height: 1.55; }
+.ai-pricing-notice { margin: 1rem 0 0.8rem; font-size: 0.72rem; line-height: 1.55; }
+.ai-prefix-flow { flex-wrap: wrap; margin-bottom: 0.9rem; }
+.ai-prefix-flow span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 95%, var(--primary) 5%);
+  font-size: 0.68rem;
+}
+.ai-prefix-flow b { color: var(--primary); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+.country-price-book-list { display: grid; gap: 0.7rem; }
+.country-price-book { overflow: hidden; border: 1px solid var(--line); border-radius: 0.95rem; background: color-mix(in srgb, var(--panel) 97%, var(--primary) 3%); }
+.country-price-book summary {
+  min-height: 4rem;
+  padding: 0.75rem 0.9rem;
+  cursor: pointer;
+  list-style: none;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+.country-price-book summary::-webkit-details-marker { display: none; }
+.country-price-book summary:hover { background: color-mix(in srgb, var(--primary) 7%, transparent); }
+.country-price-title { min-width: 0; flex: 1; align-items: flex-start; flex-direction: column; gap: 0.12rem; }
+.country-price-title strong { font-size: 0.82rem; }
+.country-price-title small { color: var(--muted); font-size: 0.65rem; }
+.country-price-chevron { color: var(--muted); font-size: 1.25rem; transform: rotate(90deg); transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1); }
+.country-price-book[open] .country-price-chevron { transform: rotate(-90deg); }
+.country-price-body { display: grid; gap: 0.8rem; padding: 0.85rem; border-top: 1px solid var(--line); }
+.country-price-toggle span { display: grid; gap: 0.18rem; }
+.country-price-table { overflow: hidden; border: 1px solid var(--line); border-radius: 0.8rem; }
+.country-price-row { display: grid; grid-template-columns: minmax(11rem, 1.15fr) minmax(7rem, 0.55fr) minmax(12rem, 1fr); align-items: center; gap: 0.75rem; min-width: 0; padding: 0.58rem 0.7rem; border-top: 1px solid var(--line); }
+.country-price-row:first-child { border-top: 0; }
+.country-price-row > span { min-width: 0; color: var(--muted); font-size: 0.67rem; }
+.country-price-row > span:first-child { display: grid; gap: 0.12rem; }
+.country-price-row > span:first-child small { color: var(--primary); font-size: 0.55rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.country-price-row > span:first-child strong { overflow: hidden; color: var(--ink); font-size: 0.72rem; text-overflow: ellipsis; white-space: nowrap; }
+.country-price-row input { min-width: 0; padding: 0.58rem 0.65rem; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.7rem; font-weight: 800; }
+.country-price-header { color: var(--muted); background: color-mix(in srgb, var(--primary) 7%, var(--panel)); }
+.country-price-header span { font-size: 0.58rem; font-weight: 850; letter-spacing: 0.07em; text-transform: uppercase; }
 .ai-business-grid { margin-bottom: 1rem; }
 .ai-business-grid label { margin-top: 1rem; }
 .ai-training-heading { justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
 .ai-training-heading h3 { margin: 0.2rem 0 0.35rem; }
 .ai-training-heading .training-copy { margin: 0; }
 .ai-training-heading .button-row { align-items: center; justify-content: flex-end; }
+.ai-memory-notice { margin: 0 0 1rem; font-size: 0.71rem; line-height: 1.55; }
 .ai-training-panel .knowledge-list { margin-bottom: 0; }
 .ai-training-panel .knowledge-card {
   overflow: hidden;
@@ -5215,12 +5270,15 @@ html[data-theme="dark"] .country-greeting-editor { background: rgba(8, 12, 27, 0
 
 html[data-theme="dark"] .ai-config-panel,
 html[data-theme="dark"] .ai-flow-panel,
+html[data-theme="dark"] .ai-pricing-panel,
 html[data-theme="dark"] .ai-business-grid > .panel,
 html[data-theme="dark"] .ai-training-panel {
   border-color: rgba(123, 132, 201, 0.2);
   background: linear-gradient(155deg, rgba(18, 24, 46, 0.96), rgba(8, 12, 26, 0.98));
 }
 html[data-theme="dark"] .ai-flow-list li,
+html[data-theme="dark"] .country-price-book,
+html[data-theme="dark"] .country-price-table,
 html[data-theme="dark"] .ai-training-panel .knowledge-card,
 html[data-theme="dark"] .ai-training-panel .knowledge-card-heading { border-color: rgba(123, 132, 201, 0.18); background: rgba(11, 16, 34, 0.72); }
 html[data-theme="dark"] .notice.success-notice { color: #58e6aa; }
@@ -5240,6 +5298,13 @@ html[data-theme="dark"] .notice.error-notice { color: #ff9ba8; }
   .ai-orb svg { width: 1.9rem; height: 1.9rem; }
   .ai-status-grid { grid-template-columns: 1fr; }
   .ai-training-heading { flex-direction: column; }
+  .ai-pricing-heading { flex-direction: column; }
+  .ai-prefix-flow { display: grid; grid-template-columns: 1fr; }
+  .country-price-book summary { flex-wrap: wrap; }
+  .country-price-book summary > .pill { margin-left: auto; }
+  .country-price-row { grid-template-columns: 1fr; gap: 0.35rem; padding: 0.75rem; }
+  .country-price-header { display: none; }
+  .country-price-row > span:first-child strong { white-space: normal; }
   .ai-training-heading .button-row { width: 100%; justify-content: flex-start; }
   .ai-training-panel .knowledge-fields { grid-template-columns: 1fr; }
   .ai-training-panel .knowledge-fields label:last-child { grid-column: auto; }

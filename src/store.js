@@ -28,6 +28,7 @@ const MAX_QUICK_REPLIES = 50;
 const MAX_QUICK_REPLY_IMAGES = 6;
 const MAX_QUICK_REPLY_TEXTS = 10;
 const MAX_COUNTRY_GREETINGS = 80;
+const MAX_COUNTRY_PRICE_BOOKS = 80;
 
 function uniqueAuthenticatorCommand(baseCommand, usedCommands) {
   if (!usedCommands.has(baseCommand)) return baseCommand;
@@ -280,6 +281,69 @@ function normalizeCountryGreetings(profiles) {
   });
 }
 
+function normalizeCountryPriceBook(input = {}, validItemIds = new Set()) {
+  const source = input && typeof input === "object" ? input : {};
+  const country = String(source.country || "").trim();
+  const callingCode = normalizeCountryCallingCode(source.callingCode);
+  const currency = String(source.currency || "").trim();
+  const symbol = String(source.symbol || "").trim();
+  const sourcePrices =
+    source.prices && typeof source.prices === "object" && !Array.isArray(source.prices)
+      ? source.prices
+      : {};
+  const prices = Object.fromEntries(
+    [...validItemIds]
+      .map((itemId) => [
+        itemId,
+        String(sourcePrices[itemId] || "").trim().slice(0, 160)
+      ])
+      .filter(([, price]) => price)
+  );
+
+  if (!country) throw new Error("Cada tabla de precios necesita un país.");
+  if (!currency) throw new Error(`Indica la moneda de ${country}.`);
+  if (!symbol) throw new Error(`Indica el símbolo monetario de ${country}.`);
+  if (!Object.keys(prices).length) {
+    throw new Error(`Agrega al menos un precio local para ${country}.`);
+  }
+
+  return {
+    id: String(source.id || crypto.randomUUID()),
+    country: country.slice(0, 80),
+    callingCode,
+    currency: currency.slice(0, 80),
+    symbol: symbol.slice(0, 20),
+    enabled: source.enabled !== false,
+    prices,
+    updatedAt: source.updatedAt || new Date().toISOString()
+  };
+}
+
+function normalizeCountryPriceBooks(books, products = [], plans = []) {
+  if (!Array.isArray(books)) {
+    throw new Error("La configuración de precios por país no es válida.");
+  }
+  if (books.length > MAX_COUNTRY_PRICE_BOOKS) {
+    throw new Error(
+      `Puedes configurar como máximo ${MAX_COUNTRY_PRICE_BOOKS} tablas de precios.`
+    );
+  }
+  const validItemIds = new Set(
+    [...products, ...plans].map((item) => String(item?.id || "")).filter(Boolean)
+  );
+  const usedCodes = new Set();
+  return books.map((book) => {
+    const normalized = normalizeCountryPriceBook(book, validItemIds);
+    if (usedCodes.has(normalized.callingCode)) {
+      throw new Error(
+        `El prefijo ${normalized.callingCode} está repetido en las tablas de precios.`
+      );
+    }
+    usedCodes.add(normalized.callingCode);
+    return normalized;
+  });
+}
+
 function normalizeWhatsAppDigits(value) {
   const localPart = String(value || "")
     .split("@")[0]
@@ -400,6 +464,23 @@ class JsonStore {
       normalizedAuthenticatorAccounts
     );
     const catalogMigration = migrateCatalog(parsed, initial);
+    const countryPriceBooksMigrated = !Array.isArray(parsed.countryPriceBooks);
+    let normalizedCountryPriceBooks;
+    try {
+      normalizedCountryPriceBooks = normalizeCountryPriceBooks(
+        countryPriceBooksMigrated
+          ? initial.countryPriceBooks
+          : parsed.countryPriceBooks,
+        catalogMigration.products,
+        catalogMigration.plans
+      );
+    } catch {
+      normalizedCountryPriceBooks = normalizeCountryPriceBooks(
+        initial.countryPriceBooks,
+        catalogMigration.products,
+        catalogMigration.plans
+      );
+    }
     const normalizedAuthenticatorAccess = Array.isArray(
       parsed.authenticatorAccess
     )
@@ -439,6 +520,7 @@ class JsonStore {
       knowledgeBase: Array.isArray(parsed.knowledgeBase)
         ? parsed.knowledgeBase
         : initial.knowledgeBase,
+      countryPriceBooks: normalizedCountryPriceBooks,
       aiConfig: {
         ...initial.aiConfig,
         ...(parsed.aiConfig && typeof parsed.aiConfig === "object"
@@ -528,12 +610,27 @@ class JsonStore {
             ) === index
         )
         .slice(0, MAX_COUNTRY_GREETINGS);
+      if (countryPriceBooksMigrated) {
+        const existingCodes = new Set(
+          migrated.settings.countryGreetings.map((profile) => profile.callingCode)
+        );
+        for (const defaultProfile of defaultSettings.countryGreetings) {
+          if (existingCodes.has(defaultProfile.callingCode)) continue;
+          migrated.settings.countryGreetings.push(
+            normalizeCountryGreetingProfile(defaultProfile)
+          );
+          existingCodes.add(defaultProfile.callingCode);
+        }
+      }
     } else {
       migrated.settings.countryGreetings = [
         normalizeCountryGreetingProfile({
           ...defaultSettings.countryGreetings[0],
           messages: legacyGreetingMessages
-        })
+        }),
+        ...defaultSettings.countryGreetings
+          .slice(1)
+          .map((profile) => normalizeCountryGreetingProfile(profile))
       ];
     }
     migrated.settings.afkEnabled = Boolean(migrated.settings.afkEnabled);
@@ -556,6 +653,7 @@ class JsonStore {
         isVersionUpgrade ||
         authenticatorMigration.changed ||
         countryGreetingsMigrated ||
+        countryPriceBooksMigrated ||
         aiConfigMigrated
     };
   }
@@ -738,6 +836,24 @@ class JsonStore {
 
   getKnowledgeBase() {
     return structuredClone(this.data.knowledgeBase || []);
+  }
+
+  getCountryPriceBooks() {
+    return structuredClone(this.data.countryPriceBooks || []);
+  }
+
+  updateCountryPriceBooks(books) {
+    this.data.countryPriceBooks = normalizeCountryPriceBooks(
+      books,
+      this.data.products,
+      this.data.plans
+    ).map((book) => ({ ...book, updatedAt: new Date().toISOString() }));
+    this.addLog(
+      "pricing",
+      `Precios locales actualizados: ${this.data.countryPriceBooks.length} países`
+    );
+    this.save();
+    return this.getCountryPriceBooks();
   }
 
   updateKnowledgeBase(entries) {

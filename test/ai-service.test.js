@@ -5,6 +5,8 @@ const assert = require("node:assert/strict");
 const {
   AiService,
   buildKnowledge,
+  buildSystemInstructions,
+  buildUserPrompt,
   compactAnswer,
   classifyOpenAIError,
   classifyGeminiError,
@@ -34,6 +36,10 @@ test("el conocimiento de IA contiene precios y reglas entrenadas", () => {
   assert.match(knowledge, /no solicites contraseñas/i);
   assert.match(knowledge, /RESPUESTAS ENTRENADAS/);
   assert.match(knowledge, /Elegir entre ChatGPT y Gemini/);
+  assert.match(knowledge, /México \(\+52\)/);
+  assert.match(knowledge, /ChatGPT Pro: MX\$225/);
+  assert.match(knowledge, /Argentina \(\+54\)/);
+  assert.match(knowledge, /ChatGPT Pro: AR\$18\.000/);
 });
 
 test("la IA usa Responses API, no guarda la respuesta y limita la salida", async () => {
@@ -58,8 +64,9 @@ test("la IA usa Responses API, no guarda la respuesta y limita la salida", async
   assert.equal(answer, "Respuesta corta y confirmada.");
   assert.equal(request.model, "gpt-test");
   assert.equal(request.store, false);
-  assert.equal(request.max_output_tokens, 300);
-  assert.match(request.instructions, /Responde únicamente la pregunta actual/);
+  assert.equal(request.max_output_tokens, 1200);
+  assert.match(request.instructions, /Responde únicamente lo solicitado/);
+  assert.match(request.instructions, /No dejes frases, listas, precios ni explicaciones incompletas/);
   assert.doesNotMatch(
     request.input[0].content[0].text,
     /Preguntas anteriores del mismo cliente:.*Tienen soporte/
@@ -191,7 +198,7 @@ test("Gemini recibe la clave solo por cabecera y usa el entrenamiento del negoci
   assert.match(body.system_instruction.parts[0].text, /PAGOS CONFIRMADOS/);
   assert.match(body.system_instruction.parts[0].text, /RESPUESTAS ENTRENADAS/);
   assert.match(body.contents[0].parts[0].text, /País detectado del cliente: Perú \(\+51, PEN\)/);
-  assert.equal(body.generationConfig.maxOutputTokens, 300);
+  assert.equal(body.generationConfig.maxOutputTokens, 1200);
   assert.equal(body.generationConfig.temperature, undefined);
 });
 
@@ -217,5 +224,92 @@ test("no activa respuestas de Gemini si todavía no existe una API key", () => {
   assert.throws(
     () => ai.configureGemini({ enabled: true }),
     /Guarda una API key de Gemini/i
+  );
+});
+
+test("elige precios mexicanos exactos para +52 y prioriza la memoria relacionada", () => {
+  const snapshot = createInitialData();
+  const prompt = buildUserPrompt(
+    snapshot,
+    "¿Cuánto cuesta ChatGPT Pro y tiene soporte?",
+    {
+      localCountry: "México",
+      localCallingCode: "+52",
+      localCurrency: "Pesos mexicanos (MXN)"
+    }
+  );
+
+  assert.match(prompt, /País detectado del cliente: México \(\+52/);
+  assert.match(prompt, /ChatGPT Pro: MX\$225/);
+  assert.match(prompt, /Plan Pro: MX\$300/);
+  assert.doesNotMatch(prompt, /ChatGPT Pro: S\/45/);
+  assert.match(prompt, /MEMORIA ENTRENADA MÁS RELEVANTE/);
+  assert.match(prompt, /Soporte y garantía/);
+
+  const instructions = buildSystemInstructions(
+    snapshot,
+    { localCallingCode: "+52", localCountry: "México" },
+    "¿Cuánto cuesta ChatGPT Pro y tiene soporte?"
+  );
+  assert.match(instructions, /ChatGPT Pro: precio local autorizado MX\$225/);
+  assert.doesNotMatch(instructions, /ChatGPT Pro: precio S\/45/);
+  assert.doesNotMatch(instructions, /AR\$18\.000/);
+  assert.doesNotMatch(instructions, /Gemini Pro: precio local autorizado S\//);
+});
+
+test("elige precios argentinos exactos para +54 sin mezclar pesos mexicanos", () => {
+  const prompt = buildUserPrompt(
+    createInitialData(),
+    "Precio de Gemini Pro",
+    {
+      localCountry: "Argentina",
+      localCallingCode: "+54",
+      localCurrency: "Pesos argentinos (ARS)"
+    }
+  );
+
+  assert.match(
+    prompt,
+    /Gemini Pro: AR\$8\.000 mensual · AR\$20\.000 anual · AR\$28\.000 por 18 meses/
+  );
+  assert.doesNotMatch(prompt, /Gemini Pro: MX\$/);
+});
+
+test("si Gemini corta por tokens repite la consulta con más espacio", async () => {
+  const store = makeStore();
+  const requests = [];
+  const ai = new AiService({
+    store,
+    provider: "gemini",
+    geminiApiKey: "AIzaSyClaveDePruebaLarga123456789",
+    fetchFn: async (_url, options) => {
+      const body = JSON.parse(options.body);
+      requests.push(body);
+      const retry = requests.length === 2;
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          candidates: [{
+            finishReason: retry ? "STOP" : "MAX_TOKENS",
+            content: { parts: [{ text: retry ? "Respuesta completa con todos los precios." : "Respuesta cortada" }] }
+          }]
+        })
+      };
+    }
+  });
+
+  const answer = await ai.answer({
+    question: "Dame todos los precios",
+    conversation: { localCallingCode: "+51", localCountry: "Perú" }
+  });
+
+  assert.equal(answer, "Respuesta completa con todos los precios.");
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].generationConfig.maxOutputTokens, 1200);
+  assert.equal(requests[1].generationConfig.maxOutputTokens, 2000);
+  assert.match(
+    requests[1].contents[0].parts[0].text,
+    /entrega la respuesta completa/i
   );
 });

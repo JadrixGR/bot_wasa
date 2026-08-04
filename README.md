@@ -6,8 +6,11 @@ El apartado **IA y entrenamiento** permite conectar Google Gemini sin exponer la
 
 - Pega la API key desde el panel, selecciona el modelo y activa o desactiva las respuestas con IA.
 - La clave se cifra con AES-256-GCM antes de guardarse en `/data/jadrixservs-v4.json`; el panel nunca vuelve a recibirla.
-- Gemini recibe como contexto el catálogo, los precios y mensajes por país, los métodos de pago, las instrucciones del negocio y las respuestas entrenadas activas.
+- Gemini recibe como contexto el catálogo, únicamente la tabla de precios que corresponde al prefijo del chat, los métodos de pago, las instrucciones del negocio y las respuestas entrenadas más relacionadas con la consulta.
 - El entrenamiento es una base de conocimiento editable de temas, frases relacionadas y respuestas confirmadas. No realiza fine-tuning ni envía archivos a Google.
+- La memoria se guarda dentro de `/data/jadrixservs-v4.json`, por lo que sigue disponible al reiniciar el servicio siempre que Render conserve el disco persistente.
+- El panel trae tablas iniciales editables para Perú (`+51`, PEN), México (`+52`, MXN) y Argentina (`+54`, ARS). Son precios comerciales fijos: no dependen de una conversión automática ni de una cotización externa.
+- Las respuestas admiten suficiente espacio para contestar listas completas. Si Gemini informa que cortó la salida por límite de tokens, el bot repite la consulta una vez con un límite mayor.
 - Un contacto nuevo siempre recibe primero la bienvenida de tres mensajes. La IA puede responder desde su siguiente consulta.
 - El modo AFK conserva prioridad. Si Gemini falla, no se envía una respuesta inventada y el mensaje queda sin leer para atención manual.
 - Los comandos privados, registros de clientes, renovaciones, cobranzas y respuestas rápidas conservan su comportamiento.
@@ -20,6 +23,18 @@ El apartado **IA y entrenamiento** permite conectar Google Gemini sin exponer la
 4. Pulsa **Probar conexión**. Activa las respuestas solamente cuando la prueba sea correcta.
 
 `GEMINI_ENCRYPTION_KEY` debe conservar siempre el mismo valor. Si cambia, la API key cifrada no podrá recuperarse y deberá ingresarse otra vez. Como alternativa avanzada, `GEMINI_API_KEY` puede configurarse directamente en Render; nunca debe escribirse en archivos que se suban al repositorio.
+
+### Enseñar respuestas y precios locales
+
+En **IA y entrenamiento** puedes editar la tabla completa de productos y planes de cada país. El bot detecta el número real del chat y aplica la coincidencia activa más específica. Por ejemplo:
+
+- Un número `+51` recibe precios en soles.
+- Un número `+52` recibe precios en pesos mexicanos.
+- Un número `+54` recibe precios en pesos argentinos.
+
+En **Memoria permanente en data → Enseñar cómo debe responder** agrega un tema, varias frases parecidas que podría escribir el cliente y una respuesta modelo completa. Al guardar, el panel conserva la entrada en el archivo de datos y la IA prioriza solo los recuerdos relacionados con la pregunta actual. Esto reduce respuestas genéricas y evita llenar cada consulta con información que el cliente no pidió.
+
+Los importes incluidos son valores iniciales y deben revisarse antes de atender clientes. Para cambiar un precio, edítalo directamente en la tabla del país y pulsa **Guardar configuración**; no necesitas modificar código ni reiniciar WhatsApp.
 
 ## Respuestas rápidas con imágenes y textos
 

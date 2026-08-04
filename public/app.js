@@ -12,6 +12,7 @@ const state = {
   catalog: [],
   quickReplies: [],
   knowledgeBase: [],
+  countryPriceBooks: [],
   aiStatus: null,
   quickReplyPendingFiles: [],
   accessEntries: [],
@@ -1617,7 +1618,7 @@ function renderAiStatus(ai = {}) {
 function renderKnowledgeBase() {
   if (!$("#knowledgeList")) return;
   const entries = Array.isArray(state.knowledgeBase) ? state.knowledgeBase : [];
-  $("#knowledgeCount").textContent = `${entries.length} respuesta${entries.length === 1 ? "" : "s"}`;
+  $("#knowledgeCount").textContent = `${entries.length} recuerdo${entries.length === 1 ? "" : "s"}`;
   $("#knowledgeEmpty").classList.toggle("hidden", entries.length > 0);
   $("#knowledgeList").innerHTML = entries.map((entry, index) => `
     <article class="knowledge-card" data-knowledge-id="${escapeHtml(entry.id || "")}">
@@ -1631,12 +1632,77 @@ function renderKnowledgeBase() {
         <button class="button danger-ghost knowledge-remove" data-knowledge-remove type="button">Eliminar</button>
       </div>
       <div class="knowledge-fields">
-        <label>Tema o pregunta<input data-knowledge-title type="text" maxlength="120" value="${escapeHtml(entry.title || "")}" placeholder="Ejemplo: Pago con Yape"></label>
-        <label>Palabras o frases relacionadas<textarea data-knowledge-triggers rows="4" placeholder="precio, pagar, Yape">${escapeHtml((entry.triggers || []).join(", "))}</textarea><small>Sepáralas con comas o saltos de línea.</small></label>
-        <label>Respuesta e información correcta<textarea data-knowledge-answer rows="5" maxlength="3000" placeholder="Escribe lo que Gemini debe saber...">${escapeHtml(entry.answer || "")}</textarea></label>
+        <label>Pregunta o tema<input data-knowledge-title type="text" maxlength="120" value="${escapeHtml(entry.title || "")}" placeholder="Ejemplo: Precio y entrega de ChatGPT Pro"></label>
+        <label>Frases parecidas del cliente<textarea data-knowledge-triggers rows="4" placeholder="cuánto cuesta, precio, cómo lo entregan">${escapeHtml((entry.triggers || []).join(", "))}</textarea><small>Sepáralas con comas o saltos de línea.</small></label>
+        <label>Respuesta modelo completa<textarea data-knowledge-answer rows="5" maxlength="3000" placeholder="Escribe exactamente cómo debe responder Gemini...">${escapeHtml(entry.answer || "")}</textarea><small>Incluye todos los detalles que no deben quedar incompletos.</small></label>
       </div>
     </article>
   `).join("");
+}
+
+function renderCountryPriceBooks() {
+  const container = $("#countryPriceBookList");
+  if (!container) return;
+  const books = Array.isArray(state.countryPriceBooks)
+    ? [...state.countryPriceBooks].sort((first, second) =>
+        String(first.callingCode || "").localeCompare(String(second.callingCode || ""))
+      )
+    : [];
+  const catalogItems = [
+    ...state.products.map((item) => ({ ...item, itemType: "Producto" })),
+    ...state.plans.map((item) => ({ ...item, itemType: "Plan" }))
+  ];
+  $("#countryPriceBookCount").textContent = `${books.length} país${books.length === 1 ? "" : "es"}`;
+  container.innerHTML = books.map((book, index) => `
+    <details class="country-price-book" data-price-book-id="${escapeHtml(book.id)}" ${index === 0 ? "open" : ""}>
+      <summary>
+        <span class="country-prefix">${escapeHtml(book.callingCode)}</span>
+        <span class="country-price-title"><strong>${escapeHtml(book.country)}</strong><small>${escapeHtml(book.currency)} · ${escapeHtml(book.symbol)}</small></span>
+        <span class="pill ${book.enabled === false ? "red" : "green"}">${book.enabled === false ? "Desactivada" : "Activa"}</span>
+        <span class="country-price-chevron" aria-hidden="true">›</span>
+      </summary>
+      <div class="country-price-body">
+        <label class="toggle-row country-price-toggle">
+          <input data-price-book-enabled type="checkbox" ${book.enabled === false ? "" : "checked"}>
+          <span><strong>Usar precios de ${escapeHtml(book.country)}</strong><small>Se aplican a clientes cuyo número empieza con ${escapeHtml(book.callingCode)}.</small></span>
+        </label>
+        <div class="country-price-table" role="table" aria-label="Precios de ${escapeHtml(book.country)}">
+          <div class="country-price-row country-price-header" role="row">
+            <span role="columnheader">Servicio</span><span role="columnheader">Duración</span><span role="columnheader">Precio local exacto</span>
+          </div>
+          ${catalogItems.map((item) => `
+            <label class="country-price-row" role="row">
+              <span role="cell"><small>${escapeHtml(item.itemType)}</small><strong>${escapeHtml(item.name)}</strong></span>
+              <span role="cell">${escapeHtml(item.period || "")}</span>
+              <input role="cell" data-price-item-id="${escapeHtml(item.id)}" type="text" maxlength="160" value="${escapeHtml(book.prices?.[item.id] || "")}" placeholder="${escapeHtml(book.symbol)}0">
+            </label>
+          `).join("")}
+        </div>
+      </div>
+    </details>
+  `).join("");
+}
+
+function countryPriceBooksFromForm() {
+  return $$(".country-price-book", $("#countryPriceBookList")).map((card) => {
+    const original = state.countryPriceBooks.find(
+      (book) => String(book.id) === String(card.dataset.priceBookId)
+    ) || {};
+    const prices = Object.fromEntries(
+      $$("[data-price-item-id]", card)
+        .map((input) => [input.dataset.priceItemId, input.value.trim()])
+        .filter(([, price]) => price)
+    );
+    return {
+      id: original.id,
+      country: original.country,
+      callingCode: original.callingCode,
+      currency: original.currency,
+      symbol: original.symbol,
+      enabled: $("[data-price-book-enabled]", card).checked,
+      prices
+    };
+  });
 }
 
 function knowledgeFromForm() {
@@ -1691,12 +1757,15 @@ async function saveAiSettings() {
         peruPayment: $("#aiPeruPayment").value,
         internationalPayment: $("#aiInternationalPayment").value,
         aiInstructions: $("#aiInstructions").value,
-        knowledgeBase: knowledgeFromForm()
+        knowledgeBase: knowledgeFromForm(),
+        countryPriceBooks: countryPriceBooksFromForm()
       }
     });
     state.settings = settingsPayload.settings;
     state.knowledgeBase = settingsPayload.knowledgeBase;
+    state.countryPriceBooks = settingsPayload.countryPriceBooks || [];
     renderKnowledgeBase();
+    renderCountryPriceBooks();
     await saveGeminiConfiguration();
     showToast("Configuración y entrenamiento de Gemini guardados.");
   } catch (error) {
@@ -1751,6 +1820,7 @@ async function loadSettings() {
   state.products = payload.products;
   state.plans = payload.plans;
   state.knowledgeBase = payload.knowledgeBase || [];
+  state.countryPriceBooks = payload.countryPriceBooks || [];
   state.aiStatus = payload.ai || null;
   state.loadedSections.add("settings");
   $("#greeting1").value = payload.settings.greetingMessages[0] || "";
@@ -1772,6 +1842,7 @@ async function loadSettings() {
   $("#aiInstructions").value = payload.settings.aiInstructions || "";
   renderAiStatus(payload.ai || {});
   renderKnowledgeBase();
+  renderCountryPriceBooks();
   $("#productOptions").innerHTML = [...payload.products, ...payload.plans]
     .map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join("");
 }
@@ -1835,6 +1906,7 @@ function logLabel(type) {
     "quick-reply": "Respuesta rápida",
     ai: "Gemini IA",
     training: "Entrenamiento IA",
+    pricing: "Precios por país",
     client: "Cliente",
     authenticator: "Autenticador",
     security: "Seguridad",
@@ -2135,6 +2207,14 @@ function bindEvents() {
     field.focus();
   });
   $("#addKnowledgeButton").addEventListener("click", () => addKnowledgeEntry());
+  $("#countryPriceBookList").addEventListener("change", (event) => {
+    if (!event.target.matches("[data-price-book-enabled]")) return;
+    const card = event.target.closest(".country-price-book");
+    const status = card?.querySelector("summary .pill");
+    if (!status) return;
+    status.textContent = event.target.checked ? "Activa" : "Desactivada";
+    status.className = `pill ${event.target.checked ? "green" : "red"}`;
+  });
   $("#knowledgeList").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-knowledge-remove]");
     if (!button) return;

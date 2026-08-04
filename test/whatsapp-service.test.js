@@ -29,10 +29,12 @@ function flush() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
-async function settleMessageQueue(service) {
-  for (let attempt = 0; attempt < 250; attempt += 1) {
+async function settleMessageQueue(service, timeoutMs = 3000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     await flush();
     if (service.queues.size === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 1));
   }
   throw new Error("La cola de mensajes no terminó a tiempo.");
 }

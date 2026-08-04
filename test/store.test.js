@@ -78,7 +78,16 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
       encryptedApiKey: "",
       updatedAt: null
     });
-    assert.match(store.getSettings().aiInstructions, /respuestas breves/i);
+    assert.match(store.getSettings().aiInstructions, /clara, amable y completa/i);
+    assert.deepEqual(
+      store.getCountryPriceBooks().map((book) => book.callingCode),
+      ["+51", "+52", "+54"]
+    );
+    assert.equal(
+      store.getCountryPriceBooks().find((book) => book.callingCode === "+52")
+        .prices["chatgpt-pro"],
+      "MX$225"
+    );
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
@@ -256,12 +265,16 @@ test("una instalación existente conserva sus tres mensajes dentro del perfil de
     );
 
     const settings = new JsonStore(directory).getSettings();
-    assert.equal(settings.countryGreetings.length, 1);
+    assert.equal(settings.countryGreetings.length, 3);
     assert.equal(settings.countryGreetings[0].country, "Perú");
     assert.equal(settings.countryGreetings[0].callingCode, "+51");
     assert.deepEqual(
       settings.countryGreetings[0].messages,
       initial.settings.greetingMessages
+    );
+    assert.deepEqual(
+      settings.countryGreetings.map((profile) => profile.callingCode),
+      ["+51", "+52", "+54"]
     );
     const persisted = JSON.parse(
       fs.readFileSync(path.join(directory, "jadrixservs-v4.json"), "utf8")
@@ -320,6 +333,35 @@ test("guarda y vuelve a cargar respuestas entrenadas editables", () => {
 
     const reloaded = new JsonStore(directory);
     assert.deepEqual(reloaded.getKnowledgeBase(), saved);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("guarda precios locales editables en data y los conserva al reiniciar", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const books = store.getCountryPriceBooks();
+    const mexico = books.find((book) => book.callingCode === "+52");
+    mexico.prices["chatgpt-pro"] = "MX$239";
+    mexico.prices["plan-pro"] = "MX$319";
+
+    const saved = store.updateCountryPriceBooks(books);
+    assert.equal(
+      saved.find((book) => book.callingCode === "+52").prices["chatgpt-pro"],
+      "MX$239"
+    );
+
+    const reloaded = new JsonStore(directory);
+    const persistedMexico = reloaded
+      .getCountryPriceBooks()
+      .find((book) => book.callingCode === "+52");
+    assert.equal(persistedMexico.prices["chatgpt-pro"], "MX$239");
+    assert.equal(persistedMexico.prices["plan-pro"], "MX$319");
+    assert.ok(
+      reloaded.data.logs.some((log) => log.type === "pricing")
+    );
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

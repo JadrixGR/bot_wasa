@@ -600,6 +600,7 @@ app.get("/api/settings", requireAuth, (_req, res) => {
     settings: store.getSettings(),
     products: store.snapshot().products,
     plans: store.snapshot().plans,
+    countryPriceBooks: store.getCountryPriceBooks(),
     knowledgeBase: store.getKnowledgeBase(),
     media: store.snapshot().media,
     ai: whatsapp.getAiStatus()
@@ -614,7 +615,11 @@ app.put("/api/settings", requireAuth, (req, res) => {
       req.body.knowledgeBase === undefined
         ? store.getKnowledgeBase()
         : store.updateKnowledgeBase(req.body.knowledgeBase);
-    res.json({ settings, knowledgeBase });
+    const countryPriceBooks =
+      req.body.countryPriceBooks === undefined
+        ? store.getCountryPriceBooks()
+        : store.updateCountryPriceBooks(req.body.countryPriceBooks);
+    res.json({ settings, knowledgeBase, countryPriceBooks });
   } catch (error) {
     store.data = previous;
     store.save();

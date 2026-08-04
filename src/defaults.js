@@ -129,6 +129,81 @@ const plans = [
   }
 ];
 
+const countryPriceBooks = [
+  {
+    id: "prices-peru-51",
+    country: "Perú",
+    callingCode: "+51",
+    currency: "Soles peruanos (PEN)",
+    symbol: "S/",
+    enabled: true,
+    prices: {
+      "claude-pro": "S/25",
+      "chatgpt-pro": "S/45",
+      "chatgpt-plus": "S/10",
+      "chatgpt-plus-personal": "S/30",
+      "gemini-pro": "S/20 mensual · S/50 anual · S/70 por 18 meses",
+      supergrok: "S/20",
+      "perplexity-pro": "S/15",
+      "gamma-pro": "S/20",
+      "capcut-pro": "S/15",
+      netflix: "S/10",
+      hbo: "S/7",
+      crunchyroll: "S/5",
+      "plan-pro": "S/60",
+      "plan-plus": "S/25"
+    }
+  },
+  {
+    id: "prices-mexico-52",
+    country: "México",
+    callingCode: "+52",
+    currency: "Pesos mexicanos (MXN)",
+    symbol: "MX$",
+    enabled: true,
+    prices: {
+      "claude-pro": "MX$125",
+      "chatgpt-pro": "MX$225",
+      "chatgpt-plus": "MX$50",
+      "chatgpt-plus-personal": "MX$150",
+      "gemini-pro": "MX$100 mensual · MX$250 anual · MX$350 por 18 meses",
+      supergrok: "MX$100",
+      "perplexity-pro": "MX$75",
+      "gamma-pro": "MX$100",
+      "capcut-pro": "MX$75",
+      netflix: "MX$50",
+      hbo: "MX$35",
+      crunchyroll: "MX$25",
+      "plan-pro": "MX$300",
+      "plan-plus": "MX$125"
+    }
+  },
+  {
+    id: "prices-argentina-54",
+    country: "Argentina",
+    callingCode: "+54",
+    currency: "Pesos argentinos (ARS)",
+    symbol: "AR$",
+    enabled: true,
+    prices: {
+      "claude-pro": "AR$10.000",
+      "chatgpt-pro": "AR$18.000",
+      "chatgpt-plus": "AR$4.000",
+      "chatgpt-plus-personal": "AR$12.000",
+      "gemini-pro": "AR$8.000 mensual · AR$20.000 anual · AR$28.000 por 18 meses",
+      supergrok: "AR$8.000",
+      "perplexity-pro": "AR$6.000",
+      "gamma-pro": "AR$8.000",
+      "capcut-pro": "AR$6.000",
+      netflix: "AR$4.000",
+      hbo: "AR$2.800",
+      crunchyroll: "AR$2.000",
+      "plan-pro": "AR$24.000",
+      "plan-plus": "AR$10.000"
+    }
+  }
+];
+
 const knowledgeBase = [
   {
     id: "chatgpt-vs-gemini",
@@ -323,10 +398,13 @@ const knowledgeBase = [
   }
 ];
 
-function buildGreetingMessages() {
+function buildGreetingMessages(priceBook = countryPriceBooks[0]) {
+  const prices = priceBook?.prices || {};
   const catalogLines = products.map(
-    (product) => `• *${product.name}* — ${product.price}${product.period === "1 mes" ? "/mes" : ""}`
+    (product) => `• *${product.name}* — ${prices[product.id] || product.price}${product.period === "1 mes" ? "/mes" : ""}`
   );
+  const planProPrice = prices["plan-pro"] || plans[0].price;
+  const planPlusPrice = prices["plan-plus"] || plans[1].price;
 
   return [
     [
@@ -341,10 +419,10 @@ function buildGreetingMessages() {
     [
       "💼 COMBOS ESPECIALES - Todo en 1",
       "",
-      "⭐ *Plan Pro — S/60/mes*",
+      `⭐ *Plan Pro — ${planProPrice}/mes*`,
       "ChatGPT Pro + Gemini 3 Ultra + Perplexity Pro + Freepik Premium + CapCut Pro + más de 1000 cursos de IA + SuperGrok + SuperGrok Heavy.",
       "",
-      "✨ *Plan Plus — S/25/mes*",
+      `✨ *Plan Plus — ${planPlusPrice}/mes*`,
       "ChatGPT Plus + Perplexity Pro + CapCut Pro + más de 1000 cursos de IA."
     ].join("\n"),
     [
@@ -377,7 +455,7 @@ const defaultSettings = {
   fallbackReply:
     "No tengo ese dato confirmado. Si deseas, puedo comunicarte con un asesor de JadrixServs.",
   aiInstructions:
-    "Da respuestas breves, amables y directas. Usa únicamente la información confirmada y deriva a un asesor cuando falte un dato.",
+    "Responde de forma clara, amable y completa. Contesta todos los puntos preguntados, usa listas cuando haya varios precios y utiliza únicamente la información confirmada. Si falta un dato, indícalo y deriva a un asesor.",
   reminderTemplate:
     "Hola {nombre} 👋 Te recordamos que tu servicio *{producto}* vence en 2 días, el *{fecha}*. Puedes renovar anticipadamente sin perder ningún día; el nuevo periodo comienza desde tu fecha de vencimiento actual.",
   chargeTemplate:
@@ -388,17 +466,20 @@ const defaultSettings = {
   afkMessage:
     "👋 Gracias por escribir a JadrixServs. En este momento estamos fuera del horario de atención. Apenas volvamos, revisaremos tu mensaje y te responderemos por este chat.",
   afkSessionId: null,
-  greetingMessages: buildGreetingMessages(),
-  countryGreetings: [
-    {
-      id: "country-peru-51",
-      country: "Perú",
-      callingCode: "+51",
-      currency: "PEN (S/)",
-      enabled: true,
-      messages: buildGreetingMessages()
-    }
-  ]
+  greetingMessages: buildGreetingMessages(countryPriceBooks[0]),
+  countryGreetings: countryPriceBooks.map((priceBook) => ({
+    id: `country-${priceBook.country.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^a-z]+/g, "-")}-${priceBook.callingCode.replace(/\D/g, "")}`,
+    country: priceBook.country,
+    callingCode: priceBook.callingCode,
+    currency:
+      priceBook.callingCode === "+51"
+        ? "PEN (S/)"
+        : priceBook.callingCode === "+52"
+          ? "MXN (MX$)"
+          : "ARS (AR$)",
+    enabled: true,
+    messages: buildGreetingMessages(priceBook)
+  }))
 };
 
 function createInitialData() {
@@ -407,6 +488,7 @@ function createInitialData() {
     settings: structuredClone(defaultSettings),
     products: structuredClone(products),
     plans: structuredClone(plans),
+    countryPriceBooks: structuredClone(countryPriceBooks),
     knowledgeBase: structuredClone(knowledgeBase),
     aiConfig: {
       provider: "gemini",
@@ -433,6 +515,7 @@ function createInitialData() {
 module.exports = {
   products,
   plans,
+  countryPriceBooks,
   knowledgeBase,
   defaultSettings,
   buildGreetingMessages,

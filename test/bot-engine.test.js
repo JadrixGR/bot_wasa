@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {
   BotEngine,
   normalizeText,
+  resolveCountryPriceBook,
   resolveWelcomeProfile
 } = require("../src/bot-engine");
 const { createInitialData } = require("../src/defaults");
@@ -130,6 +131,23 @@ test("la IA responde a un cliente registrado y detecta su país por el número",
   assert.equal(sent.length, 1);
   assert.equal(receivedConversation.welcomeCountry, "Perú");
   assert.equal(receivedConversation.welcomeCurrency, "PEN (S/)");
+  assert.equal(receivedConversation.localCallingCode, "+51");
+  assert.equal(receivedConversation.localCurrency, "Soles peruanos (PEN)");
+});
+
+test("detecta la tabla de pesos mexicanos y argentinos por prefijo", () => {
+  const data = createInitialData();
+  const mexico = resolveCountryPriceBook(data, {
+    chatId: "5215512345678@s.whatsapp.net"
+  });
+  const argentina = resolveCountryPriceBook(data, {
+    chatId: "5491112345678@s.whatsapp.net"
+  });
+
+  assert.equal(mexico.book.callingCode, "+52");
+  assert.equal(mexico.book.prices["chatgpt-pro"], "MX$225");
+  assert.equal(argentina.book.callingCode, "+54");
+  assert.equal(argentina.book.prices["chatgpt-pro"], "AR$18.000");
 });
 
 test("si Gemini falla no envía texto inventado y deja el mensaje para atención manual", async () => {

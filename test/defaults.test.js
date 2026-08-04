@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {
   products,
   plans,
+  countryPriceBooks,
   knowledgeBase,
   defaultSettings,
   buildGreetingMessages,
@@ -68,11 +69,21 @@ test("la V4.7 usa el modo de bienvenida única", () => {
   assert.equal(defaultSettings.chargeStartTime, "09:00");
   assert.equal(defaultSettings.afkEnabled, false);
   assert.match(defaultSettings.afkMessage, /fuera del horario/i);
-  assert.equal(defaultSettings.countryGreetings.length, 1);
+  assert.equal(defaultSettings.countryGreetings.length, 3);
   assert.equal(defaultSettings.countryGreetings[0].callingCode, "+51");
   assert.equal(defaultSettings.countryGreetings[0].country, "Perú");
   assert.equal(defaultSettings.countryGreetings[0].messages.length, 3);
-  assert.match(defaultSettings.aiInstructions, /respuestas breves/i);
+  assert.deepEqual(
+    defaultSettings.countryGreetings.map((profile) => profile.callingCode),
+    ["+51", "+52", "+54"]
+  );
+  assert.match(defaultSettings.countryGreetings[1].messages[0], /MX\$225/);
+  assert.match(defaultSettings.countryGreetings[2].messages[0], /AR\$18\.000/);
+  assert.match(defaultSettings.aiInstructions, /clara, amable y completa/i);
+  assert.equal(countryPriceBooks.length, 3);
+  assert.equal(countryPriceBooks[0].prices["chatgpt-pro"], "S/45");
+  assert.equal(countryPriceBooks[1].prices["chatgpt-pro"], "MX$225");
+  assert.equal(countryPriceBooks[2].prices["chatgpt-pro"], "AR$18.000");
   assert.deepEqual(createInitialData().aiConfig, {
     provider: "gemini",
     enabled: false,
