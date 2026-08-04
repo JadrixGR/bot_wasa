@@ -10,6 +10,7 @@ const {
   buildConnectionCandidates,
   calculateHumanDelay,
   compatibleBrowserProfile,
+  extractAdReferral,
   extractMessageBody,
   formatAuthenticatorCodeMessage,
   formatWhatsAppWebVersion,
@@ -233,6 +234,38 @@ test("extrae texto aunque WhatsApp lo envíe como mensaje efímero", () => {
     }),
     "¿Cuánto cuesta Claude?"
   );
+});
+
+test("extrae la referencia del anuncio que WhatsApp adjunta al mensaje", () => {
+  const referral = extractAdReferral({
+    ephemeralMessage: {
+      message: {
+        extendedTextMessage: {
+          text: "¿Cuál es el proceso de activación?",
+          contextInfo: {
+            externalAdReply: {
+              title: "Jadrix Servis.",
+              body: "POTENCIA TU PRODUCTIVIDAD CON CHATGPT",
+              sourceId: "meta-ad-123",
+              sourceUrl: "https://www.instagram.com/p/chatgpt",
+              ctwaClid: "click-unico-no-persistente"
+            }
+          }
+        }
+      }
+    }
+  });
+
+  assert.deepEqual(referral, {
+    title: "Jadrix Servis.",
+    body: "POTENCIA TU PRODUCTIVIDAD CON CHATGPT",
+    sourceId: "meta-ad-123",
+    sourceUrl: "https://www.instagram.com/p/chatgpt",
+    ref: "",
+    sourceType: "",
+    sourceApp: "",
+    ctwaClid: "click-unico-no-persistente"
+  });
 });
 
 test("formatea el código 2FA sin incluir el correo ni datos innecesarios", () => {
@@ -621,6 +654,74 @@ test("un mensaje entrante real envía la bienvenida una sola vez en tres mensaje
   );
   assert.equal(socket.calls.read.length, 1);
   assert.equal(socket.calls.sent.length, 3);
+});
+
+test("un contacto de anuncio recibe la secuencia específica detectada por externalAdReply", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  store.getSettings = () => ({
+    welcomeRoutingMode: "smart",
+    greetingMessages: ["General 1", "General 2", "General 3"],
+    countryGreetings: [],
+    adGreetings: [
+      {
+        id: "anuncio-chatgpt",
+        name: "ChatGPT Personal",
+        enabled: true,
+        matchTerms: ["POTENCIA TU PRODUCTIVIDAD CON CHATGPT"],
+        messages: ["Anuncio 1", "Anuncio 2", "Anuncio 3"]
+      }
+    ]
+  });
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "ad-incoming-session"),
+    mediaDir: path.join(testRuntimeDir, "ad-incoming-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "ad-message-1",
+          remoteJid: "51922223333@s.whatsapp.net",
+          fromMe: false
+        },
+        pushName: "Cliente anuncio",
+        message: {
+          extendedTextMessage: {
+            text: "¿Cuál es el proceso de activación?",
+            contextInfo: {
+              externalAdReply: {
+                title: "Jadrix Servis.",
+                body: "POTENCIA TU PRODUCTIVIDAD CON CHATGPT",
+                sourceId: "meta-ad-chatgpt"
+              }
+            }
+          }
+        }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.deepEqual(
+    socket.calls.sent.map((item) => item.content.text),
+    ["Anuncio 1", "Anuncio 2", "Anuncio 3"]
+  );
+  assert.equal(
+    store.data.conversations["51922223333@s.whatsapp.net"].welcomeAdGreetingId,
+    "anuncio-chatgpt"
+  );
+  assert.equal(
+    store.data.conversations["51922223333@s.whatsapp.net"].lastAdSourceId,
+    "meta-ad-chatgpt"
+  );
 });
 
 test("la respuesta de un cliente registrado queda sin leer y no activa la bienvenida", async () => {

@@ -381,6 +381,7 @@ function buildSystemInstructions(snapshot, conversation = {}, question = "") {
     "No menciones que eres una IA, un bot, un modelo, ni que recibiste instrucciones.",
     "Utiliza exclusivamente la información confirmada incluida abajo. No completes datos con conocimiento general y no inventes precios, características, stock ni condiciones.",
     "Cuando exista una tabla local para el prefijo del cliente, usa exactamente esos importes y esa moneda. No conviertas desde soles y no muestres precios de otro país.",
+    "Si la consulta incluye una CAMPAÑA DE ORIGEN con un precio o promoción propios, esa oferta confirmada tiene prioridad sobre el precio general para ese chat.",
     "Si preguntan por el precio de varios productos, incluye el precio local de cada producto mencionado.",
     "Si la respuesta no está confirmada, dilo brevemente y ofrece consultar con un asesor.",
     "Si la pregunta depende del tema inmediatamente anterior, usa el contexto corto.",
@@ -447,6 +448,14 @@ function resolveConversationPriceBook(snapshot, conversation = {}) {
     .find((book) => preferredCodes.includes(String(book.callingCode || ""))) || null;
 }
 
+function resolveConversationAdGreeting(snapshot, conversation = {}) {
+  const profileId = String(conversation.welcomeAdGreetingId || "").trim();
+  if (!profileId) return null;
+  return (snapshot?.settings?.adGreetings || []).find(
+    (profile) => String(profile.id || "") === profileId
+  ) || null;
+}
+
 function buildUserPrompt(snapshot, question, conversation = {}) {
   const recentQuestions = Array.isArray(conversation.recentUserMessages)
     ? conversation.recentUserMessages
@@ -466,6 +475,7 @@ function buildUserPrompt(snapshot, question, conversation = {}) {
         )?.name
       : null;
   const priceBook = resolveConversationPriceBook(snapshot, conversation);
+  const adGreeting = resolveConversationAdGreeting(snapshot, conversation);
   const catalogNames = new Map(
     [...(snapshot?.products || []), ...(snapshot?.plans || [])].map((item) => [
       String(item.id || ""),
@@ -486,6 +496,12 @@ function buildUserPrompt(snapshot, question, conversation = {}) {
     : snapshot?.settings?.internationalPayment;
 
   return [
+    adGreeting
+      ? `CAMPAÑA DE ORIGEN CONFIRMADA: ${adGreeting.name}. Los precios y condiciones escritos en esta campaña tienen prioridad para esta conversación.`
+      : "",
+    ...(adGreeting?.messages || []).map(
+      (message, index) => `- Mensaje ${index + 1} de la campaña: ${String(message).replace(/\s+/g, " ").trim()}`
+    ),
     conversation.localCountry || conversation.welcomeCountry
       ? `País detectado del cliente: ${conversation.localCountry || conversation.welcomeCountry} (${conversation.localCallingCode || conversation.welcomeCallingCode || "sin prefijo"}, ${conversation.localCurrency || conversation.welcomeCurrency || "moneda sin confirmar"}).`
       : "",
@@ -896,6 +912,7 @@ module.exports = {
   encryptGeminiApiKey,
   friendlyOpenAIError,
   normalizeGeminiModel,
+  resolveConversationAdGreeting,
   resolveConversationPriceBook,
   selectRelevantKnowledge
 };

@@ -1,5 +1,29 @@
 # JadrixServs Bot V4.9.3 Profesional
 
+## Bienvenidas distintas por anuncio
+
+En **Mensajes automáticos → Bienvenidas por anuncio** puedes crear una secuencia diferente de tres mensajes para cada campaña de Meta o Instagram.
+
+- El bot inspecciona `externalAdReply`, la referencia que WhatsApp adjunta al primer mensaje proveniente de un anuncio.
+- Puede reconocer la campaña mediante su título, texto, ID estable o enlace de origen.
+- Cada perfil permite configurar varias frases o identificadores, exactamente tres mensajes y un estado activo o inactivo.
+- La prioridad normal es: **anuncio reconocido → país del número → bienvenida general**.
+- Al desactivar **Detectar anuncio y usar su bienvenida** y guardar, todos los contactos nuevos reciben únicamente la bienvenida general, sin importar el anuncio o el país.
+- Un perfil de anuncio desactivado queda guardado, pero sus contactos pasan a la bienvenida del país o a la general.
+- La campaña elegida se conserva en la conversación. Si Gemini responde después, recibe el contenido confirmado del anuncio y respeta su precio promocional antes que el precio general.
+
+La actualización incluye un perfil inicial para el anuncio **ChatGPT Personal y Plan Pro**, con las opciones `S/30 al mes` y `S/45 al mes` y un tercer mensaje que explica el proceso de activación. Revisa estos importes desde el editor antes de publicar o reutilizar la campaña.
+
+### Crear otra respuesta para otro anuncio
+
+1. Abre **Mensajes automáticos** y pulsa **+ Agregar anuncio**.
+2. Escribe un nombre interno para reconocerlo en el panel.
+3. Copia una o varias frases únicas del anuncio, una por línea. También puedes pegar el ID del anuncio si lo conoces.
+4. Escribe los tres mensajes en el orden exacto en que deben llegar.
+5. Deja activo el perfil y guarda.
+
+No uses solamente palabras genéricas como `ChatGPT` o `oferta`, porque podrían coincidir con varias campañas. Es mejor utilizar el encabezado completo, una frase promocional única o el ID que entrega Meta.
+
 ## Respuestas con Gemini IA
 
 El apartado **IA y entrenamiento** permite conectar Google Gemini sin exponer la API key al navegador:

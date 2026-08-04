@@ -437,9 +437,51 @@ function buildGreetingMessages(priceBook = countryPriceBooks[0]) {
   ];
 }
 
+const adGreetings = [
+  {
+    id: "ad-chatgpt-personal-plan-pro",
+    name: "ChatGPT Personal y Plan Pro",
+    enabled: true,
+    matchTerms: [
+      "POTENCIA TU PRODUCTIVIDAD CON CHATGPT",
+      "POTENCIA TU PRODUCTIVIDAD CON CH4TGPT",
+      "CHAT GPT PERSONAL",
+      "PLAN PERSONAL",
+      "PLAN PRO S/45"
+    ],
+    messages: [
+      [
+        "👋 ¡Hola! Gracias por escribirnos desde nuestro anuncio de ChatGPT.",
+        "Tenemos dos opciones para que elijas según el uso que necesitas: *ChatGPT Personal* y *Plan Pro*."
+      ].join("\n"),
+      [
+        "💬 *OPCIONES DEL ANUNCIO*",
+        "",
+        "🔹 *ChatGPT Personal — S/30 al mes*",
+        "Cuenta personal para estudiar, trabajar y crear con mayor privacidad.",
+        "",
+        "🔷 *Plan Pro — S/45 al mes*",
+        "Incluye ChatGPT Pro, Gemini 3 Ultra, Perplexity Pro y Freepik."
+      ].join("\n"),
+      [
+        "✅ *PROCESO DE ACTIVACIÓN*",
+        "1. Indícame cuál de los dos planes deseas.",
+        "2. Te envío los datos de pago.",
+        "3. Envías tu comprobante por este chat.",
+        "4. Verificamos el pago y realizamos la activación.",
+        "",
+        "¿Prefieres ChatGPT Personal o Plan Pro?"
+      ].join("\n")
+    ],
+    createdAt: null,
+    updatedAt: null
+  }
+];
+
 const defaultSettings = {
   businessName: "JadrixServs",
   inboundMode: "welcome_once",
+  welcomeRoutingMode: "smart",
   shortGreeting:
     "¡Hola! 👋 Soy parte del equipo de JadrixServs. ¿En qué servicio estás interesado o qué deseas consultar?",
   welcomeTriggers:
@@ -467,6 +509,7 @@ const defaultSettings = {
     "👋 Gracias por escribir a JadrixServs. En este momento estamos fuera del horario de atención. Apenas volvamos, revisaremos tu mensaje y te responderemos por este chat.",
   afkSessionId: null,
   greetingMessages: buildGreetingMessages(countryPriceBooks[0]),
+  adGreetings: structuredClone(adGreetings),
   countryGreetings: countryPriceBooks.map((priceBook) => ({
     id: `country-${priceBook.country.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^a-z]+/g, "-")}-${priceBook.callingCode.replace(/\D/g, "")}`,
     country: priceBook.country,
@@ -516,6 +559,7 @@ module.exports = {
   products,
   plans,
   countryPriceBooks,
+  adGreetings,
   knowledgeBase,
   defaultSettings,
   buildGreetingMessages,

@@ -426,8 +426,43 @@
           </div>
 
           <div class="notice mode-notice">
-            <strong>Detección automática:</strong> el bot reconoce el país por el prefijo del número de WhatsApp, por ejemplo <code>+51</code> para Perú o <code>+54</code> para Argentina, y envía la secuencia configurada para ese país una sola vez.
+            <strong>Detección automática:</strong> el bot puede reconocer primero el anuncio de Meta o Instagram y, si no coincide, usar el país del número. Siempre envía una sola secuencia de tres mensajes.
           </div>
+
+          <article id="adGreetingsPanel" class="panel ad-greetings-panel">
+            <div class="ad-greetings-heading">
+              <div>
+                <span class="pill cyan">Meta · Instagram · WhatsApp</span>
+                <h3>Bienvenidas por anuncio</h3>
+                <p>Cada anuncio puede responder con tres mensajes propios. El bot compara el título, texto, ID y enlace que WhatsApp adjunta al primer mensaje del cliente.</p>
+              </div>
+              <button id="newAdGreetingButton" class="button primary" type="button">+ Agregar anuncio</button>
+            </div>
+            <label class="toggle-row ad-routing-toggle">
+              <input id="adGreetingRoutingEnabled" type="checkbox" checked>
+              <span>
+                <strong>Detectar anuncio y usar su bienvenida</strong>
+                <small>Si lo desactivas y guardas, todos los contactos nuevos recibirán únicamente la bienvenida general.</small>
+              </span>
+              <span id="welcomeRoutingStatus" class="pill green">Detección activa</span>
+            </label>
+            <div class="ad-greeting-flow" aria-label="Prioridad de las bienvenidas">
+              <span><b>1</b> Anuncio reconocido</span>
+              <i aria-hidden="true">→</i>
+              <span><b>2</b> País del número</span>
+              <i aria-hidden="true">→</i>
+              <span><b>3</b> Bienvenida general</span>
+            </div>
+            <div class="notice ad-greeting-notice">
+              <strong>Consejo:</strong> agrega frases únicas que aparezcan en la publicación, como <code>POTENCIA TU PRODUCTIVIDAD CON CHATGPT</code>. Si Meta entrega el ID del anuncio, también puedes pegarlo como identificador.
+            </div>
+            <div id="adGreetingGrid" class="ad-greeting-grid"></div>
+            <div id="adGreetingEmpty" class="country-greeting-empty hidden">
+              <strong>No hay anuncios configurados.</strong>
+              <span>Los clientes recibirán la bienvenida por país o la general.</span>
+              <button class="button secondary" data-ad-greeting-new type="button">Configurar primer anuncio</button>
+            </div>
+          </article>
 
           <article class="panel country-greetings-panel">
             <div class="country-greetings-heading">
@@ -953,6 +988,48 @@
         <div class="dialog-actions">
           <button class="button secondary country-greeting-close" type="button">Cancelar</button>
           <button id="saveCountryGreetingButton" class="button primary" type="submit">Guardar país</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="adGreetingDialog" class="country-greeting-dialog ad-greeting-dialog">
+      <form id="adGreetingForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">BIENVENIDA DE CAMPAÑA</p><h2 id="adGreetingDialogTitle">Agregar anuncio</h2></div>
+          <button class="icon-button ad-greeting-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="adGreetingId" type="hidden">
+        <div class="form-grid">
+          <label class="span-2">
+            Nombre interno del anuncio
+            <input id="adGreetingName" type="text" maxlength="120" placeholder="ChatGPT Personal y Plan Pro" autocomplete="off" required>
+            <small>Solo se usa en el panel para que puedas reconocer la campaña.</small>
+          </label>
+          <label class="span-2">
+            Frases o identificadores para reconocerlo
+            <textarea id="adGreetingMatchTerms" rows="6" maxlength="8000" placeholder="POTENCIA TU PRODUCTIVIDAD CON CHATGPT&#10;CHAT GPT PERSONAL&#10;ID del anuncio" required></textarea>
+            <small>Escribe una frase o ID por línea. Basta una coincidencia; usa textos específicos para no confundir dos anuncios.</small>
+          </label>
+        </div>
+        <section class="country-greeting-editor" aria-labelledby="adGreetingMessagesTitle">
+          <div class="country-greeting-editor-heading">
+            <div><span class="editor-step">3</span><div><h3 id="adGreetingMessagesTitle">Tres mensajes para este anuncio</h3><p>Se enviarán una sola vez, exactamente en este orden.</p></div></div>
+            <span class="pill violet">3 mensajes</span>
+          </div>
+          <label>Mensaje 1 · Saludo y contexto<textarea id="adGreeting1" rows="6" required></textarea></label>
+          <label>Mensaje 2 · Oferta del anuncio<textarea id="adGreeting2" rows="9" required></textarea></label>
+          <label>Mensaje 3 · Proceso y cierre<textarea id="adGreeting3" rows="8" required></textarea></label>
+        </section>
+        <label class="toggle-row country-greeting-enable-row">
+          <input id="adGreetingEnabled" type="checkbox" checked>
+          <span><strong>Respuesta activa para este anuncio</strong><small>Al desactivarla, los contactos de esta campaña pasarán a la bienvenida por país o a la general.</small></span>
+        </label>
+        <div class="notice country-greeting-dialog-notice">
+          WhatsApp no comparte la imagen completa con el panel; la coincidencia se realiza con los metadatos adjuntos al mensaje: título, texto, ID y enlace del anuncio.
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary ad-greeting-close" type="button">Cancelar</button>
+          <button id="saveAdGreetingButton" class="button primary" type="submit">Guardar anuncio</button>
         </div>
       </form>
     </dialog>

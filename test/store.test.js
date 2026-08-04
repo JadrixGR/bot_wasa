@@ -53,6 +53,12 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
     assert.deepEqual(store.data.authenticatorAccounts, []);
     assert.deepEqual(store.data.processedCommandIds, []);
     assert.equal(store.getSettings().inboundMode, "welcome_once");
+    assert.equal(store.getSettings().welcomeRoutingMode, "smart");
+    assert.equal(store.getSettings().adGreetings.length, 1);
+    assert.equal(
+      store.getSettings().adGreetings[0].id,
+      "ad-chatgpt-personal-plan-pro"
+    );
     assert.match(
       store.getSettings().welcomeTriggers,
       /Super Combo IA 2026/
@@ -199,6 +205,79 @@ test("guarda y recarga bienvenidas editables por país", () => {
         enabled,
         messages
       }))
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("guarda bienvenidas por anuncio y permite activar el modo general", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const settings = store.updateSettings({
+      welcomeRoutingMode: "general",
+      adGreetings: [
+        {
+          id: "anuncio-streaming",
+          name: "Streaming agosto",
+          enabled: true,
+          matchTerms: ["PROMOCIÓN STREAMING AGOSTO", "meta-ad-7788"],
+          messages: ["Streaming 1", "Streaming 2", "Streaming 3"]
+        }
+      ]
+    });
+
+    assert.equal(settings.welcomeRoutingMode, "general");
+    assert.equal(settings.adGreetings[0].matchTerms.length, 2);
+    assert.deepEqual(settings.adGreetings[0].messages, [
+      "Streaming 1",
+      "Streaming 2",
+      "Streaming 3"
+    ]);
+
+    const reloaded = new JsonStore(directory).getSettings();
+    assert.equal(reloaded.welcomeRoutingMode, "general");
+    assert.equal(reloaded.adGreetings[0].name, "Streaming agosto");
+    assert.deepEqual(reloaded.adGreetings[0].messages, [
+      "Streaming 1",
+      "Streaming 2",
+      "Streaming 3"
+    ]);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("rechaza anuncios sin identificadores o sin sus tres mensajes", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    assert.throws(
+      () =>
+        store.updateSettings({
+          adGreetings: [
+            {
+              name: "Sin coincidencia",
+              matchTerms: [],
+              messages: ["uno", "dos", "tres"]
+            }
+          ]
+        }),
+      /al menos una frase o identificador/i
+    );
+    assert.throws(
+      () =>
+        store.updateSettings({
+          adGreetings: [
+            {
+              name: "Incompleto",
+              matchTerms: ["anuncio único"],
+              messages: ["uno", "dos"]
+            }
+          ]
+        }),
+      /exactamente 3 mensajes/i
     );
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });

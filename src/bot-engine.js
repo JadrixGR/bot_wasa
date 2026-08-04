@@ -67,6 +67,110 @@ function resolveWelcomeProfile(
   };
 }
 
+function adReferralValues(adReferral = {}) {
+  const source =
+    adReferral && typeof adReferral === "object" ? adReferral : {};
+  return [
+    source.title,
+    source.body,
+    source.sourceId,
+    source.sourceUrl,
+    source.ref,
+    source.sourceType,
+    source.sourceApp
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+function resolveAdWelcomeProfile(
+  settings,
+  { adReferral = null, profileId = "" } = {}
+) {
+  const profiles = Array.isArray(settings?.adGreetings)
+    ? settings.adGreetings
+    : [];
+  const savedProfile = profileId
+    ? profiles.find((profile) => String(profile.id) === String(profileId))
+    : null;
+  if (savedProfile) return savedProfile;
+  const referralValues = adReferralValues(adReferral);
+  if (!referralValues.length) return null;
+  const normalizedValues = referralValues.map(normalizeText).filter(Boolean);
+
+  return profiles
+    .filter((profile) => profile.enabled !== false)
+    .map((profile, profileOrder) => {
+      let score = 0;
+      for (const term of profile.matchTerms || []) {
+        const normalizedTerm = normalizeText(term);
+        if (normalizedTerm.length < 4) continue;
+        for (const value of normalizedValues) {
+          if (value === normalizedTerm) {
+            score = Math.max(score, 10000 + normalizedTerm.length);
+          } else if (value.includes(normalizedTerm)) {
+            score = Math.max(score, normalizedTerm.length);
+          }
+        }
+      }
+      return { profile, score, profileOrder };
+    })
+    .filter(({ score }) => score > 0)
+    .sort(
+      (first, second) =>
+        second.score - first.score || second.profileOrder - first.profileOrder
+    )[0]?.profile || null;
+}
+
+function resolveWelcomeSelection(
+  settings,
+  {
+    customerPhone = "",
+    chatId = "",
+    alternateChatId = "",
+    countryProfileId = "",
+    adProfileId = "",
+    adReferral = null
+  } = {}
+) {
+  const fallbackMessages = Array.isArray(settings?.greetingMessages)
+    ? settings.greetingMessages.slice(0, 3)
+    : [];
+  const countryWelcome = resolveWelcomeProfile(settings, {
+    customerPhone,
+    chatId,
+    alternateChatId,
+    profileId: countryProfileId
+  });
+  if (settings?.welcomeRoutingMode === "general") {
+    return {
+      source: "general",
+      adProfile: null,
+      profile: null,
+      phoneDigits: countryWelcome.phoneDigits,
+      messages: fallbackMessages
+    };
+  }
+  const adProfile = resolveAdWelcomeProfile(settings, {
+    adReferral,
+    profileId: adProfileId
+  });
+  if (adProfile) {
+    return {
+      source: "ad",
+      adProfile,
+      profile: countryWelcome.profile,
+      phoneDigits: countryWelcome.phoneDigits,
+      messages: adProfile.messages.slice(0, 3)
+    };
+  }
+  return {
+    source: countryWelcome.profile ? "country" : "general",
+    adProfile: null,
+    ...countryWelcome
+  };
+}
+
 function resolveCountryPriceBook(
   data,
   { customerPhone = "", chatId = "", alternateChatId = "", priceBookId = "" } = {}
@@ -124,7 +228,8 @@ class BotEngine {
     body = "",
     hasMedia = false,
     fromName = "",
-    messageId = ""
+    messageId = "",
+    adReferral = null
   }) {
     const conversationIds = [...new Set([chatId, alternateChatId].filter(Boolean))];
     const conversations = conversationIds.map((id) =>
@@ -197,6 +302,15 @@ class BotEngine {
             localCurrency: localPricing.book.currency,
             localCurrencySymbol: localPricing.book.symbol
           }
+        : {}),
+      ...(adReferral
+        ? {
+            lastAdTitle: String(adReferral.title || "").slice(0, 300),
+            lastAdBody: String(adReferral.body || "").slice(0, 1200),
+            lastAdSourceId: String(adReferral.sourceId || "").slice(0, 300),
+            lastAdSourceUrl: String(adReferral.sourceUrl || "").slice(0, 1000),
+            lastAdSeenAt: now
+          }
         : {})
     });
 
@@ -231,11 +345,13 @@ class BotEngine {
     }
 
     if (!client && !conversation.welcomeSequenceSentAt) {
-      const welcome = resolveWelcomeProfile(settings, {
+      const welcome = resolveWelcomeSelection(settings, {
         customerPhone,
         chatId,
         alternateChatId,
-        profileId: conversation.welcomeCountryGreetingId || ""
+        countryProfileId: conversation.welcomeCountryGreetingId || "",
+        adProfileId: conversation.welcomeAdGreetingId || "",
+        adReferral
       });
       const messages = welcome.messages;
       const previousCount = Math.max(
@@ -247,7 +363,10 @@ class BotEngine {
         welcomeCountryGreetingId: welcome.profile?.id || null,
         welcomeCountry: welcome.profile?.country || null,
         welcomeCallingCode: welcome.profile?.callingCode || null,
-        welcomeCurrency: welcome.profile?.currency || null
+        welcomeCurrency: welcome.profile?.currency || null,
+        welcomeAdGreetingId: welcome.adProfile?.id || null,
+        welcomeAdName: welcome.adProfile?.name || null,
+        welcomeSource: welcome.source
       });
 
       let sentNow = 0;
@@ -272,7 +391,10 @@ class BotEngine {
           country: welcome.profile?.country || null,
           callingCode: welcome.profile?.callingCode || null,
           currency: welcome.profile?.currency || null,
-          usedFallback: !welcome.profile
+          adGreetingId: welcome.adProfile?.id || null,
+          adName: welcome.adProfile?.name || null,
+          source: welcome.source,
+          usedFallback: welcome.source === "general"
         }
       );
       this.store.save();
@@ -282,7 +404,10 @@ class BotEngine {
         messages: sentNow,
         country: welcome.profile?.country || null,
         callingCode: welcome.profile?.callingCode || null,
-        usedFallback: !welcome.profile
+        adGreetingId: welcome.adProfile?.id || null,
+        adName: welcome.adProfile?.name || null,
+        source: welcome.source,
+        usedFallback: welcome.source === "general"
       };
     }
 
@@ -370,8 +495,11 @@ class BotEngine {
 
 module.exports = {
   BotEngine,
+  adReferralValues,
   normalizeText,
+  resolveAdWelcomeProfile,
   resolveWelcomeProfile,
+  resolveWelcomeSelection,
   resolveCountryPriceBook,
   whatsappPhoneDigits
 };

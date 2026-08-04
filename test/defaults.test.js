@@ -6,6 +6,7 @@ const {
   products,
   plans,
   countryPriceBooks,
+  adGreetings,
   knowledgeBase,
   defaultSettings,
   buildGreetingMessages,
@@ -65,6 +66,17 @@ test("la V4.7 usa el modo de bienvenida única", () => {
   assert.equal(createInitialData().version, 4.92);
   assert.deepEqual(createInitialData().authenticatorAccounts, []);
   assert.equal(defaultSettings.inboundMode, "welcome_once");
+  assert.equal(defaultSettings.welcomeRoutingMode, "smart");
+  assert.equal(defaultSettings.adGreetings.length, 1);
+  assert.equal(defaultSettings.adGreetings[0].messages.length, 3);
+  assert.match(defaultSettings.adGreetings[0].messages[1], /S\/30 al mes/);
+  assert.match(defaultSettings.adGreetings[0].messages[1], /S\/45 al mes/);
+  assert.ok(
+    defaultSettings.adGreetings[0].matchTerms.includes(
+      "POTENCIA TU PRODUCTIVIDAD CON CHATGPT"
+    )
+  );
+  assert.equal(adGreetings.length, 1);
   assert.match(defaultSettings.reminderTemplate, /vence en 2 días/i);
   assert.equal(defaultSettings.chargeStartTime, "09:00");
   assert.equal(defaultSettings.afkEnabled, false);

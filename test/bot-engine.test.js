@@ -5,8 +5,10 @@ const assert = require("node:assert/strict");
 const {
   BotEngine,
   normalizeText,
+  resolveAdWelcomeProfile,
   resolveCountryPriceBook,
-  resolveWelcomeProfile
+  resolveWelcomeProfile,
+  resolveWelcomeSelection
 } = require("../src/bot-engine");
 const { createInitialData } = require("../src/defaults");
 
@@ -58,6 +60,78 @@ test("el primer mensaje de cualquier contacto nuevo recibe exactamente la secuen
   assert.ok(sent[2].startsWith("✅ `Entrega inmediata`"));
   assert.equal(conversation.welcomeMessagesSent, 3);
   assert.ok(conversation.welcomeSequenceSentAt);
+});
+
+test("reconoce el anuncio de ChatGPT y usa sus tres mensajes antes que el país", async () => {
+  const { engine, sent, data, conversations } = makeHarness();
+  const adReferral = {
+    title: "Jadrix Servis.",
+    body:
+      "🚀 ¡POTENCIA TU PRODUCTIVIDAD CON CHATGPT! Chat GPT Personal S/30 al mes. Plan Pro S/45 al mes.",
+    sourceId: "meta-ad-99881",
+    sourceUrl: "https://www.instagram.com/p/anuncio-chatgpt"
+  };
+
+  const matched = resolveAdWelcomeProfile(data.settings, { adReferral });
+  assert.equal(matched.id, "ad-chatgpt-personal-plan-pro");
+
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "¿Cuál es el proceso de activación?",
+    adReferral
+  });
+
+  assert.deepEqual(sent, data.settings.adGreetings[0].messages);
+  assert.equal(result.source, "ad");
+  assert.equal(result.adGreetingId, "ad-chatgpt-personal-plan-pro");
+  assert.equal(result.country, "Perú");
+  assert.equal(
+    conversations["51900000000@s.whatsapp.net"].welcomeAdGreetingId,
+    "ad-chatgpt-personal-plan-pro"
+  );
+  assert.equal(
+    conversations["51900000000@s.whatsapp.net"].welcomeCountryGreetingId,
+    data.settings.countryGreetings[0].id
+  );
+});
+
+test("el modo general ignora anuncio y país para todos los contactos", async () => {
+  const { engine, sent, data } = makeHarness();
+  data.settings.welcomeRoutingMode = "general";
+  data.settings.greetingMessages = ["GENERAL 1", "GENERAL 2", "GENERAL 3"];
+
+  const selection = resolveWelcomeSelection(data.settings, {
+    customerPhone: "51900000000",
+    adReferral: { body: "POTENCIA TU PRODUCTIVIDAD CON CHATGPT" }
+  });
+  assert.equal(selection.source, "general");
+
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "Quiero información",
+    adReferral: { body: "POTENCIA TU PRODUCTIVIDAD CON CHATGPT" }
+  });
+
+  assert.deepEqual(sent, ["GENERAL 1", "GENERAL 2", "GENERAL 3"]);
+  assert.equal(result.source, "general");
+  assert.equal(result.adGreetingId, null);
+  assert.equal(result.country, null);
+});
+
+test("un anuncio desactivado vuelve a la bienvenida del país", async () => {
+  const { engine, sent, data } = makeHarness();
+  data.settings.adGreetings[0].enabled = false;
+  data.settings.countryGreetings[0].messages = ["PERÚ 1", "PERÚ 2", "PERÚ 3"];
+
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    body: "Hola",
+    adReferral: { title: "CHAT GPT PERSONAL" }
+  });
+
+  assert.deepEqual(sent, ["PERÚ 1", "PERÚ 2", "PERÚ 3"]);
+  assert.equal(result.source, "country");
+  assert.equal(result.adGreetingId, null);
 });
 
 test("después de la bienvenida no vuelve a responder mensajes entrantes", async () => {

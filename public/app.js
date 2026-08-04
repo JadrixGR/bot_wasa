@@ -1419,6 +1419,146 @@ function countryGreetings() {
     : [];
 }
 
+function adGreetings() {
+  return Array.isArray(state.settings?.adGreetings)
+    ? state.settings.adGreetings
+    : [];
+}
+
+function renderWelcomeRouting() {
+  const toggle = $("#adGreetingRoutingEnabled");
+  const panel = $("#adGreetingsPanel");
+  const status = $("#welcomeRoutingStatus");
+  if (!toggle || !panel || !status) return;
+  const smartMode = toggle.checked;
+  panel.classList.toggle("is-general-mode", !smartMode);
+  status.textContent = smartMode ? "Detección activa" : "General para todos";
+  status.className = `pill ${smartMode ? "green" : "neutral"}`;
+}
+
+function renderAdGreetings() {
+  const grid = $("#adGreetingGrid");
+  const empty = $("#adGreetingEmpty");
+  if (!grid || !empty) return;
+  const profiles = adGreetings();
+  empty.classList.toggle("hidden", profiles.length > 0);
+  grid.classList.toggle("hidden", profiles.length === 0);
+  grid.innerHTML = profiles.map((profile) => {
+    const terms = (profile.matchTerms || []).slice(0, 3).join(" · ");
+    const preview = (profile.messages || [])[0] || "";
+    return `
+      <article class="ad-greeting-card ${profile.enabled === false ? "is-disabled" : ""}">
+        <div class="ad-greeting-card-top">
+          <span class="ad-source-icon" aria-hidden="true">AD</span>
+          <span class="pill ${profile.enabled === false ? "neutral" : "green"}">${profile.enabled === false ? "Inactiva" : "Activa"}</span>
+        </div>
+        <h4>${escapeHtml(profile.name)}</h4>
+        <p class="ad-match-preview"><strong>Reconoce:</strong> ${escapeHtml(terms || "Sin identificadores")}</p>
+        <p class="country-message-preview">${escapeHtml(preview)}</p>
+        <div class="country-greeting-card-footer">
+          <span>3 mensajes · ${(profile.matchTerms || []).length} coincidencia${(profile.matchTerms || []).length === 1 ? "" : "s"}</span>
+          <div>
+            <button class="button secondary compact-button" data-ad-greeting-action="edit" data-id="${escapeHtml(profile.id)}" type="button">Editar</button>
+            <button class="button danger-ghost compact-button" data-ad-greeting-action="delete" data-id="${escapeHtml(profile.id)}" type="button">Eliminar</button>
+          </div>
+        </div>
+      </article>`;
+  }).join("");
+  renderWelcomeRouting();
+}
+
+function openAdGreetingDialog(profile = null) {
+  if (!state.settings) {
+    showToast("Espera a que termine de cargar la configuración.", true);
+    return;
+  }
+  const fallback = state.settings.greetingMessages || ["", "", ""];
+  const messages = profile?.messages || fallback;
+  $("#adGreetingDialogTitle").textContent = profile
+    ? `Editar ${profile.name}`
+    : "Agregar anuncio";
+  $("#adGreetingId").value = profile?.id || "";
+  $("#adGreetingName").value = profile?.name || "";
+  $("#adGreetingMatchTerms").value = (profile?.matchTerms || []).join("\n");
+  $("#adGreeting1").value = messages[0] || "";
+  $("#adGreeting2").value = messages[1] || "";
+  $("#adGreeting3").value = messages[2] || "";
+  $("#adGreetingEnabled").checked = profile?.enabled !== false;
+  $("#saveAdGreetingButton").textContent = profile
+    ? "Guardar cambios"
+    : "Guardar anuncio";
+  $("#adGreetingDialog").showModal();
+  requestAnimationFrame(() => $("#adGreetingName").focus());
+}
+
+async function saveAdGreeting(event) {
+  event.preventDefault();
+  const id = $("#adGreetingId").value;
+  const previous = adGreetings().find((profile) => profile.id === id);
+  const now = new Date().toISOString();
+  const nextProfile = {
+    ...(previous || {}),
+    ...(id ? { id } : {}),
+    name: $("#adGreetingName").value.trim(),
+    enabled: $("#adGreetingEnabled").checked,
+    matchTerms: $("#adGreetingMatchTerms").value
+      .split(/\r?\n/)
+      .map((term) => term.trim())
+      .filter(Boolean),
+    messages: [
+      $("#adGreeting1").value,
+      $("#adGreeting2").value,
+      $("#adGreeting3").value
+    ],
+    createdAt: previous?.createdAt || now,
+    updatedAt: now
+  };
+  const profiles = previous
+    ? adGreetings().map((profile) =>
+        profile.id === previous.id ? nextProfile : profile
+      )
+    : [...adGreetings(), nextProfile];
+  const button = $("#saveAdGreetingButton");
+  button.disabled = true;
+  button.textContent = "Guardando…";
+  try {
+    const payload = await api("/api/settings", {
+      method: "PUT",
+      body: { adGreetings: profiles }
+    });
+    state.settings = payload.settings;
+    renderAdGreetings();
+    $("#adGreetingDialog").close();
+    showToast(
+      previous
+        ? `Bienvenida de ${nextProfile.name} actualizada.`
+        : `Bienvenida de ${nextProfile.name} creada.`
+    );
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = previous ? "Guardar cambios" : "Guardar anuncio";
+  }
+}
+
+async function deleteAdGreeting(profile) {
+  if (!confirm(`¿Eliminar la bienvenida del anuncio ${profile.name}?`)) return;
+  try {
+    const payload = await api("/api/settings", {
+      method: "PUT",
+      body: {
+        adGreetings: adGreetings().filter((item) => item.id !== profile.id)
+      }
+    });
+    state.settings = payload.settings;
+    renderAdGreetings();
+    showToast(`Bienvenida de ${profile.name} eliminada.`);
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 function renderCountryGreetings() {
   const grid = $("#countryGreetingGrid");
   const empty = $("#countryGreetingEmpty");
@@ -1826,6 +1966,8 @@ async function loadSettings() {
   $("#greeting1").value = payload.settings.greetingMessages[0] || "";
   $("#greeting2").value = payload.settings.greetingMessages[1] || "";
   $("#greeting3").value = payload.settings.greetingMessages[2] || "";
+  $("#adGreetingRoutingEnabled").checked =
+    payload.settings.welcomeRoutingMode !== "general";
   $("#reminderTemplate").value = payload.settings.reminderTemplate || "";
   $("#chargeTemplate").value = payload.settings.chargeTemplate || "";
   $("#chargeStartTime").value = payload.settings.chargeStartTime || "09:00";
@@ -1836,6 +1978,7 @@ async function loadSettings() {
   $("#afkEnabled").checked = Boolean(payload.settings.afkEnabled);
   $("#afkMessage").value = payload.settings.afkMessage || "";
   renderAfkStatus(payload.settings);
+  renderAdGreetings();
   renderCountryGreetings();
   $("#aiPeruPayment").value = payload.settings.peruPayment || "";
   $("#aiInternationalPayment").value = payload.settings.internationalPayment || "";
@@ -1853,6 +1996,9 @@ async function saveSettings() {
       method: "PUT",
       body: {
         inboundMode: "welcome_once",
+        welcomeRoutingMode: $("#adGreetingRoutingEnabled").checked
+          ? "smart"
+          : "general",
         greetingMessages: [$("#greeting1").value, $("#greeting2").value, $("#greeting3").value],
         reminderTemplate: $("#reminderTemplate").value,
         chargeTemplate: $("#chargeTemplate").value,
@@ -1863,8 +2009,13 @@ async function saveSettings() {
       }
     });
     state.settings = payload.settings;
+    renderAdGreetings();
     renderCountryGreetings();
-    showToast("Mensajes y horario de cobranza guardados.");
+    showToast(
+      payload.settings.welcomeRoutingMode === "general"
+        ? "Bienvenida general activada para todos y mensajes guardados."
+        : "Detección por anuncio activada y mensajes guardados."
+    );
   } catch (error) {
     showToast(error.message, true);
   }
@@ -2229,6 +2380,33 @@ function bindEvents() {
     if (!event.target.matches("[data-knowledge-title]")) return;
     const heading = event.target.closest(".knowledge-card")?.querySelector(".knowledge-card-heading strong");
     if (heading) heading.textContent = event.target.value.trim() || "Nueva respuesta";
+  });
+  $("#adGreetingRoutingEnabled").addEventListener(
+    "change",
+    renderWelcomeRouting
+  );
+  $("#newAdGreetingButton").addEventListener("click", () =>
+    openAdGreetingDialog()
+  );
+  $$('[data-ad-greeting-new]').forEach((button) =>
+    button.addEventListener("click", () => openAdGreetingDialog())
+  );
+  $("#adGreetingForm").addEventListener("submit", saveAdGreeting);
+  $$(".ad-greeting-close").forEach((button) =>
+    button.addEventListener("click", () => $("#adGreetingDialog").close())
+  );
+  $("#adGreetingGrid").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-ad-greeting-action]");
+    if (!button) return;
+    const profile = adGreetings().find((item) => item.id === button.dataset.id);
+    if (!profile) return;
+    if (button.dataset.adGreetingAction === "edit") {
+      openAdGreetingDialog(profile);
+      return;
+    }
+    if (button.dataset.adGreetingAction === "delete") {
+      await deleteAdGreeting(profile);
+    }
   });
   $("#newCountryGreetingButton").addEventListener("click", () =>
     openCountryGreetingDialog()

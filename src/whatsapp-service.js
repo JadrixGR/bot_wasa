@@ -267,6 +267,35 @@ function extractMessageBody(message) {
   ).trim();
 }
 
+function extractAdReferral(message) {
+  const content = unwrapMessageContent(message);
+  const contextCandidates = [
+    content.messageContextInfo,
+    ...Object.values(content)
+      .filter(
+        (value) =>
+          value && typeof value === "object" && !Array.isArray(value)
+      )
+      .map((value) => value.contextInfo)
+  ].filter(Boolean);
+  const externalAdReply = contextCandidates
+    .map((contextInfo) => contextInfo?.externalAdReply)
+    .find((value) => value && typeof value === "object");
+  if (!externalAdReply) return null;
+
+  const referral = {
+    title: String(externalAdReply.title || "").trim().slice(0, 300),
+    body: String(externalAdReply.body || "").trim().slice(0, 1200),
+    sourceId: String(externalAdReply.sourceId || "").trim().slice(0, 300),
+    sourceUrl: String(externalAdReply.sourceUrl || "").trim().slice(0, 1000),
+    ref: String(externalAdReply.ref || "").trim().slice(0, 500),
+    sourceType: String(externalAdReply.sourceType || "").trim().slice(0, 80),
+    sourceApp: String(externalAdReply.sourceApp || "").trim().slice(0, 80),
+    ctwaClid: String(externalAdReply.ctwaClid || "").trim().slice(0, 500)
+  };
+  return Object.values(referral).some(Boolean) ? referral : null;
+}
+
 function mimeTypeForExtension(extension) {
   return (
     {
@@ -1088,11 +1117,19 @@ class WhatsAppService {
     ]).has(type);
     const body = extractMessageBody(message.message);
     if (!body && !hasMedia) return;
+    const adReferral = extractAdReferral(message.message);
 
     const fromName = String(message.pushName || "");
     this.store.addLog("incoming", `Mensaje de ${fromName || chatId}`, {
       chatId,
-      preview: body.slice(0, 180)
+      preview: body.slice(0, 180),
+      ...(adReferral
+        ? {
+            adTitle: adReferral.title,
+            adSourceId: adReferral.sourceId,
+            adSourceUrl: adReferral.sourceUrl
+          }
+        : {})
     });
     this.store.save();
 
@@ -1106,7 +1143,8 @@ class WhatsAppService {
       hasMedia,
       mediaType: type.replace(/Message$/, ""),
       fromName,
-      messageId: message.key.id || ""
+      messageId: message.key.id || "",
+      adReferral
     });
 
     if (
@@ -1726,6 +1764,7 @@ module.exports = {
   normalizeWhatsAppId,
   calculateHumanDelay,
   compatibleBrowserProfile,
+  extractAdReferral,
   extractMessageBody,
   formatAuthenticatorCodeMessage,
   formatWhatsAppWebVersion,

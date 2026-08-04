@@ -29,6 +29,7 @@ const MAX_QUICK_REPLY_IMAGES = 6;
 const MAX_QUICK_REPLY_TEXTS = 10;
 const MAX_COUNTRY_GREETINGS = 80;
 const MAX_COUNTRY_PRICE_BOOKS = 80;
+const MAX_AD_GREETINGS = 50;
 
 function uniqueAuthenticatorCommand(baseCommand, usedCommands) {
   if (!usedCommands.has(baseCommand)) return baseCommand;
@@ -281,6 +282,67 @@ function normalizeCountryGreetings(profiles) {
   });
 }
 
+function normalizeAdGreetingProfile(input = {}) {
+  const source = input && typeof input === "object" ? input : {};
+  const name = String(source.name || "").trim();
+  const messages = (Array.isArray(source.messages) ? source.messages : []).map(
+    (message) => String(message || "").trim()
+  );
+  const usedTerms = new Set();
+  const matchTerms = (Array.isArray(source.matchTerms) ? source.matchTerms : [])
+    .map((term) => String(term || "").trim())
+    .filter((term) => {
+      const key = term.toLowerCase();
+      if (!term || usedTerms.has(key)) return false;
+      usedTerms.add(key);
+      return true;
+    })
+    .slice(0, 30)
+    .map((term) => term.slice(0, 500));
+
+  if (!name) throw new Error("Ingresa un nombre para la bienvenida del anuncio.");
+  if (!matchTerms.length) {
+    throw new Error(
+      `Agrega al menos una frase o identificador para reconocer el anuncio ${name}.`
+    );
+  }
+  if (messages.length !== 3 || messages.some((message) => !message)) {
+    throw new Error(
+      `La bienvenida del anuncio ${name} debe contener exactamente 3 mensajes.`
+    );
+  }
+
+  return {
+    id: String(source.id || crypto.randomUUID()),
+    name: name.slice(0, 120),
+    enabled: source.enabled !== false,
+    matchTerms,
+    messages: messages.map((message) => message.slice(0, 12000)),
+    createdAt: source.createdAt || new Date().toISOString(),
+    updatedAt: source.updatedAt || new Date().toISOString()
+  };
+}
+
+function normalizeAdGreetings(profiles) {
+  if (!Array.isArray(profiles)) {
+    throw new Error("La configuración de bienvenidas por anuncio no es válida.");
+  }
+  if (profiles.length > MAX_AD_GREETINGS) {
+    throw new Error(
+      `Puedes configurar como máximo ${MAX_AD_GREETINGS} anuncios.`
+    );
+  }
+  const usedIds = new Set();
+  return profiles.map((profile) => {
+    const normalized = normalizeAdGreetingProfile(profile);
+    if (usedIds.has(normalized.id)) {
+      throw new Error("Hay dos bienvenidas de anuncio con el mismo identificador.");
+    }
+    usedIds.add(normalized.id);
+    return normalized;
+  });
+}
+
 function normalizeCountryPriceBook(input = {}, validItemIds = new Set()) {
   const source = input && typeof input === "object" ? input : {};
   const country = String(source.country || "").trim();
@@ -465,6 +527,10 @@ class JsonStore {
     );
     const catalogMigration = migrateCatalog(parsed, initial);
     const countryPriceBooksMigrated = !Array.isArray(parsed.countryPriceBooks);
+    const adGreetingsMigrated = !Array.isArray(parsed.settings?.adGreetings);
+    const welcomeRoutingMigrated = !["smart", "general"].includes(
+      String(parsed.settings?.welcomeRoutingMode || "")
+    );
     let normalizedCountryPriceBooks;
     try {
       normalizedCountryPriceBooks = normalizeCountryPriceBooks(
@@ -633,6 +699,29 @@ class JsonStore {
           .map((profile) => normalizeCountryGreetingProfile(profile))
       ];
     }
+    if (adGreetingsMigrated) {
+      migrated.settings.adGreetings = normalizeAdGreetings(
+        defaultSettings.adGreetings
+      );
+    } else {
+      migrated.settings.adGreetings = parsed.settings.adGreetings
+        .map((profile) => {
+          try {
+            return normalizeAdGreetingProfile(profile);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean)
+        .filter(
+          (profile, index, profiles) =>
+            profiles.findIndex((candidate) => candidate.id === profile.id) ===
+            index
+        )
+        .slice(0, MAX_AD_GREETINGS);
+    }
+    migrated.settings.welcomeRoutingMode =
+      parsed.settings?.welcomeRoutingMode === "general" ? "general" : "smart";
     migrated.settings.afkEnabled = Boolean(migrated.settings.afkEnabled);
     migrated.settings.afkMessage =
       String(migrated.settings.afkMessage || defaultSettings.afkMessage).trim() ||
@@ -654,6 +743,8 @@ class JsonStore {
         authenticatorMigration.changed ||
         countryGreetingsMigrated ||
         countryPriceBooksMigrated ||
+        adGreetingsMigrated ||
+        welcomeRoutingMigrated ||
         aiConfigMigrated
     };
   }
@@ -761,7 +852,9 @@ class JsonStore {
       "afkEnabled",
       "afkMessage",
       "greetingMessages",
-      "countryGreetings"
+      "countryGreetings",
+      "welcomeRoutingMode",
+      "adGreetings"
     ];
 
     for (const key of allowed) {
@@ -785,6 +878,20 @@ class JsonStore {
         this.data.settings.countryGreetings = normalizeCountryGreetings(
           patch[key]
         );
+        continue;
+      }
+
+      if (key === "adGreetings") {
+        this.data.settings.adGreetings = normalizeAdGreetings(patch[key]);
+        continue;
+      }
+
+      if (key === "welcomeRoutingMode") {
+        const mode = String(patch[key] || "").trim();
+        if (!new Set(["smart", "general"]).has(mode)) {
+          throw new Error("El modo de bienvenida no es válido.");
+        }
+        this.data.settings.welcomeRoutingMode = mode;
         continue;
       }
 

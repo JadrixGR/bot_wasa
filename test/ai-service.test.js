@@ -275,6 +275,24 @@ test("elige precios argentinos exactos para +54 sin mezclar pesos mexicanos", ()
   assert.doesNotMatch(prompt, /Gemini Pro: MX\$/);
 });
 
+test("la oferta del anuncio queda como contexto prioritario para la IA", () => {
+  const prompt = buildUserPrompt(
+    createInitialData(),
+    "¿Cuánto cuesta el Plan Pro del anuncio?",
+    {
+      localCountry: "Perú",
+      localCallingCode: "+51",
+      localCurrency: "Soles peruanos (PEN)",
+      welcomeAdGreetingId: "ad-chatgpt-personal-plan-pro"
+    }
+  );
+
+  assert.match(prompt, /CAMPAÑA DE ORIGEN CONFIRMADA: ChatGPT Personal y Plan Pro/);
+  assert.match(prompt, /precios y condiciones.*prioridad/i);
+  assert.match(prompt, /Plan Pro — S\/45 al mes/);
+  assert.match(prompt, /ChatGPT Personal — S\/30 al mes/);
+});
+
 test("si Gemini corta por tokens repite la consulta con más espacio", async () => {
   const store = makeStore();
   const requests = [];
