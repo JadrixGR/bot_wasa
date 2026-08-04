@@ -1096,9 +1096,12 @@ class WhatsAppService {
     });
     this.store.save();
 
+    const customerPhone = await this.#resolveCustomerPhone(socket, message);
+
     const result = await this.engine.handleIncoming({
       chatId,
       alternateChatId: message.key.remoteJidAlt || "",
+      customerPhone: customerPhone || "",
       body,
       hasMedia,
       mediaType: type.replace(/Message$/, ""),

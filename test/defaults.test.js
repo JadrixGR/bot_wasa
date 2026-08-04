@@ -68,6 +68,10 @@ test("la V4.7 usa el modo de bienvenida única", () => {
   assert.equal(defaultSettings.chargeStartTime, "09:00");
   assert.equal(defaultSettings.afkEnabled, false);
   assert.match(defaultSettings.afkMessage, /fuera del horario/i);
+  assert.equal(defaultSettings.countryGreetings.length, 1);
+  assert.equal(defaultSettings.countryGreetings[0].callingCode, "+51");
+  assert.equal(defaultSettings.countryGreetings[0].country, "Perú");
+  assert.equal(defaultSettings.countryGreetings[0].messages.length, 3);
 });
 
 test("incluye respuestas locales para consultas frecuentes aun sin OpenAI", () => {

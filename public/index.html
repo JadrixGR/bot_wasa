@@ -415,18 +415,43 @@
             <div>
               <p class="eyebrow">CONTENIDO DEL BOT</p>
               <h2>Mensajes automáticos</h2>
-              <p class="muted">Edita la bienvenida, el recordatorio de renovación y la cobranza.</p>
+              <p class="muted">Personaliza la bienvenida por país, el recordatorio de renovación y la cobranza.</p>
             </div>
             <button id="saveSettingsButton" class="button primary" type="button">Guardar cambios</button>
           </div>
 
           <div class="notice mode-notice">
-            <strong>Modo solo bienvenida:</strong> un contacto nuevo recibe estos tres mensajes una sola vez. Después, el bot no responde y deja sus siguientes mensajes sin leer para que puedas atenderlos manualmente. Los clientes registrados únicamente reciben los recordatorios y cobranzas que actives.
+            <strong>Detección automática:</strong> el bot reconoce el país por el prefijo del número de WhatsApp, por ejemplo <code>+51</code> para Perú o <code>+54</code> para Argentina, y envía la secuencia configurada para ese país una sola vez.
           </div>
+
+          <article class="panel country-greetings-panel">
+            <div class="country-greetings-heading">
+              <div>
+                <span class="pill violet">Por prefijo internacional</span>
+                <h3>Bienvenidas y precios por país</h3>
+                <p>Edita tres mensajes independientes para cada moneda. Los precios se escriben directamente en los mensajes y no se convierten automáticamente.</p>
+              </div>
+              <button id="newCountryGreetingButton" class="button primary" type="button">+ Agregar país</button>
+            </div>
+            <div class="country-greeting-flow" aria-label="Funcionamiento de las bienvenidas por país">
+              <span><b>1</b> Llega un número</span>
+              <i aria-hidden="true">→</i>
+              <span><b>2</b> Se detecta el prefijo</span>
+              <i aria-hidden="true">→</i>
+              <span><b>3</b> Se envían sus 3 mensajes</span>
+            </div>
+            <div id="countryGreetingGrid" class="country-greeting-grid"></div>
+            <div id="countryGreetingEmpty" class="country-greeting-empty hidden">
+              <strong>No hay países configurados.</strong>
+              <span>Se usará la bienvenida predeterminada hasta que agregues uno.</span>
+              <button class="button secondary" data-country-greeting-new type="button">Configurar primer país</button>
+            </div>
+          </article>
 
           <div class="two-column settings-grid">
             <article class="panel">
-              <div class="panel-heading"><h3>Secuencia inicial</h3><span class="pill blue">3 mensajes</span></div>
+              <div class="panel-heading"><h3>Bienvenida predeterminada</h3><span class="pill blue">Respaldo</span></div>
+              <div class="notice country-fallback-notice">Se usa cuando el número no coincide con ningún país activo. Así ningún contacto nuevo queda sin respuesta.</div>
               <label>Mensaje 1 · Catálogo<textarea id="greeting1" rows="12"></textarea><small>Se envía primero y aparece “escribiendo…” antes del mensaje.</small></label>
               <label>Mensaje 2 · Combos<textarea id="greeting2" rows="9"></textarea><small>Se envía después del catálogo, como un mensaje separado.</small></label>
               <label>Mensaje 3 · Entrega y soporte<textarea id="greeting3" rows="8"></textarea><small>Tercer y último mensaje de la secuencia inicial.</small></label>
@@ -753,6 +778,62 @@
         </div>
       </form>
     </dialog>
+
+    <dialog id="countryGreetingDialog" class="country-greeting-dialog">
+      <form id="countryGreetingForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">BIENVENIDA LOCAL</p><h2 id="countryGreetingDialogTitle">Agregar país</h2></div>
+          <button class="icon-button country-greeting-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="countryGreetingId" type="hidden">
+        <div class="form-grid">
+          <label>
+            País
+            <input id="countryGreetingCountry" type="text" maxlength="80" list="countryGreetingOptions" placeholder="Argentina" autocomplete="off" required>
+          </label>
+          <label>
+            Prefijo internacional
+            <input id="countryGreetingCallingCode" type="text" maxlength="7" inputmode="tel" placeholder="+54" required>
+            <small>Puede ser específico, por ejemplo +1809. Gana el prefijo más largo.</small>
+          </label>
+          <label class="span-2">
+            Moneda y símbolo
+            <input id="countryGreetingCurrency" type="text" maxlength="40" placeholder="ARS ($)" required>
+            <small>Es una referencia visual; escribe los precios locales dentro de cada mensaje.</small>
+          </label>
+        </div>
+        <section class="country-greeting-editor" aria-labelledby="countryGreetingMessagesTitle">
+          <div class="country-greeting-editor-heading">
+            <div><span class="editor-step">3</span><div><h3 id="countryGreetingMessagesTitle">Mensajes para este país</h3><p>Se enviarán una sola vez y exactamente en este orden.</p></div></div>
+            <span class="pill blue">3 mensajes</span>
+          </div>
+          <label>Mensaje 1 · Catálogo y precios<textarea id="countryGreeting1" rows="9" required></textarea></label>
+          <label>Mensaje 2 · Planes o promociones<textarea id="countryGreeting2" rows="7" required></textarea></label>
+          <label>Mensaje 3 · Entrega y soporte<textarea id="countryGreeting3" rows="6" required></textarea></label>
+        </section>
+        <label class="toggle-row country-greeting-enable-row">
+          <input id="countryGreetingEnabled" type="checkbox" checked>
+          <span><strong>Bienvenida activa para este prefijo</strong><small>Si la desactivas, el bot usará la bienvenida predeterminada.</small></span>
+        </label>
+        <div class="notice country-greeting-dialog-notice">
+          El prefijo solo selecciona el contenido. No se consulta ninguna API de divisas ni se cambia la lógica de cobros.
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary country-greeting-close" type="button">Cancelar</button>
+          <button id="saveCountryGreetingButton" class="button primary" type="submit">Guardar país</button>
+        </div>
+      </form>
+    </dialog>
+
+    <datalist id="countryGreetingOptions">
+      <option value="Perú"></option><option value="Argentina"></option><option value="México"></option>
+      <option value="Colombia"></option><option value="Chile"></option><option value="Ecuador"></option>
+      <option value="Bolivia"></option><option value="Brasil"></option><option value="Uruguay"></option>
+      <option value="Paraguay"></option><option value="Venezuela"></option><option value="Guatemala"></option>
+      <option value="El Salvador"></option><option value="Honduras"></option><option value="Nicaragua"></option>
+      <option value="Costa Rica"></option><option value="Panamá"></option><option value="República Dominicana"></option>
+      <option value="Estados Unidos"></option><option value="España"></option>
+    </datalist>
 
     <dialog id="quickReplyDialog" class="quick-reply-dialog">
       <form id="quickReplyForm">

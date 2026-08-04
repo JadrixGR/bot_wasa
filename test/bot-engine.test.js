@@ -2,7 +2,11 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { BotEngine, normalizeText } = require("../src/bot-engine");
+const {
+  BotEngine,
+  normalizeText,
+  resolveWelcomeProfile
+} = require("../src/bot-engine");
 const { createInitialData } = require("../src/defaults");
 
 function makeHarness(conversation = {}, registeredClient = null) {
@@ -179,4 +183,175 @@ test("el modo AFK también informa a un cliente registrado", async () => {
   assert.equal(result.action, "afk-reply");
   assert.equal(result.clientId, "cliente-afk");
   assert.deepEqual(sent, ["Volvemos mañana a las 9 AM."]);
+});
+
+test("selecciona la bienvenida de Argentina para un número +54", async () => {
+  const { engine, sent, data, conversations } = makeHarness();
+  data.settings.countryGreetings.push({
+    id: "argentina-54",
+    country: "Argentina",
+    callingCode: "+54",
+    currency: "ARS ($)",
+    enabled: true,
+    messages: ["ARG catálogo", "ARG combos", "ARG soporte"]
+  });
+
+  const result = await engine.handleIncoming({
+    chatId: "5491122334455@s.whatsapp.net",
+    customerPhone: "5491122334455",
+    body: "Hola"
+  });
+
+  assert.deepEqual(sent, ["ARG catálogo", "ARG combos", "ARG soporte"]);
+  assert.equal(result.country, "Argentina");
+  assert.equal(result.callingCode, "+54");
+  assert.equal(result.usedFallback, false);
+  assert.equal(
+    conversations["5491122334455@s.whatsapp.net"].welcomeCountryGreetingId,
+    "argentina-54"
+  );
+});
+
+test("usa el número alternativo cuando WhatsApp entrega un chat LID", async () => {
+  const { engine, sent, data, conversations } = makeHarness();
+  data.settings.countryGreetings[0].messages = [
+    "PER catálogo",
+    "PER combos",
+    "PER soporte"
+  ];
+
+  const result = await engine.handleIncoming({
+    chatId: "100000000123@lid",
+    alternateChatId: "51987654321@s.whatsapp.net",
+    body: "Hola"
+  });
+
+  assert.deepEqual(sent, ["PER catálogo", "PER combos", "PER soporte"]);
+  assert.equal(result.country, "Perú");
+  assert.equal(
+    conversations["100000000123@lid"].welcomeCallingCode,
+    "+51"
+  );
+});
+
+test("usa la bienvenida predeterminada si no existe un país coincidente", async () => {
+  const { engine, sent, data } = makeHarness();
+  data.settings.greetingMessages = [
+    "GENERAL catálogo",
+    "GENERAL combos",
+    "GENERAL soporte"
+  ];
+
+  const result = await engine.handleIncoming({
+    chatId: "34600111222@s.whatsapp.net",
+    customerPhone: "34600111222",
+    body: "Hola"
+  });
+
+  assert.deepEqual(sent, [
+    "GENERAL catálogo",
+    "GENERAL combos",
+    "GENERAL soporte"
+  ]);
+  assert.equal(result.country, null);
+  assert.equal(result.usedFallback, true);
+});
+
+test("prefiere el prefijo internacional más específico", () => {
+  const result = resolveWelcomeProfile(
+    {
+      greetingMessages: ["general 1", "general 2", "general 3"],
+      countryGreetings: [
+        {
+          id: "usa-1",
+          country: "Estados Unidos",
+          callingCode: "+1",
+          enabled: true,
+          messages: ["USA 1", "USA 2", "USA 3"]
+        },
+        {
+          id: "do-1809",
+          country: "República Dominicana",
+          callingCode: "+1809",
+          enabled: true,
+          messages: ["DO 1", "DO 2", "DO 3"]
+        }
+      ]
+    },
+    { customerPhone: "18095550199" }
+  );
+
+  assert.equal(result.profile.id, "do-1809");
+  assert.deepEqual(result.messages, ["DO 1", "DO 2", "DO 3"]);
+});
+
+test("un país desactivado cae en la bienvenida predeterminada", () => {
+  const result = resolveWelcomeProfile(
+    {
+      greetingMessages: ["general 1", "general 2", "general 3"],
+      countryGreetings: [
+        {
+          id: "argentina-54",
+          country: "Argentina",
+          callingCode: "+54",
+          enabled: false,
+          messages: ["ARG 1", "ARG 2", "ARG 3"]
+        }
+      ]
+    },
+    { customerPhone: "5491122334455" }
+  );
+
+  assert.equal(result.profile, null);
+  assert.deepEqual(result.messages, ["general 1", "general 2", "general 3"]);
+});
+
+test("ignora un identificador LID alternativo si el chat contiene el número real", () => {
+  const result = resolveWelcomeProfile(
+    {
+      greetingMessages: ["general 1", "general 2", "general 3"],
+      countryGreetings: [
+        {
+          id: "peru-51",
+          country: "Perú",
+          callingCode: "+51",
+          enabled: true,
+          messages: ["PER 1", "PER 2", "PER 3"]
+        }
+      ]
+    },
+    {
+      alternateChatId: "100000000000@lid",
+      chatId: "51987654321@s.whatsapp.net"
+    }
+  );
+
+  assert.equal(result.profile.id, "peru-51");
+  assert.deepEqual(result.messages, ["PER 1", "PER 2", "PER 3"]);
+});
+
+test("al reanudar conserva el país elegido aunque el número coincida con otro", async () => {
+  const conversation = {
+    welcomeMessagesSent: 1,
+    welcomeCountryGreetingId: "argentina-54"
+  };
+  const { engine, sent, data } = makeHarness(conversation);
+  data.settings.countryGreetings.push({
+    id: "argentina-54",
+    country: "Argentina",
+    callingCode: "+54",
+    currency: "ARS ($)",
+    enabled: true,
+    messages: ["ARG 1", "ARG 2", "ARG 3"]
+  });
+
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    customerPhone: "51900000000",
+    body: "Continúa"
+  });
+
+  assert.deepEqual(sent, ["ARG 2", "ARG 3"]);
+  assert.equal(result.country, "Argentina");
+  assert.equal(result.action, "welcome-resumed");
 });

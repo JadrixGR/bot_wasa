@@ -114,13 +114,27 @@ Bot de WhatsApp con panel privado para dar una bienvenida única, registrar clie
 
 La V4.9.1 funciona en modo **solo bienvenida**:
 
-1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales.
+1. El primer mensaje de un contacto nuevo activa los tres mensajes iniciales del país que coincide con su prefijo internacional.
 2. Los tres se envían por separado, mostrando “escribiendo…” y una pequeña demora antes de cada envío.
 3. Después de completar esa secuencia, el bot no vuelve a responder los mensajes entrantes de ese contacto y los deja sin leer para que aparezcan pendientes de atención manual.
 4. Si el número ya está registrado como cliente, sus respuestas tampoco activan la bienvenida.
 5. Desde ese momento, el bot solamente envía recordatorios o cobranzas programadas desde el panel.
 
-El contenido de los tres mensajes iniciales puede editarse en **Mensajes automáticos**. Los datos antiguos de productos y entrenamiento se conservan al actualizar, pero no generan respuestas en este modo. `OPENAI_API_KEY` no es necesaria para la bienvenida ni para las renovaciones.
+El contenido de los tres mensajes iniciales puede editarse en **Mensajes automáticos**. Allí también puedes crear perfiles por país, por ejemplo `+51` para Perú y `+54` para Argentina, con moneda y tres mensajes propios. Si no existe una coincidencia activa, el bot usa la bienvenida predeterminada. Los datos antiguos de productos y entrenamiento se conservan al actualizar, pero no generan respuestas en este modo. `OPENAI_API_KEY` no es necesaria para la bienvenida ni para las renovaciones.
+
+## Bienvenidas y precios por país
+
+En **Mensajes automáticos → Bienvenidas y precios por país** puedes:
+
+- Agregar cualquier país con su prefijo internacional y una referencia de moneda.
+- Escribir tres mensajes propios con los precios locales de ese país.
+- Activar o desactivar un perfil sin eliminarlo.
+- Editar o eliminar perfiles desde sus tarjetas.
+- Mantener una bienvenida predeterminada para números sin coincidencia.
+
+El país se detecta únicamente desde el número real de WhatsApp; también funciona cuando WhatsApp entrega primero un identificador LID y el número aparece como identificador alternativo. Cuando varios perfiles pueden coincidir, se usa el prefijo más específico: por ejemplo, `+1809` tiene prioridad sobre `+1`.
+
+La moneda es una etiqueta informativa y el bot no consulta cotizaciones ni convierte importes automáticamente. Esto permite que tú controles exactamente cada precio escrito en los tres mensajes. Una instalación anterior recibe automáticamente un perfil de Perú (`+51`) con sus tres mensajes actuales, sin perder su configuración.
 
 ## Registro rápido mediante comandos
 
@@ -201,7 +215,8 @@ No elimines el disco persistente, no cambies su punto de montaje y no crees otro
 
 En **Mensajes automáticos** puedes editar:
 
-- Los tres mensajes de bienvenida.
+- La bienvenida predeterminada de tres mensajes.
+- Las bienvenidas de tres mensajes por país, con prefijo y moneda propios.
 - El recordatorio de 2 días antes.
 - La cobranza del día de vencimiento.
 - La hora mínima para iniciar cobranzas, configurada inicialmente a las 09:00.

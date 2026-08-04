@@ -27,6 +27,7 @@ const CATALOG_VERSION = 4.92;
 const MAX_QUICK_REPLIES = 50;
 const MAX_QUICK_REPLY_IMAGES = 6;
 const MAX_QUICK_REPLY_TEXTS = 10;
+const MAX_COUNTRY_GREETINGS = 80;
 
 function uniqueAuthenticatorCommand(baseCommand, usedCommands) {
   if (!usedCommands.has(baseCommand)) return baseCommand;
@@ -216,6 +217,67 @@ function normalizeQuickReplyRecord(input = {}) {
     createdAt: source.createdAt || new Date().toISOString(),
     updatedAt: source.updatedAt || new Date().toISOString()
   };
+}
+
+function normalizeCountryCallingCode(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 6);
+  if (!digits) {
+    throw new Error("Ingresa un prefijo internacional, por ejemplo +51 o +54.");
+  }
+  return `+${digits}`;
+}
+
+function normalizeCountryGreetingProfile(input = {}) {
+  const source = input && typeof input === "object" ? input : {};
+  const country = String(source.country || "").trim();
+  const callingCode = normalizeCountryCallingCode(source.callingCode);
+  const currency = String(source.currency || "").trim();
+  const messages = (Array.isArray(source.messages) ? source.messages : []).map(
+    (message) => String(message || "").trim()
+  );
+
+  if (!country) throw new Error("Ingresa el nombre del país.");
+  if (!currency) {
+    throw new Error("Ingresa la moneda que usarás en esta bienvenida.");
+  }
+  if (messages.length !== 3 || messages.some((message) => !message)) {
+    throw new Error(
+      `La bienvenida de ${country} debe contener exactamente 3 mensajes.`
+    );
+  }
+
+  return {
+    id: String(source.id || crypto.randomUUID()),
+    country: country.slice(0, 80),
+    callingCode,
+    currency: currency.slice(0, 40),
+    enabled: source.enabled !== false,
+    messages: messages.map((message) => message.slice(0, 12000)),
+    createdAt: source.createdAt || new Date().toISOString(),
+    updatedAt: source.updatedAt || new Date().toISOString()
+  };
+}
+
+function normalizeCountryGreetings(profiles) {
+  if (!Array.isArray(profiles)) {
+    throw new Error("La configuración de bienvenidas por país no es válida.");
+  }
+  if (profiles.length > MAX_COUNTRY_GREETINGS) {
+    throw new Error(
+      `Puedes configurar como máximo ${MAX_COUNTRY_GREETINGS} países.`
+    );
+  }
+  const usedCodes = new Set();
+  return profiles.map((profile) => {
+    const normalized = normalizeCountryGreetingProfile(profile);
+    if (usedCodes.has(normalized.callingCode)) {
+      throw new Error(
+        `El prefijo ${normalized.callingCode} está repetido. Cada perfil debe usar uno diferente.`
+      );
+    }
+    usedCodes.add(normalized.callingCode);
+    return normalized;
+  });
 }
 
 function normalizeWhatsAppDigits(value) {
@@ -423,6 +485,39 @@ class JsonStore {
         })
       )
     };
+    const legacyGreetingMessages = Array.isArray(
+      migrated.settings.greetingMessages
+    )
+      ? migrated.settings.greetingMessages.slice(0, 3)
+      : structuredClone(defaultSettings.greetingMessages);
+    const countryGreetingsMigrated = !Array.isArray(
+      parsed.settings?.countryGreetings
+    );
+    if (!countryGreetingsMigrated) {
+      migrated.settings.countryGreetings = parsed.settings.countryGreetings
+        .map((profile) => {
+          try {
+            return normalizeCountryGreetingProfile(profile);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean)
+        .filter(
+          (profile, index, profiles) =>
+            profiles.findIndex(
+              (candidate) => candidate.callingCode === profile.callingCode
+            ) === index
+        )
+        .slice(0, MAX_COUNTRY_GREETINGS);
+    } else {
+      migrated.settings.countryGreetings = [
+        normalizeCountryGreetingProfile({
+          ...defaultSettings.countryGreetings[0],
+          messages: legacyGreetingMessages
+        })
+      ];
+    }
     migrated.settings.afkEnabled = Boolean(migrated.settings.afkEnabled);
     migrated.settings.afkMessage =
       String(migrated.settings.afkMessage || defaultSettings.afkMessage).trim() ||
@@ -439,7 +534,10 @@ class JsonStore {
     }
     return {
       data: migrated,
-      isUpgrade: isVersionUpgrade || authenticatorMigration.changed
+      isUpgrade:
+        isVersionUpgrade ||
+        authenticatorMigration.changed ||
+        countryGreetingsMigrated
     };
   }
 
@@ -544,7 +642,8 @@ class JsonStore {
       "reminderStartTime",
       "afkEnabled",
       "afkMessage",
-      "greetingMessages"
+      "greetingMessages",
+      "countryGreetings"
     ];
 
     for (const key of allowed) {
@@ -561,6 +660,13 @@ class JsonStore {
           throw new Error("Los 3 mensajes de bienvenida son obligatorios.");
         }
         this.data.settings[key] = messages;
+        continue;
+      }
+
+      if (key === "countryGreetings") {
+        this.data.settings.countryGreetings = normalizeCountryGreetings(
+          patch[key]
+        );
         continue;
       }
 

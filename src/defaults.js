@@ -386,7 +386,17 @@ const defaultSettings = {
   afkMessage:
     "👋 Gracias por escribir a JadrixServs. En este momento estamos fuera del horario de atención. Apenas volvamos, revisaremos tu mensaje y te responderemos por este chat.",
   afkSessionId: null,
-  greetingMessages: buildGreetingMessages()
+  greetingMessages: buildGreetingMessages(),
+  countryGreetings: [
+    {
+      id: "country-peru-51",
+      country: "Perú",
+      callingCode: "+51",
+      currency: "PEN (S/)",
+      enabled: true,
+      messages: buildGreetingMessages()
+    }
+  ]
 };
 
 function createInitialData() {

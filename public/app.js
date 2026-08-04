@@ -1370,6 +1370,199 @@ function renderAfkStatus(settings) {
     : "<strong>AFK desactivado:</strong> el bot mantiene el funcionamiento normal de bienvenida y renovaciones.";
 }
 
+const COUNTRY_GREETING_PRESETS = {
+  peru: { country: "Perú", callingCode: "+51", currency: "PEN (S/)" },
+  argentina: { country: "Argentina", callingCode: "+54", currency: "ARS ($)" },
+  mexico: { country: "México", callingCode: "+52", currency: "MXN ($)" },
+  colombia: { country: "Colombia", callingCode: "+57", currency: "COP ($)" },
+  chile: { country: "Chile", callingCode: "+56", currency: "CLP ($)" },
+  ecuador: { country: "Ecuador", callingCode: "+593", currency: "USD ($)" },
+  bolivia: { country: "Bolivia", callingCode: "+591", currency: "BOB (Bs)" },
+  brasil: { country: "Brasil", callingCode: "+55", currency: "BRL (R$)" },
+  uruguay: { country: "Uruguay", callingCode: "+598", currency: "UYU ($)" },
+  paraguay: { country: "Paraguay", callingCode: "+595", currency: "PYG (₲)" },
+  venezuela: { country: "Venezuela", callingCode: "+58", currency: "USD ($)" },
+  guatemala: { country: "Guatemala", callingCode: "+502", currency: "GTQ (Q)" },
+  "el salvador": { country: "El Salvador", callingCode: "+503", currency: "USD ($)" },
+  honduras: { country: "Honduras", callingCode: "+504", currency: "HNL (L)" },
+  nicaragua: { country: "Nicaragua", callingCode: "+505", currency: "NIO (C$)" },
+  "costa rica": { country: "Costa Rica", callingCode: "+506", currency: "CRC (₡)" },
+  panama: { country: "Panamá", callingCode: "+507", currency: "USD ($)" },
+  "republica dominicana": { country: "República Dominicana", callingCode: "+1809", currency: "DOP (RD$)" },
+  "estados unidos": { country: "Estados Unidos", callingCode: "+1", currency: "USD ($)" },
+  espana: { country: "España", callingCode: "+34", currency: "EUR (€)" }
+};
+
+function countryGreetingKey(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+}
+
+function normalizeCallingCodeInput(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 6);
+  return digits ? `+${digits}` : "";
+}
+
+function countryGreetings() {
+  return Array.isArray(state.settings?.countryGreetings)
+    ? state.settings.countryGreetings
+    : [];
+}
+
+function renderCountryGreetings() {
+  const grid = $("#countryGreetingGrid");
+  const empty = $("#countryGreetingEmpty");
+  if (!grid || !empty) return;
+  const profiles = [...countryGreetings()].sort((first, second) =>
+    String(first.country).localeCompare(String(second.country), "es")
+  );
+  empty.classList.toggle("hidden", profiles.length > 0);
+  grid.classList.toggle("hidden", profiles.length === 0);
+  grid.innerHTML = profiles.map((profile) => {
+    const preview = (profile.messages || [])[0] || "";
+    return `
+      <article class="country-greeting-card ${profile.enabled === false ? "is-disabled" : ""}">
+        <div class="country-greeting-card-top">
+          <span class="country-prefix">${escapeHtml(profile.callingCode)}</span>
+          <span class="pill ${profile.enabled === false ? "neutral" : "green"}">${profile.enabled === false ? "Inactiva" : "Activa"}</span>
+        </div>
+        <div class="country-greeting-card-title">
+          <div class="country-monogram" aria-hidden="true">${escapeHtml(String(profile.country || "P").charAt(0).toUpperCase())}</div>
+          <div><h4>${escapeHtml(profile.country)}</h4><span>${escapeHtml(profile.currency)}</span></div>
+        </div>
+        <p class="country-message-preview">${escapeHtml(preview)}</p>
+        <div class="country-greeting-card-footer">
+          <span>3 mensajes · coincidencia ${escapeHtml(profile.callingCode)}</span>
+          <div>
+            <button class="button secondary compact-button" data-country-greeting-action="edit" data-id="${escapeHtml(profile.id)}" type="button">Editar</button>
+            <button class="button danger-ghost compact-button" data-country-greeting-action="delete" data-id="${escapeHtml(profile.id)}" type="button">Eliminar</button>
+          </div>
+        </div>
+      </article>`;
+  }).join("");
+}
+
+function applyCountryGreetingPreset() {
+  const preset = COUNTRY_GREETING_PRESETS[
+    countryGreetingKey($("#countryGreetingCountry").value)
+  ];
+  if (!preset) return;
+  $("#countryGreetingCountry").value = preset.country;
+  $("#countryGreetingCallingCode").value = preset.callingCode;
+  $("#countryGreetingCurrency").value = preset.currency;
+}
+
+function openCountryGreetingDialog(profile = null) {
+  if (!state.settings) {
+    showToast("Espera a que termine de cargar la configuración.", true);
+    return;
+  }
+  const fallback = [
+    $("#greeting1")?.value || state.settings.greetingMessages?.[0] || "",
+    $("#greeting2")?.value || state.settings.greetingMessages?.[1] || "",
+    $("#greeting3")?.value || state.settings.greetingMessages?.[2] || ""
+  ];
+  const messages = profile?.messages || fallback;
+  $("#countryGreetingDialogTitle").textContent = profile
+    ? `Editar ${profile.country}`
+    : "Agregar país";
+  $("#countryGreetingId").value = profile?.id || "";
+  $("#countryGreetingCountry").value = profile?.country || "";
+  $("#countryGreetingCallingCode").value = profile?.callingCode || "";
+  $("#countryGreetingCurrency").value = profile?.currency || "";
+  $("#countryGreeting1").value = messages[0] || "";
+  $("#countryGreeting2").value = messages[1] || "";
+  $("#countryGreeting3").value = messages[2] || "";
+  $("#countryGreetingEnabled").checked = profile?.enabled !== false;
+  $("#saveCountryGreetingButton").textContent = profile
+    ? "Guardar cambios"
+    : "Guardar país";
+  $("#countryGreetingDialog").showModal();
+  requestAnimationFrame(() => $("#countryGreetingCountry").focus());
+}
+
+async function saveCountryGreeting(event) {
+  event.preventDefault();
+  const id = $("#countryGreetingId").value;
+  const callingCode = normalizeCallingCodeInput(
+    $("#countryGreetingCallingCode").value
+  );
+  $("#countryGreetingCallingCode").value = callingCode;
+  const duplicate = countryGreetings().find(
+    (profile) => profile.id !== id && profile.callingCode === callingCode
+  );
+  if (duplicate) {
+    showToast(`El prefijo ${callingCode} ya pertenece a ${duplicate.country}.`, true);
+    return;
+  }
+  const previous = countryGreetings().find((profile) => profile.id === id);
+  const now = new Date().toISOString();
+  const nextProfile = {
+    ...(previous || {}),
+    ...(id ? { id } : {}),
+    country: $("#countryGreetingCountry").value.trim(),
+    callingCode,
+    currency: $("#countryGreetingCurrency").value.trim(),
+    enabled: $("#countryGreetingEnabled").checked,
+    messages: [
+      $("#countryGreeting1").value,
+      $("#countryGreeting2").value,
+      $("#countryGreeting3").value
+    ],
+    createdAt: previous?.createdAt || now,
+    updatedAt: now
+  };
+  const profiles = previous
+    ? countryGreetings().map((profile) =>
+        profile.id === previous.id ? nextProfile : profile
+      )
+    : [...countryGreetings(), nextProfile];
+  const button = $("#saveCountryGreetingButton");
+  button.disabled = true;
+  button.textContent = "Guardando…";
+  try {
+    const payload = await api("/api/settings", {
+      method: "PUT",
+      body: { countryGreetings: profiles }
+    });
+    state.settings = payload.settings;
+    renderCountryGreetings();
+    $("#countryGreetingDialog").close();
+    showToast(
+      previous
+        ? `Bienvenida de ${nextProfile.country} actualizada.`
+        : `Bienvenida de ${nextProfile.country} creada.`
+    );
+  } catch (error) {
+    showToast(error.message, true);
+  } finally {
+    button.disabled = false;
+    button.textContent = previous ? "Guardar cambios" : "Guardar país";
+  }
+}
+
+async function deleteCountryGreeting(profile) {
+  if (!confirm(`¿Eliminar la bienvenida de ${profile.country} (${profile.callingCode})? Los contactos de ese país recibirán la bienvenida predeterminada.`)) return;
+  try {
+    const payload = await api("/api/settings", {
+      method: "PUT",
+      body: {
+        countryGreetings: countryGreetings().filter(
+          (item) => item.id !== profile.id
+        )
+      }
+    });
+    state.settings = payload.settings;
+    renderCountryGreetings();
+    showToast(`Bienvenida de ${profile.country} eliminada.`);
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 async function loadSettings() {
   const payload = await api("/api/settings");
   state.settings = payload.settings;
@@ -1389,6 +1582,7 @@ async function loadSettings() {
   $("#afkEnabled").checked = Boolean(payload.settings.afkEnabled);
   $("#afkMessage").value = payload.settings.afkMessage || "";
   renderAfkStatus(payload.settings);
+  renderCountryGreetings();
   $("#productOptions").innerHTML = [...payload.products, ...payload.plans]
     .map((item) => `<option value="${escapeHtml(item.name)}"></option>`).join("");
 }
@@ -1409,6 +1603,7 @@ async function saveSettings() {
       }
     });
     state.settings = payload.settings;
+    renderCountryGreetings();
     showToast("Mensajes y horario de cobranza guardados.");
   } catch (error) {
     showToast(error.message, true);
@@ -1736,6 +1931,40 @@ function bindEvents() {
     }
   });
   $("#saveSettingsButton").addEventListener("click", saveSettings);
+  $("#newCountryGreetingButton").addEventListener("click", () =>
+    openCountryGreetingDialog()
+  );
+  $$('[data-country-greeting-new]').forEach((button) =>
+    button.addEventListener("click", () => openCountryGreetingDialog())
+  );
+  $("#countryGreetingForm").addEventListener("submit", saveCountryGreeting);
+  $$(".country-greeting-close").forEach((button) =>
+    button.addEventListener("click", () => $("#countryGreetingDialog").close())
+  );
+  $("#countryGreetingCountry").addEventListener(
+    "input",
+    applyCountryGreetingPreset
+  );
+  $("#countryGreetingCallingCode").addEventListener("blur", () => {
+    $("#countryGreetingCallingCode").value = normalizeCallingCodeInput(
+      $("#countryGreetingCallingCode").value
+    );
+  });
+  $("#countryGreetingGrid").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-country-greeting-action]");
+    if (!button) return;
+    const profile = countryGreetings().find(
+      (item) => item.id === button.dataset.id
+    );
+    if (!profile) return;
+    if (button.dataset.countryGreetingAction === "edit") {
+      openCountryGreetingDialog(profile);
+      return;
+    }
+    if (button.dataset.countryGreetingAction === "delete") {
+      await deleteCountryGreeting(profile);
+    }
+  });
   $("#saveAfkButton").addEventListener("click", saveAfkSettings);
   $("#afkEnabled").addEventListener("change", () => {
     renderAfkStatus({ ...state.settings, afkEnabled: $("#afkEnabled").checked });

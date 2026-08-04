@@ -139,6 +139,131 @@ test("recupera los clientes desde la copia automática si la base se daña", () 
   }
 });
 
+test("guarda y recarga bienvenidas editables por país", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const settings = store.updateSettings({
+      countryGreetings: [
+        {
+          id: "peru-51",
+          country: "Perú",
+          callingCode: "51",
+          currency: "PEN (S/)",
+          enabled: true,
+          messages: ["Perú catálogo", "Perú combos", "Perú soporte"]
+        },
+        {
+          id: "argentina-54",
+          country: "Argentina",
+          callingCode: "+54",
+          currency: "ARS ($)",
+          enabled: false,
+          messages: ["Argentina catálogo", "Argentina combos", "Argentina soporte"]
+        }
+      ]
+    });
+
+    assert.equal(settings.countryGreetings[0].callingCode, "+51");
+    assert.equal(settings.countryGreetings[1].enabled, false);
+    const reloaded = new JsonStore(directory).getSettings();
+    assert.deepEqual(
+      reloaded.countryGreetings.map(({ country, callingCode, currency, enabled, messages }) => ({
+        country,
+        callingCode,
+        currency,
+        enabled,
+        messages
+      })),
+      settings.countryGreetings.map(({ country, callingCode, currency, enabled, messages }) => ({
+        country,
+        callingCode,
+        currency,
+        enabled,
+        messages
+      }))
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("rechaza prefijos repetidos y perfiles que no tengan tres mensajes", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    assert.throws(
+      () =>
+        store.updateSettings({
+          countryGreetings: [
+            {
+              country: "Perú",
+              callingCode: "+51",
+              currency: "PEN",
+              messages: ["uno", "dos", "tres"]
+            },
+            {
+              country: "Duplicado",
+              callingCode: "51",
+              currency: "PEN",
+              messages: ["uno", "dos", "tres"]
+            }
+          ]
+        }),
+      /prefijo \+51 está repetido/i
+    );
+    assert.throws(
+      () =>
+        store.updateSettings({
+          countryGreetings: [
+            {
+              country: "Argentina",
+              callingCode: "+54",
+              currency: "ARS",
+              messages: ["uno", "dos"]
+            }
+          ]
+        }),
+      /exactamente 3 mensajes/i
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("una instalación existente conserva sus tres mensajes dentro del perfil de Perú", () => {
+  const directory = temporaryDataDir();
+  try {
+    const initial = createInitialData();
+    delete initial.settings.countryGreetings;
+    initial.settings.greetingMessages = [
+      "catálogo peruano anterior",
+      "combos peruanos anteriores",
+      "soporte peruano anterior"
+    ];
+    fs.writeFileSync(
+      path.join(directory, "jadrixservs-v4.json"),
+      JSON.stringify(initial),
+      "utf8"
+    );
+
+    const settings = new JsonStore(directory).getSettings();
+    assert.equal(settings.countryGreetings.length, 1);
+    assert.equal(settings.countryGreetings[0].country, "Perú");
+    assert.equal(settings.countryGreetings[0].callingCode, "+51");
+    assert.deepEqual(
+      settings.countryGreetings[0].messages,
+      initial.settings.greetingMessages
+    );
+    const persisted = JSON.parse(
+      fs.readFileSync(path.join(directory, "jadrixservs-v4.json"), "utf8")
+    );
+    assert.equal(persisted.settings.countryGreetings[0].callingCode, "+51");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("un cliente nuevo activa el aviso de 2 días, deja la cobranza apagada y guarda su cuenta", () => {
   const directory = temporaryDataDir();
   try {

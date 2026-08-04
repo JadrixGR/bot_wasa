@@ -10,6 +10,61 @@ function normalizeText(text) {
     .trim();
 }
 
+function whatsappPhoneDigits(value) {
+  const localPart = String(value || "")
+    .split("@")[0]
+    .split(":")[0];
+  return localPart.replace(/\D/g, "");
+}
+
+function resolveWelcomeProfile(
+  settings,
+  { customerPhone = "", chatId = "", alternateChatId = "", profileId = "" } = {}
+) {
+  const profiles = Array.isArray(settings?.countryGreetings)
+    ? settings.countryGreetings
+    : [];
+  const savedProfile = profileId
+    ? profiles.find((profile) => String(profile.id) === String(profileId))
+    : null;
+  const phoneCandidates = [
+    customerPhone,
+    ...[alternateChatId, chatId].filter((value) =>
+      /@(s\.whatsapp\.net|c\.us)$/i.test(String(value || ""))
+    )
+  ]
+    .filter(Boolean)
+    .map(whatsappPhoneDigits)
+    .filter(Boolean);
+  const phoneDigits = phoneCandidates[0] || "";
+  const matchedProfile = savedProfile ||
+    profiles
+      .filter((profile) => profile.enabled !== false)
+      .map((profile) => ({
+        ...profile,
+        callingCodeDigits: String(profile.callingCode || "").replace(/\D/g, "")
+      }))
+      .filter(
+        (profile) =>
+          profile.callingCodeDigits &&
+          phoneDigits.startsWith(profile.callingCodeDigits)
+      )
+      .sort(
+        (first, second) =>
+          second.callingCodeDigits.length - first.callingCodeDigits.length
+      )[0] ||
+    null;
+  const fallbackMessages = Array.isArray(settings?.greetingMessages)
+    ? settings.greetingMessages
+    : [];
+
+  return {
+    profile: matchedProfile,
+    phoneDigits,
+    messages: (matchedProfile?.messages || fallbackMessages).slice(0, 3)
+  };
+}
+
 class BotEngine {
   constructor({ store, sendText }) {
     this.store = store;
@@ -19,6 +74,7 @@ class BotEngine {
   async handleIncoming({
     chatId,
     alternateChatId = "",
+    customerPhone = "",
     body = "",
     hasMedia = false,
     fromName = ""
@@ -99,11 +155,24 @@ class BotEngine {
       return { action: "welcome-already-sent" };
     }
 
-    const messages = settings.greetingMessages.slice(0, 3);
+    const welcome = resolveWelcomeProfile(settings, {
+      customerPhone,
+      chatId,
+      alternateChatId,
+      profileId: conversation.welcomeCountryGreetingId || ""
+    });
+    const messages = welcome.messages;
     const previousCount = Math.max(
       0,
       Math.min(3, Number(conversation.welcomeMessagesSent) || 0)
     );
+
+    updateConversations({
+      welcomeCountryGreetingId: welcome.profile?.id || null,
+      welcomeCountry: welcome.profile?.country || null,
+      welcomeCallingCode: welcome.profile?.callingCode || null,
+      welcomeCurrency: welcome.profile?.currency || null
+    });
 
     let sentNow = 0;
     for (let index = previousCount; index < messages.length; index += 1) {
@@ -121,18 +190,30 @@ class BotEngine {
     this.store.addLog(
       "welcome",
       `Bienvenida enviada a ${fromName || chatId}`,
-      { chatId, messages: sentNow }
+      {
+        chatId,
+        messages: sentNow,
+        country: welcome.profile?.country || null,
+        callingCode: welcome.profile?.callingCode || null,
+        currency: welcome.profile?.currency || null,
+        usedFallback: !welcome.profile
+      }
     );
     this.store.save();
 
     return {
       action: previousCount ? "welcome-resumed" : "welcome-sequence",
-      messages: sentNow
+      messages: sentNow,
+      country: welcome.profile?.country || null,
+      callingCode: welcome.profile?.callingCode || null,
+      usedFallback: !welcome.profile
     };
   }
 }
 
 module.exports = {
   BotEngine,
-  normalizeText
+  normalizeText,
+  resolveWelcomeProfile,
+  whatsappPhoneDigits
 };

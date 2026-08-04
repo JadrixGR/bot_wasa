@@ -4915,3 +4915,191 @@ html[data-theme="dark"] .quick-reply-text-row { background: rgba(13, 17, 34, 0.8
   .quick-reply-image-list,
   .quick-reply-pending-list { grid-template-columns: 1fr; }
 }
+
+/* Bienvenidas locales por prefijo internacional */
+.country-greetings-panel {
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 1.25rem;
+  background:
+    radial-gradient(circle at 94% 8%, color-mix(in srgb, var(--primary) 11%, transparent), transparent 17rem),
+    var(--panel);
+}
+.country-greetings-panel::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  content: "";
+  background: linear-gradient(180deg, #28c9ff, #6f6bff 52%, #a05cff);
+}
+.country-greetings-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+.country-greetings-heading > div { max-width: 48rem; }
+.country-greetings-heading h3 { margin: 0.65rem 0 0.35rem; font-size: 1.15rem; }
+.country-greetings-heading p { margin: 0; color: var(--muted); font-size: 0.78rem; line-height: 1.55; }
+.country-greeting-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 1.1rem 0;
+  padding: 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+}
+.country-greeting-flow span { display: inline-flex; align-items: center; gap: 0.45rem; color: var(--muted); font-size: 0.72rem; font-weight: 700; }
+.country-greeting-flow span b {
+  display: grid;
+  width: 1.45rem;
+  height: 1.45rem;
+  place-items: center;
+  border-radius: 0.45rem;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 13%, transparent);
+  font-size: 0.66rem;
+}
+.country-greeting-flow i { color: var(--primary); font-style: normal; }
+.country-greeting-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.8rem;
+}
+.country-greeting-card {
+  display: grid;
+  min-width: 0;
+  gap: 0.85rem;
+  padding: 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--panel) 96%, var(--primary) 4%);
+  box-shadow: 0 12px 26px rgba(13, 18, 39, 0.04);
+  transition: transform 190ms cubic-bezier(0.22, 1, 0.36, 1), border-color 190ms ease, box-shadow 190ms ease, opacity 190ms ease;
+}
+.country-greeting-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--line));
+  box-shadow: 0 16px 34px rgba(24, 33, 72, 0.1);
+}
+.country-greeting-card.is-disabled { opacity: 0.66; }
+.country-greeting-card-top,
+.country-greeting-card-footer,
+.country-greeting-card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+.country-prefix {
+  display: inline-flex;
+  min-height: 2rem;
+  align-items: center;
+  padding: 0.35rem 0.62rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--line));
+  border-radius: 0.6rem;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 9%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+.country-greeting-card-title { justify-content: flex-start; }
+.country-monogram {
+  display: grid;
+  flex: 0 0 auto;
+  width: 2.45rem;
+  height: 2.45rem;
+  place-items: center;
+  border-radius: 0.75rem;
+  color: white;
+  background: linear-gradient(135deg, #287cff, #7763ff 55%, #a05cff);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 22%, transparent);
+  font-weight: 900;
+}
+.country-greeting-card-title h4 { margin: 0 0 0.14rem; font-size: 0.88rem; }
+.country-greeting-card-title span { color: var(--muted); font-size: 0.7rem; }
+.country-message-preview {
+  display: -webkit-box;
+  min-height: 2.7rem;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+.country-greeting-card-footer {
+  align-items: flex-end;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.country-greeting-card-footer > span { color: var(--muted); font-size: 0.65rem; }
+.country-greeting-card-footer > div { display: flex; gap: 0.35rem; }
+.country-greeting-empty {
+  display: grid;
+  place-items: center;
+  gap: 0.35rem;
+  padding: 1.4rem;
+  border: 1px dashed var(--line);
+  border-radius: 0.95rem;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.75rem;
+}
+.country-greeting-empty strong { color: var(--ink); font-size: 0.88rem; }
+.country-greeting-empty .button { margin-top: 0.4rem; }
+.country-fallback-notice { font-size: 0.74rem; line-height: 1.5; }
+.country-greeting-dialog { width: min(58rem, calc(100vw - 2rem)); max-width: 58rem; overflow: hidden; }
+.country-greeting-dialog form { max-height: min(88vh, 58rem); overflow-y: auto; outline: none; overscroll-behavior: contain; }
+.country-greeting-editor {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--primary) 4%, var(--panel));
+}
+.country-greeting-editor label + label { padding-top: 0.15rem; }
+.country-greeting-editor-heading,
+.country-greeting-editor-heading > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+}
+.country-greeting-editor-heading h3 { margin: 0 0 0.2rem; }
+.country-greeting-editor-heading p { margin: 0; color: var(--muted); font-size: 0.72rem; }
+.country-greeting-enable-row { margin-top: 1rem; }
+.country-greeting-enable-row span { display: grid; gap: 0.2rem; }
+.country-greeting-dialog-notice { margin-top: 1rem; margin-bottom: 0; font-size: 0.72rem; }
+
+html[data-theme="dark"] .country-greetings-panel,
+html[data-theme="dark"] .country-greeting-card {
+  border-color: rgba(123, 132, 201, 0.22);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(67, 224, 255, 0.055), transparent 14rem),
+    linear-gradient(155deg, rgba(19, 25, 48, 0.94), rgba(8, 12, 26, 0.97));
+}
+html[data-theme="dark"] .country-greeting-card:hover {
+  border-color: rgba(111, 107, 255, 0.5);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.38), 0 0 24px rgba(111, 107, 255, 0.1);
+}
+html[data-theme="dark"] .country-greeting-editor { background: rgba(8, 12, 27, 0.58); }
+
+@media (max-width: 700px) {
+  .country-greetings-heading { flex-direction: column; }
+  .country-greetings-heading .button { width: 100%; }
+  .country-greeting-flow i { display: none; }
+  .country-greeting-flow { display: grid; grid-template-columns: 1fr; }
+  .country-greeting-grid { grid-template-columns: 1fr; }
+  .country-greeting-card-footer { align-items: stretch; flex-direction: column; }
+  .country-greeting-card-footer > div { display: grid; grid-template-columns: 1fr 1fr; }
+  .country-greeting-editor-heading { align-items: flex-start; flex-direction: column; }
+}
