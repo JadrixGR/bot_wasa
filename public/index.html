@@ -336,7 +336,7 @@
               <span class="pill blue">Solo tú</span>
             </div>
             <p class="muted">
-              Escribe el comando desde tu propio WhatsApp dentro del chat del cliente. El bot toma el número, crea al usuario como <strong>estimad@</strong> y calcula el vencimiento usando los días indicados.
+              Escribe el comando desde tu propio WhatsApp dentro del chat del cliente. El bot identifica automáticamente el número o <strong>@usuario</strong>, crea al cliente como <strong>estimad@</strong> y calcula el vencimiento usando los días indicados.
             </p>
             <div class="command-examples">
               <code>/planpro 30</code>
@@ -344,7 +344,7 @@
               <code>/geminipro 365</code>
             </div>
             <p class="microcopy">
-              Cada comando nuevo crea una compra independiente, incluso si repites el mismo servicio. Así, cada registro conserva su propia activación y vencimiento. Cada número puede tener hasta 2 compras o servicios registrados. Los clientes no pueden ejecutar estos comandos.
+              Cada comando nuevo crea una compra independiente, incluso si repites el mismo servicio. Así, cada registro conserva su propia activación y vencimiento. Cada contacto puede tener hasta 2 compras o servicios registrados. Los clientes no pueden ejecutar estos comandos.
             </p>
             <a class="button secondary" href="/COMANDOS-WHATSAPP-V4.8.txt" download>Descargar todos los comandos</a>
           </article>
@@ -393,19 +393,19 @@
           <div class="section-intro">
             <div>
               <p class="eyebrow">CONSULTA RÁPIDA</p>
-              <h2>Buscar cliente por celular</h2>
-              <p class="muted">Escribe el número para ver todos los servicios registrados y sus fechas de vencimiento.</p>
+              <h2>Buscar cliente por WhatsApp</h2>
+              <p class="muted">Escribe el número o @usuario para ver todos los servicios registrados y sus fechas de vencimiento.</p>
             </div>
           </div>
           <article class="panel lookup-panel">
             <form id="lookupForm" class="lookup-form">
               <label>
-                Número de celular o WhatsApp
-                <input id="lookupPhone" type="search" inputmode="tel" autocomplete="off" placeholder="Ejemplo: 921444991" required>
+                Número o @usuario de WhatsApp
+                <input id="lookupPhone" type="search" autocomplete="off" placeholder="Ejemplo: 921444991 o @josrn_69" required>
               </label>
               <button id="lookupButton" class="button primary" type="submit">Buscar cliente</button>
             </form>
-            <p class="microcopy">Puedes escribir los 9 dígitos de Perú o el número completo con código de país.</p>
+            <p class="microcopy">Puedes escribir los 9 dígitos de Perú, el número completo con código de país o el @usuario exactamente como aparece en WhatsApp.</p>
           </article>
           <div id="lookupResults" class="lookup-results">
             <div class="empty-state compact">
@@ -831,7 +831,7 @@
         <input id="clientId" type="hidden">
         <div class="form-grid">
           <label>Nombre<input id="clientName" type="text" required></label>
-          <label>WhatsApp<input id="clientWhatsapp" type="text" inputmode="tel" placeholder="921444991" required></label>
+          <label>WhatsApp: número o @usuario<input id="clientWhatsapp" type="text" autocomplete="off" placeholder="921444991 o @josrn_69" required></label>
           <label>Servicio o plan<input id="clientProduct" type="text" list="productOptions" required></label>
           <label>
             Cuenta asociada

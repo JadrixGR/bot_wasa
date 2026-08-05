@@ -483,12 +483,86 @@ function normalizeCountryPriceBooks(books, products = [], plans = []) {
 }
 
 function normalizeWhatsAppDigits(value) {
-  const localPart = String(value || "")
-    .split("@")[0]
-    .split(":")[0];
+  const raw = String(value || "").trim();
+  const server = raw.includes("@") ? raw.split("@").pop().toLowerCase() : "";
+  if (server && !["s.whatsapp.net", "c.us"].includes(server)) return "";
+  const localPart = raw.split("@")[0].split(":")[0];
   let digits = localPart.replace(/\D/g, "");
   if (digits.length === 9) digits = `51${digits}`;
   return digits;
+}
+
+function normalizeWhatsAppUsername(value, { allowBare = false } = {}) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw || (raw.includes("@") && !raw.startsWith("@"))) return "";
+  if (!allowBare && !raw.startsWith("@")) return "";
+  const username = raw.replace(/^@+/, "");
+  if (!/^[a-z0-9._-]{2,100}$/.test(username)) return "";
+  return `@${username}`;
+}
+
+function normalizeWhatsAppChatId(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  const match = raw.match(/^([^@]+)@(s\.whatsapp\.net|c\.us|lid|hosted\.lid)$/);
+  if (!match) return "";
+  const user = match[1].split(":")[0];
+  if (!user) return "";
+  const server = match[2] === "c.us" ? "s.whatsapp.net" : match[2];
+  return `${user}@${server}`;
+}
+
+function normalizeWhatsAppIdentity(input) {
+  const source = input && typeof input === "object" ? input : { whatsapp: input };
+  const direct = String(source.whatsapp || "").trim();
+  const whatsappChatId =
+    normalizeWhatsAppChatId(source.whatsappChatId) ||
+    normalizeWhatsAppChatId(direct);
+  const phoneCandidate =
+    normalizeWhatsAppDigits(source.whatsappPhone) ||
+    normalizeWhatsAppDigits(direct) ||
+    normalizeWhatsAppDigits(whatsappChatId);
+  const whatsappPhone =
+    phoneCandidate.length >= 10 && phoneCandidate.length <= 15
+      ? phoneCandidate
+      : "";
+  const whatsappUsername =
+    normalizeWhatsAppUsername(source.whatsappUsername, { allowBare: true }) ||
+    normalizeWhatsAppUsername(direct);
+  return {
+    whatsapp: whatsappPhone || whatsappUsername || whatsappChatId,
+    whatsappPhone,
+    whatsappUsername,
+    whatsappChatId
+  };
+}
+
+function whatsappIdentityKeys(...values) {
+  const keys = new Set();
+  for (const value of values.flat(Infinity)) {
+    const identity = normalizeWhatsAppIdentity(value);
+    if (identity.whatsappPhone) keys.add(`phone:${identity.whatsappPhone}`);
+    if (identity.whatsappUsername) {
+      keys.add(`username:${identity.whatsappUsername.slice(1)}`);
+    }
+    if (identity.whatsappChatId) keys.add(`chat:${identity.whatsappChatId}`);
+  }
+  return keys;
+}
+
+function identitiesOverlap(left, right) {
+  const leftKeys = whatsappIdentityKeys(left);
+  const rightKeys = whatsappIdentityKeys(right);
+  return [...leftKeys].some((key) => rightKeys.has(key));
+}
+
+function clientWhatsAppTarget(client) {
+  const identity = normalizeWhatsAppIdentity(client);
+  return (
+    identity.whatsappChatId ||
+    identity.whatsappPhone ||
+    identity.whatsappUsername ||
+    identity.whatsapp
+  );
 }
 
 class JsonStore {
@@ -689,6 +763,7 @@ class JsonStore {
       clients: Array.isArray(parsed.clients)
         ? parsed.clients.map((client) => ({
             ...client,
+            ...normalizeWhatsAppIdentity(client),
             accountReference: String(client.accountReference || ""),
             reminderDays: 2,
             autoReminder:
@@ -1853,15 +1928,42 @@ class JsonStore {
     return this.data.clients.find((client) => client.id === id) || null;
   }
 
+  enrichClientsWithWhatsAppIdentity(value) {
+    const identity = normalizeWhatsAppIdentity(value);
+    if (!identity.whatsapp) return 0;
+    let changed = 0;
+    for (const client of this.data.clients) {
+      if (!identitiesOverlap(client, identity)) continue;
+      const merged = normalizeWhatsAppIdentity({
+        ...client,
+        whatsappPhone: identity.whatsappPhone || client.whatsappPhone,
+        whatsappUsername: identity.whatsappUsername || client.whatsappUsername,
+        whatsappChatId: identity.whatsappChatId || client.whatsappChatId
+      });
+      if (
+        merged.whatsapp === client.whatsapp &&
+        merged.whatsappPhone === client.whatsappPhone &&
+        merged.whatsappUsername === client.whatsappUsername &&
+        merged.whatsappChatId === client.whatsappChatId
+      ) {
+        continue;
+      }
+      Object.assign(client, merged, { updatedAt: new Date().toISOString() });
+      changed += 1;
+    }
+    if (changed) this.save();
+    return changed;
+  }
+
   findClientsByWhatsApp(...values) {
-    const candidates = new Set(values.map(normalizeWhatsAppDigits).filter(Boolean));
+    const candidates = whatsappIdentityKeys(...values);
     if (!candidates.size) return [];
     return structuredClone(
       this.data.clients
         .filter(
           (client) =>
             !client.archived &&
-            candidates.has(normalizeWhatsAppDigits(client.whatsapp))
+            [...whatsappIdentityKeys(client)].some((key) => candidates.has(key))
         )
         .sort((a, b) => String(a.expiryDate || "").localeCompare(String(b.expiryDate || "")))
     );
@@ -1872,14 +1974,14 @@ class JsonStore {
   }
 
   findClientByWhatsAppAndProduct(whatsapp, product) {
-    const digits = normalizeWhatsAppDigits(whatsapp);
+    const identity = whatsappIdentityKeys(whatsapp);
     const wantedProduct = String(product || "").trim().toLowerCase();
-    if (!digits || !wantedProduct) return null;
+    if (!identity.size || !wantedProduct) return null;
     return (
       this.data.clients.find(
         (client) =>
           !client.archived &&
-          normalizeWhatsAppDigits(client.whatsapp) === digits &&
+          [...whatsappIdentityKeys(client)].some((key) => identity.has(key)) &&
           String(client.product || "").trim().toLowerCase() === wantedProduct
       ) || null
     );
@@ -1887,6 +1989,10 @@ class JsonStore {
 
   registerClientFromCommand({
     whatsapp,
+    whatsappPhone = "",
+    whatsappUsername = "",
+    whatsappChatId = "",
+    name = "estimad@",
     item,
     days,
     command,
@@ -1946,8 +2052,11 @@ class JsonStore {
 
     const client = this.createClient({
       ...commandFields,
-      name: "estimad@",
-      whatsapp: normalizeWhatsAppDigits(whatsapp),
+      name: String(name || "").trim() || "estimad@",
+      whatsapp,
+      whatsappPhone,
+      whatsappUsername,
+      whatsappChatId,
       accountReference: "",
       paymentMethod: "",
       startDate: today,
@@ -1973,13 +2082,13 @@ class JsonStore {
   }
 
   createClient(input) {
-    const whatsappDigits = normalizeWhatsAppDigits(input.whatsapp);
+    const identity = normalizeWhatsAppIdentity(input);
     const purchases = this.data.clients.filter(
       (client) =>
         !client.archived &&
-        normalizeWhatsAppDigits(client.whatsapp) === whatsappDigits
+        identitiesOverlap(client, identity)
     );
-    if (whatsappDigits && purchases.length >= MAX_PURCHASES_PER_PHONE) {
+    if (identity.whatsapp && purchases.length >= MAX_PURCHASES_PER_PHONE) {
       throw new Error(
         `Este número ya tiene ${MAX_PURCHASES_PER_PHONE} compras registradas. Elimina un registro o renueva uno de los servicios existentes.`
       );
@@ -2008,16 +2117,33 @@ class JsonStore {
     if (index === -1) throw new Error("Cliente no encontrado.");
 
     const current = this.data.clients[index];
-    const currentDigits = normalizeWhatsAppDigits(current.whatsapp);
-    const targetDigits = normalizeWhatsAppDigits(
-      input.whatsapp === undefined ? current.whatsapp : input.whatsapp
-    );
-    if (targetDigits && targetDigits !== currentDigits) {
+    const whatsappChanged =
+      input.whatsapp !== undefined &&
+      String(input.whatsapp || "").trim() !== String(current.whatsapp || "").trim();
+    const identityInput = whatsappChanged
+      ? {
+          ...input,
+          whatsappPhone: input.whatsappPhone || "",
+          whatsappUsername: input.whatsappUsername || "",
+          whatsappChatId: input.whatsappChatId || ""
+        }
+      : {
+          ...current,
+          ...input,
+          whatsappPhone: input.whatsappPhone || current.whatsappPhone || "",
+          whatsappUsername:
+            input.whatsappUsername || current.whatsappUsername || "",
+          whatsappChatId: input.whatsappChatId || current.whatsappChatId || ""
+        };
+    const currentIdentity = whatsappIdentityKeys(current);
+    const targetIdentity = whatsappIdentityKeys(identityInput);
+    const sameIdentity = [...targetIdentity].some((key) => currentIdentity.has(key));
+    if (targetIdentity.size && !sameIdentity) {
       const targetPurchases = this.data.clients.filter(
         (client) =>
           client.id !== id &&
           !client.archived &&
-          normalizeWhatsAppDigits(client.whatsapp) === targetDigits
+          identitiesOverlap(client, identityInput)
       );
       if (targetPurchases.length >= MAX_PURCHASES_PER_PHONE) {
         throw new Error(
@@ -2028,7 +2154,7 @@ class JsonStore {
 
     const updated = this.#normalizeClient({
       ...current,
-      ...input,
+      ...identityInput,
       id,
       updatedAt: new Date().toISOString()
     });
@@ -2056,20 +2182,22 @@ class JsonStore {
   }
 
   deleteClientsByWhatsApp(whatsapp) {
-    const digits = normalizeWhatsAppDigits(whatsapp);
-    if (!digits) throw new Error("Ingresa un número de WhatsApp válido.");
+    const identity = whatsappIdentityKeys(whatsapp);
+    if (!identity.size) {
+      throw new Error("Ingresa un número o @usuario de WhatsApp válido.");
+    }
     const deleted = this.data.clients.filter(
-      (client) => normalizeWhatsAppDigits(client.whatsapp) === digits
+      (client) => [...whatsappIdentityKeys(client)].some((key) => identity.has(key))
     );
-    if (!deleted.length) throw new Error("No encontramos registros para ese número.");
+    if (!deleted.length) throw new Error("No encontramos registros para ese contacto.");
     const deletedIds = new Set(deleted.map((client) => client.id));
     this.data.clients = this.data.clients.filter(
       (client) => !deletedIds.has(client.id)
     );
     this.addLog(
       "client-delete",
-      `Cliente eliminado por completo: ${digits} · ${deleted.length} registro(s)`,
-      { whatsapp: digits, count: deleted.length, clientIds: [...deletedIds] }
+      `Cliente eliminado por completo: ${whatsapp} · ${deleted.length} registro(s)`,
+      { whatsapp: String(whatsapp), count: deleted.length, clientIds: [...deletedIds] }
     );
     this.save();
     return structuredClone(deleted);
@@ -2101,11 +2229,11 @@ class JsonStore {
 
   #normalizeClient(input) {
     const name = String(input.name || "").trim();
-    const whatsapp = String(input.whatsapp || "").replace(/[^\d+]/g, "");
+    const identity = normalizeWhatsAppIdentity(input);
     const product = String(input.product || "").trim();
     if (!name) throw new Error("Ingresa el nombre del cliente.");
-    if (whatsapp.replace(/\D/g, "").length < 9) {
-      throw new Error("Ingresa un número de WhatsApp válido.");
+    if (!identity.whatsapp) {
+      throw new Error("Ingresa un número o @usuario de WhatsApp válido.");
     }
     if (!product) throw new Error("Selecciona o escribe un producto.");
     if (!input.startDate || !input.expiryDate) {
@@ -2115,7 +2243,7 @@ class JsonStore {
     return {
       id: input.id,
       name,
-      whatsapp,
+      ...identity,
       product,
       price: String(input.price || "").trim(),
       paymentMethod: String(input.paymentMethod || "").trim(),
@@ -2202,4 +2330,13 @@ class JsonStore {
   }
 }
 
-module.exports = { JsonStore, normalizeWhatsAppDigits, MAX_PURCHASES_PER_PHONE };
+module.exports = {
+  JsonStore,
+  normalizeWhatsAppDigits,
+  normalizeWhatsAppUsername,
+  normalizeWhatsAppChatId,
+  normalizeWhatsAppIdentity,
+  whatsappIdentityKeys,
+  clientWhatsAppTarget,
+  MAX_PURCHASES_PER_PHONE
+};

@@ -626,6 +626,34 @@ test("un comando crea al cliente estimad@ con días exactos y automatización se
   }
 });
 
+test("registra y encuentra un cliente con @usuario y LID cuando el teléfono está oculto", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const result = store.registerClientFromCommand({
+      whatsapp: "@josrn_69",
+      whatsappUsername: "@josrn_69",
+      whatsappChatId: "400000000000@lid",
+      item: { name: "CapCut Pro", price: "S/10" },
+      days: 30,
+      command: "/capcutpro",
+      commandMessageId: "usuario-oculto-1"
+    });
+
+    assert.equal(result.client.whatsapp, "@josrn_69");
+    assert.equal(result.client.whatsappPhone, "");
+    assert.equal(result.client.whatsappUsername, "@josrn_69");
+    assert.equal(result.client.whatsappChatId, "400000000000@lid");
+    assert.equal(store.findClientsByWhatsApp("@josrn_69").length, 1);
+    assert.equal(store.findClientsByWhatsApp("400000000000@lid").length, 1);
+
+    const reloaded = new JsonStore(directory);
+    assert.equal(reloaded.findClientsByWhatsApp("@josrn_69")[0].product, "CapCut Pro");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("cada comando nuevo crea una compra independiente aunque repita el producto", () => {
   const directory = temporaryDataDir();
   try {

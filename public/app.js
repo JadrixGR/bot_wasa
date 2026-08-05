@@ -444,7 +444,7 @@ async function copyTextToClipboard(value) {
 
 async function copyPhoneToClipboard(phone) {
   const value = String(phone || "").trim();
-  if (!value) throw new Error("No hay un número para copiar.");
+  if (!value) throw new Error("No hay una identidad de WhatsApp para copiar.");
   await copyTextToClipboard(value);
 }
 
@@ -1196,14 +1196,14 @@ async function saveAccess(event) {
   }
 }
 
-function renderLookupResults(clients, phone = "") {
+function renderLookupResults(clients, identity = "") {
   state.lookupClients = clients;
   const target = $("#lookupResults");
   if (!clients.length) {
     target.innerHTML = `
       <article class="panel empty-state compact">
-        <strong>No encontramos servicios para ${escapeHtml(phone || "ese número")}.</strong>
-        <span>Revisa los dígitos o registra al cliente desde Clientes y cobros.</span>
+        <strong>No encontramos servicios para ${escapeHtml(identity || "ese contacto")}.</strong>
+        <span>Revisa el número o @usuario, o registra al cliente desde Clientes y cobros.</span>
       </article>`;
     return;
   }
@@ -1237,15 +1237,15 @@ function renderLookupResults(clients, phone = "") {
 
 async function lookupClient(event) {
   event.preventDefault();
-  const phone = $("#lookupPhone").value.trim();
+  const identity = $("#lookupPhone").value.trim();
   const button = $("#lookupButton");
   button.disabled = true;
   button.textContent = "Buscando…";
   try {
-    const result = await api(`/api/clients/lookup?phone=${encodeURIComponent(phone)}`);
-    renderLookupResults(result.clients, result.phone);
+    const result = await api(`/api/clients/lookup?identity=${encodeURIComponent(identity)}`);
+    renderLookupResults(result.clients, result.identity || identity);
   } catch (error) {
-    renderLookupResults([], phone);
+    renderLookupResults([], identity);
     showToast(error.message, true);
   } finally {
     button.disabled = false;
@@ -1257,7 +1257,7 @@ function renderClients() {
   const query = $("#clientSearch").value.trim().toLowerCase();
   const status = $("#clientStatusFilter").value;
   const clients = state.clients.filter((client) => {
-    const haystack = `${client.whatsapp} ${client.product} ${client.accountReference || ""}`.toLowerCase();
+    const haystack = `${client.whatsapp} ${client.whatsappPhone || ""} ${client.whatsappUsername || ""} ${client.product} ${client.accountReference || ""}`.toLowerCase();
     return (!query || haystack.includes(query)) && (!status || client.status === status);
   });
   const table = $("#clientsTable");
@@ -1266,7 +1266,7 @@ function renderClients() {
     return `
     <tr class="client-row tone-${remaining.tone}" style="--row-index:${index}">
       <td>
-        <button class="phone-copy" data-action="copy-phone" data-id="${client.id}" type="button" title="Copiar número al portapapeles">
+        <button class="phone-copy" data-action="copy-phone" data-id="${client.id}" type="button" title="Copiar identidad de WhatsApp al portapapeles">
           ${escapeHtml(client.whatsapp)}
           <span>Haz clic para copiar</span>
         </button>
@@ -1289,6 +1289,16 @@ function renderClients() {
   }).join("");
   $("#clientsEmpty").classList.toggle("hidden", clients.length > 0);
   $(".table-wrap").classList.toggle("hidden", clients.length === 0);
+}
+
+function clientIdentityKey(client) {
+  return (
+    client?.whatsappChatId ||
+    client?.whatsappPhone ||
+    client?.whatsappUsername ||
+    client?.whatsapp ||
+    ""
+  );
 }
 
 function openClientDialog(client = null) {
@@ -2538,7 +2548,7 @@ function bindEvents() {
     if (button.dataset.action === "copy-phone") {
       try {
         await copyPhoneToClipboard(client.whatsapp);
-        showToast(`Número ${client.whatsapp} copiado.`);
+        showToast(`WhatsApp ${client.whatsapp} copiado.`);
       } catch (error) {
         showToast(error.message, true);
       }
@@ -2547,7 +2557,7 @@ function bindEvents() {
     if (button.dataset.action === "edit") openClientDialog(client);
     if (button.dataset.action === "renew") openRenewDialog(client);
     if (button.dataset.action === "delete-record") {
-      if (!confirm(`¿Eliminar solo el registro “${client.product}” del número ${client.whatsapp}? Esta acción no elimina sus otras compras.`)) return;
+      if (!confirm(`¿Eliminar solo el registro “${client.product}” del contacto ${client.whatsapp}? Esta acción no elimina sus otras compras.`)) return;
       try {
         await api(`/api/clients/${client.id}`, { method: "DELETE" });
         await Promise.all([loadClients(), refreshDashboardOnly()]);
@@ -2556,8 +2566,9 @@ function bindEvents() {
       return;
     }
     if (button.dataset.action === "delete-client") {
-      const purchases = state.clients.filter((item) => item.whatsapp === client.whatsapp).length;
-      if (!confirm(`¿Eliminar por completo al número ${client.whatsapp} y sus ${purchases} compra${purchases === 1 ? "" : "s"}? Esta acción elimina todos sus registros.`)) return;
+      const identityKey = clientIdentityKey(client);
+      const purchases = state.clients.filter((item) => clientIdentityKey(item) === identityKey).length;
+      if (!confirm(`¿Eliminar por completo al contacto ${client.whatsapp} y sus ${purchases} compra${purchases === 1 ? "" : "s"}? Esta acción elimina todos sus registros.`)) return;
       try {
         const result = await api(`/api/clients/by-phone/${encodeURIComponent(client.whatsapp)}`, { method: "DELETE" });
         await Promise.all([loadClients(), refreshDashboardOnly()]);

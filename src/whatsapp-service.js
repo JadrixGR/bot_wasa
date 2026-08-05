@@ -5,6 +5,13 @@ const path = require("node:path");
 const QRCode = require("qrcode");
 const { BotEngine } = require("./bot-engine");
 const { parseRegistrationCommand } = require("./command-registry");
+const {
+  normalizeWhatsAppChatId,
+  normalizeWhatsAppDigits,
+  normalizeWhatsAppIdentity,
+  normalizeWhatsAppUsername,
+  whatsappIdentityKeys
+} = require("./store");
 
 const BAILEYS_VERSION = "7.0.0-rc13";
 const FALLBACK_WA_WEB_VERSIONS = [
@@ -54,14 +61,12 @@ async function withTimeout(promise, milliseconds, message) {
 
 function normalizeWhatsAppId(value) {
   const raw = String(value || "").trim();
-  if (raw.includes("@")) {
-    const [localPart, server = ""] = raw.split("@");
-    const user = localPart.split(":")[0];
-    if (server === "c.us" || server === "s.whatsapp.net") {
-      return `${user}@s.whatsapp.net`;
-    }
-    return raw;
+  const chatId = normalizeWhatsAppChatId(raw);
+  if (chatId) return chatId;
+  if (normalizeWhatsAppUsername(raw)) {
+    throw new Error("El @usuario de WhatsApp todavía no está vinculado a un chat.");
   }
+  if (raw.includes("@")) throw new Error("Identificador de WhatsApp no válido.");
 
   let digits = raw.replace(/\D/g, "");
   if (digits.length === 9) digits = `51${digits}`;
@@ -385,6 +390,7 @@ class WhatsAppService {
     this.authState = null;
     this.engine = null;
     this.queues = new Map();
+    this.contactsByIdentity = new Map();
     this.generation = 0;
     this.initializePromise = null;
     this.restartPromise = null;
@@ -777,6 +783,27 @@ class WhatsAppService {
         this.#handleMessagesUpsert(socket, event);
       });
 
+      socket.ev.on("contacts.upsert", (contacts) => {
+        if (!this.#isCurrent(socket, generation)) return;
+        this.#rememberContacts(contacts);
+      });
+
+      socket.ev.on("contacts.update", (contacts) => {
+        if (!this.#isCurrent(socket, generation)) return;
+        this.#rememberContacts(contacts);
+      });
+
+      socket.ev.on("messaging-history.set", (history) => {
+        if (!this.#isCurrent(socket, generation)) return;
+        this.#rememberContacts(history?.contacts);
+      });
+
+      socket.ev.on("lid-mapping.update", ({ lid, pn } = {}) => {
+        if (!this.#isCurrent(socket, generation)) return;
+        const existing = this.#findCachedContact(lid, pn);
+        this.#rememberContact({ ...existing, id: lid || pn, lid, phoneNumber: pn });
+      });
+
       if (state.creds.registered) {
         this.#clearQrWatchdog();
         this.#setStatus({
@@ -1133,12 +1160,12 @@ class WhatsAppService {
     });
     this.store.save();
 
-    const customerPhone = await this.#resolveCustomerPhone(socket, message);
+    const customerIdentity = await this.#resolveCustomerIdentity(socket, message);
 
     const result = await this.engine.handleIncoming({
       chatId,
       alternateChatId: message.key.remoteJidAlt || "",
-      customerPhone: customerPhone || "",
+      customerPhone: customerIdentity.whatsappPhone || "",
       body,
       hasMedia,
       mediaType: type.replace(/Message$/, ""),
@@ -1157,22 +1184,124 @@ class WhatsAppService {
     }
   }
 
-  async #resolveCustomerPhone(socket, message) {
-    const candidates = [
-      message.key.remoteJidAlt,
-      message.key.remoteJid
-    ].filter(Boolean);
-    const phoneJid = candidates.find((jid) =>
-      /@(s\.whatsapp\.net|c\.us)$/.test(String(jid))
-    );
-    if (phoneJid) return extractPhone(phoneJid);
+  #findCachedContact(...values) {
+    for (const value of values.flat(Infinity).filter(Boolean)) {
+      const candidates = [value];
+      if (typeof value === "string") {
+        const username = normalizeWhatsAppUsername(value, { allowBare: true });
+        if (username) candidates.push({ whatsappUsername: username });
+      }
+      for (const key of whatsappIdentityKeys(...candidates)) {
+        const contact = this.contactsByIdentity.get(key);
+        if (contact) return contact;
+      }
+    }
+    return null;
+  }
 
-    const lid = candidates.find((jid) => String(jid).endsWith("@lid"));
-    if (!lid) return null;
-    const mapped = await socket.signalRepository?.lidMapping
-      ?.getPNForLID(lid)
-      .catch(() => null);
-    return extractPhone(mapped);
+  #rememberContact(contact) {
+    if (!contact || typeof contact !== "object") return null;
+    const existing = this.#findCachedContact(
+      contact.id,
+      contact.lid,
+      contact.phoneNumber,
+      contact.username
+    );
+    const whatsappUsername =
+      normalizeWhatsAppUsername(contact.username, { allowBare: true }) ||
+      existing?.whatsappUsername ||
+      "";
+    const whatsappChatId =
+      normalizeWhatsAppChatId(contact.lid) ||
+      normalizeWhatsAppChatId(contact.id) ||
+      normalizeWhatsAppChatId(contact.phoneNumber) ||
+      existing?.whatsappChatId ||
+      "";
+    const whatsappPhone =
+      normalizeWhatsAppDigits(contact.phoneNumber) ||
+      normalizeWhatsAppDigits(contact.id) ||
+      existing?.whatsappPhone ||
+      "";
+    const identity = normalizeWhatsAppIdentity({
+      whatsapp: whatsappPhone || whatsappUsername || whatsappChatId,
+      whatsappPhone,
+      whatsappUsername,
+      whatsappChatId
+    });
+    if (!identity.whatsapp) return null;
+    const normalized = {
+      ...(existing || {}),
+      ...contact,
+      ...identity,
+      username: whatsappUsername ? whatsappUsername.slice(1) : ""
+    };
+    for (const key of whatsappIdentityKeys(normalized)) {
+      this.contactsByIdentity.set(key, normalized);
+    }
+    this.store.enrichClientsWithWhatsAppIdentity?.(normalized);
+    return normalized;
+  }
+
+  #rememberContacts(contacts) {
+    if (!Array.isArray(contacts)) return;
+    for (const contact of contacts) this.#rememberContact(contact);
+  }
+
+  async #resolveCustomerIdentity(socket, message) {
+    const candidates = [
+      message?.key?.remoteJid,
+      message?.key?.remoteJidAlt
+    ].filter(Boolean);
+    const primaryChatId = normalizeWhatsAppChatId(message?.key?.remoteJid);
+    const phoneJid = candidates.find((jid) =>
+      /@(s\.whatsapp\.net|c\.us)$/i.test(String(jid))
+    );
+    let whatsappPhone = extractPhone(phoneJid) || "";
+    const lid = candidates.find((jid) =>
+      /@(lid|hosted\.lid)$/i.test(String(jid))
+    );
+    if (!whatsappPhone && lid) {
+      try {
+        const mapped = await socket.signalRepository?.lidMapping?.getPNForLID?.(lid);
+        whatsappPhone = extractPhone(mapped) || "";
+      } catch {
+        // Los usuarios con teléfono oculto pueden no tener un mapeo PN disponible.
+      }
+    }
+
+    const messageUsername =
+      normalizeWhatsAppUsername(
+        message?.key?.remoteJidUsername || message?.key?.participantUsername,
+        { allowBare: true }
+      ) || "";
+    const cached = this.#findCachedContact(
+      ...candidates,
+      messageUsername
+    );
+    const whatsappUsername =
+      messageUsername || cached?.whatsappUsername || "";
+    const whatsappChatId =
+      primaryChatId || cached?.whatsappChatId || normalizeWhatsAppChatId(lid);
+    return this.#rememberContact({
+      ...cached,
+      id: whatsappChatId || phoneJid,
+      lid: lid || cached?.lid,
+      phoneNumber: whatsappPhone
+        ? `${whatsappPhone}@s.whatsapp.net`
+        : cached?.phoneNumber,
+      username: whatsappUsername ? whatsappUsername.slice(1) : cached?.username,
+      notify: String(message?.pushName || cached?.notify || "")
+    }) || normalizeWhatsAppIdentity({
+      whatsapp: whatsappPhone || whatsappUsername || whatsappChatId,
+      whatsappPhone,
+      whatsappUsername,
+      whatsappChatId
+    });
+  }
+
+  async #resolveCustomerPhone(socket, message) {
+    const identity = await this.#resolveCustomerIdentity(socket, message);
+    return identity.whatsappPhone || null;
   }
 
   async #handleClientAuthenticatorCommand(socket, message) {
@@ -1302,11 +1431,11 @@ class WhatsAppService {
       return;
     }
 
-    const whatsapp = await this.#resolveCustomerPhone(socket, message);
-    if (!whatsapp) {
+    const identity = await this.#resolveCustomerIdentity(socket, message);
+    if (!identity.whatsapp) {
       this.store.addLog(
         "command",
-        `No se pudo aplicar ${parsed.command}: WhatsApp no entregó el número del cliente.`,
+        `No se pudo aplicar ${parsed.command}: WhatsApp no entregó una identidad válida del cliente.`,
         { chatId: message.key.remoteJid }
       );
       this.store.save();
@@ -1314,7 +1443,10 @@ class WhatsAppService {
     }
 
     const result = this.store.registerClientFromCommand({
-      whatsapp,
+      whatsapp: identity.whatsapp,
+      whatsappPhone: identity.whatsappPhone,
+      whatsappUsername: identity.whatsappUsername,
+      whatsappChatId: identity.whatsappChatId,
       item: parsed.item,
       days: parsed.days,
       command: parsed.command,
@@ -1462,11 +1594,88 @@ class WhatsAppService {
     }
   }
 
+  async #resolveUsernameTarget(value) {
+    const username = normalizeWhatsAppUsername(value, { allowBare: true });
+    if (!username) throw new Error("Nombre de usuario de WhatsApp no válido.");
+    const cached = this.#findCachedContact(username);
+    const cachedTarget =
+      normalizeWhatsAppChatId(cached?.whatsappChatId) ||
+      (cached?.whatsappPhone
+        ? normalizeWhatsAppId(cached.whatsappPhone)
+        : "");
+    if (cachedTarget) return cachedTarget;
+    if (!this.status.ready || !this.socket) {
+      throw new Error("WhatsApp debe estar conectado para buscar ese @usuario.");
+    }
+    const { USyncQuery, USyncUser } = this.baileys || {};
+    if (!USyncQuery || !USyncUser || !this.socket.executeUSyncQuery) {
+      throw new Error("La sesión actual no permite buscar nombres de usuario.");
+    }
+
+    const query = new USyncQuery()
+      .withContext("interactive")
+      .withContactProtocol()
+      .withLIDProtocol()
+      .withUsernameProtocol()
+      .withUser(new USyncUser().withUsername(username.slice(1)));
+    const result = await withTimeout(
+      this.socket.executeUSyncQuery(query),
+      10000,
+      `WhatsApp tardó demasiado en buscar ${username}.`
+    );
+    for (const item of result?.list || []) {
+      const target =
+        normalizeWhatsAppChatId(item?.lid) ||
+        normalizeWhatsAppChatId(item?.id);
+      if (!target) continue;
+      this.#rememberContact({
+        id: target,
+        lid: target.endsWith("@lid") || target.endsWith("@hosted.lid")
+          ? target
+          : undefined,
+        phoneNumber: /@s\.whatsapp\.net$/.test(target) ? target : undefined,
+        username: String(item?.username || username.slice(1))
+      });
+      return target;
+    }
+    throw new Error(
+      `No se encontró ${username}. Pide al cliente que escriba primero al bot y vuelve a intentarlo.`
+    );
+  }
+
+  async #resolveOutgoingTarget(value) {
+    const direct = normalizeWhatsAppChatId(value);
+    if (direct) return direct;
+    const phone = normalizeWhatsAppDigits(value);
+    if (phone.length >= 10) return normalizeWhatsAppId(phone);
+    const username = normalizeWhatsAppUsername(value, { allowBare: false });
+    if (username) return this.#resolveUsernameTarget(username);
+    return normalizeWhatsAppId(value);
+  }
+
+  async resolveIdentity(value) {
+    const identity = normalizeWhatsAppIdentity(value);
+    if (!identity.whatsappUsername || identity.whatsappChatId) return identity;
+    try {
+      const target = await this.#resolveUsernameTarget(identity.whatsappUsername);
+      const contact = this.#findCachedContact(target, identity.whatsappUsername);
+      return normalizeWhatsAppIdentity({
+        ...identity,
+        ...(contact || {}),
+        whatsapp: identity.whatsapp,
+        whatsappUsername: identity.whatsappUsername,
+        whatsappChatId: target
+      });
+    } catch {
+      return identity;
+    }
+  }
+
   async beginTyping(chatId, { recording = false } = {}) {
     if (!this.status.ready || !this.socket) return async () => undefined;
     const socket = this.socket;
-    const target = normalizeWhatsAppId(chatId);
     try {
+      const target = await this.#resolveOutgoingTarget(chatId);
       await socket.presenceSubscribe(target).catch(() => undefined);
       await socket.sendPresenceUpdate(recording ? "recording" : "composing", target);
       return async () => {
@@ -1483,7 +1692,7 @@ class WhatsAppService {
       throw new Error("WhatsApp todavía no está conectado.");
     }
     const socket = this.socket;
-    const target = normalizeWhatsAppId(chatId);
+    const target = await this.#resolveOutgoingTarget(chatId);
     const stopTyping = typingAlreadyStarted
       ? async () => undefined
       : await this.beginTyping(target);
@@ -1506,7 +1715,7 @@ class WhatsAppService {
     if (!fs.existsSync(resolved)) throw new Error("El archivo solicitado no existe.");
 
     const socket = this.socket;
-    const target = normalizeWhatsAppId(chatId);
+    const target = await this.#resolveOutgoingTarget(chatId);
     const extension = path.extname(resolved).toLowerCase();
     const mimeType = mimeTypeForExtension(extension);
     const buffer = await fs.promises.readFile(resolved);

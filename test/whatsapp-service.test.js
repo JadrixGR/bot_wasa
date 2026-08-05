@@ -1293,6 +1293,98 @@ test("resuelve el número desde el mapa LID si WhatsApp no entrega remoteJidAlt"
   assert.equal(registration.item.name, "HBO");
 });
 
+test("registra por @usuario y LID si WhatsApp oculta por completo el número", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  let registration;
+  store.registerClientFromCommand = (payload) => {
+    registration = payload;
+    return {
+      client: { id: "cliente-usuario" },
+      created: true,
+      duplicate: false
+    };
+  };
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "username-command-session"),
+    mediaDir: path.join(testRuntimeDir, "username-command-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "owner-command-username",
+          remoteJid: "500000000000@lid",
+          remoteJidUsername: "josrn_69",
+          fromMe: true
+        },
+        message: { conversation: "/capcutpro 30" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(registration.whatsapp, "@josrn_69");
+  assert.equal(registration.whatsappPhone, "");
+  assert.equal(registration.whatsappUsername, "@josrn_69");
+  assert.equal(registration.whatsappChatId, "500000000000@lid");
+  assert.equal(registration.item.name, "CapCut Pro");
+  assert.equal(
+    store.logs.some((entry) => entry.message.includes("no entregó el número")),
+    false
+  );
+});
+
+test("usa el @usuario recibido por sincronización de contactos para registrar el LID", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  let registration;
+  store.registerClientFromCommand = (payload) => {
+    registration = payload;
+    return {
+      client: { id: "cliente-contacto-sincronizado" },
+      created: true,
+      duplicate: false
+    };
+  };
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "contact-username-session"),
+    mediaDir: path.join(testRuntimeDir, "contact-username-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("contacts.upsert", [
+    {
+      id: "600000000000@lid",
+      lid: "600000000000@lid",
+      username: "cliente_nuevo"
+    }
+  ]);
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "owner-command-contact-username",
+          remoteJid: "600000000000@lid",
+          fromMe: true
+        },
+        message: { conversation: "/hbo 30" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(registration.whatsapp, "@cliente_nuevo");
+  assert.equal(registration.whatsappChatId, "600000000000@lid");
+});
+
 test("envía escribiendo, pausa y luego un solo mensaje", async () => {
   const fake = makeFakeBaileys({ registered: true });
   const service = makeService(fake);

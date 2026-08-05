@@ -7,7 +7,12 @@ const express = require("express");
 const helmet = require("helmet");
 const cookieSession = require("cookie-session");
 const { version: appVersion } = require("../package.json");
-const { JsonStore, normalizeWhatsAppDigits } = require("./store");
+const {
+  JsonStore,
+  clientWhatsAppTarget,
+  normalizeWhatsAppDigits,
+  normalizeWhatsAppIdentity
+} = require("./store");
 const { AiService } = require("./ai-service");
 const { AuthenticatorService } = require("./authenticator-service");
 const { WhatsAppService } = require("./whatsapp-service");
@@ -507,25 +512,39 @@ app.get("/api/clients", requireAuth, (req, res) => {
 });
 
 app.get("/api/clients/lookup", requireAuth, (req, res) => {
-  const phone = normalizeWhatsAppDigits(req.query.phone);
-  if (phone.length < 9) {
+  const requestedIdentity = String(req.query.identity || req.query.phone || "").trim();
+  const identity = normalizeWhatsAppIdentity(requestedIdentity);
+  if (!identity.whatsapp) {
     return res.status(400).json({
-      error: "Ingresa un número de celular válido para realizar la búsqueda."
+      error: "Ingresa un número o @usuario de WhatsApp válido para realizar la búsqueda."
     });
   }
   return res.json({
-    phone,
-    clients: store.findClientsByWhatsApp(phone).map(clientForPanel)
+    phone: identity.whatsappPhone,
+    identity: identity.whatsapp,
+    clients: store.findClientsByWhatsApp(identity).map(clientForPanel)
   });
 });
 
-app.post("/api/clients", requireAuth, (req, res) => {
-  res.status(201).json(store.createClient(req.body));
-});
+app.post(
+  "/api/clients",
+  requireAuth,
+  asyncRoute(async (req, res) => {
+    const identity = await whatsapp.resolveIdentity(req.body);
+    res.status(201).json(store.createClient({ ...req.body, ...identity }));
+  })
+);
 
-app.put("/api/clients/:id", requireAuth, (req, res) => {
-  res.json(store.updateClient(req.params.id, req.body));
-});
+app.put(
+  "/api/clients/:id",
+  requireAuth,
+  asyncRoute(async (req, res) => {
+    const identity = req.body.whatsapp === undefined
+      ? {}
+      : await whatsapp.resolveIdentity(req.body);
+    res.json(store.updateClient(req.params.id, { ...req.body, ...identity }));
+  })
+);
 
 app.post("/api/clients/:id/archive", requireAuth, (req, res) => {
   res.json(store.archiveClient(req.params.id));
@@ -533,7 +552,12 @@ app.post("/api/clients/:id/archive", requireAuth, (req, res) => {
 
 app.delete("/api/clients/by-phone/:phone", requireAuth, (req, res) => {
   const deleted = store.deleteClientsByWhatsApp(req.params.phone);
-  res.json({ ok: true, deleted: deleted.length, phone: normalizeWhatsAppDigits(req.params.phone) });
+  res.json({
+    ok: true,
+    deleted: deleted.length,
+    phone: normalizeWhatsAppDigits(req.params.phone),
+    identity: normalizeWhatsAppIdentity(req.params.phone).whatsapp
+  });
 });
 
 app.delete("/api/clients/:id", requireAuth, (req, res) => {
@@ -552,7 +576,7 @@ app.post(
     if (!client) return res.status(404).json({ error: "Cliente no encontrado." });
     const settings = store.getSettings();
     const message = fillTemplate(settings.reminderTemplate, client);
-    await whatsapp.sendText(client.whatsapp, message);
+    await whatsapp.sendText(clientWhatsAppTarget(client), message);
     store.updateClient(client.id, {
       lastReminderKey: `${client.expiryDate}:reminder:2`
     });
@@ -571,7 +595,7 @@ app.post(
     const client = store.getClient(req.params.id);
     if (!client) return res.status(404).json({ error: "Cliente no encontrado." });
     const message = fillTemplate(store.getSettings().chargeTemplate, client);
-    await whatsapp.sendText(client.whatsapp, message);
+    await whatsapp.sendText(clientWhatsAppTarget(client), message);
     store.updateClient(client.id, {
       lastChargeKey: `${client.expiryDate}:charge`
     });
@@ -619,7 +643,7 @@ app.post(
     for (const client of pending) {
       try {
         await whatsapp.sendText(
-          client.whatsapp,
+          clientWhatsAppTarget(client),
           fillTemplate(settings.chargeTemplate, client)
         );
         store.updateClient(client.id, {
@@ -920,6 +944,8 @@ app.get("/api/export/clients.csv", requireAuth, (_req, res) => {
   const columns = [
     "nombre",
     "whatsapp",
+    "usuario_whatsapp",
+    "id_chat_whatsapp",
     "producto",
     "cuenta_asociada",
     "precio",
@@ -938,6 +964,8 @@ app.get("/api/export/clients.csv", requireAuth, (_req, res) => {
     [
       client.name,
       client.whatsapp,
+      client.whatsappUsername,
+      client.whatsappChatId,
       client.product,
       client.accountReference,
       client.price,

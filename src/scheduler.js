@@ -1,5 +1,7 @@
 "use strict";
 
+const { clientWhatsAppTarget } = require("./store");
+
 const {
   daysBetween,
   todayInTimeZone,
@@ -116,7 +118,10 @@ class ReminderScheduler {
         try {
           const template =
             action.type === "reminder" ? settings.reminderTemplate : settings.chargeTemplate;
-          await this.whatsapp.sendText(client.whatsapp, fillTemplate(template, client));
+          await this.whatsapp.sendText(
+            clientWhatsAppTarget(client),
+            fillTemplate(template, client)
+          );
           this.store.updateClient(client.id, {
             ...(action.type === "reminder"
               ? { lastReminderKey: action.key }
