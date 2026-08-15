@@ -287,18 +287,46 @@ app.get("/api/authenticator/access", requireAuth, noStore, (req, res) => {
   res.json({ access: store.listAuthenticatorAccess(req.query.accountId || null) });
 });
 
+app.get("/api/authenticator/usage", requireAuth, noStore, (req, res) => {
+  res.json(
+    store.getAuthenticatorUsageReport({
+      accountId: req.query.accountId || null,
+      limit: req.query.limit || 500
+    })
+  );
+});
+
 app.post(
   "/api/authenticator/:id/access",
   requireAuth,
   noStore,
-  (req, res) => {
-    res.status(201).json(store.createAuthenticatorAccess(req.params.id, req.body));
-  }
+  asyncRoute(async (req, res) => {
+    const identity = await whatsapp.resolveIdentity(req.body);
+    res.status(201).json(
+      store.createAuthenticatorAccess(req.params.id, {
+        ...req.body,
+        ...identity
+      })
+    );
+  })
 );
 
-app.put("/api/authenticator/access/:accessId", requireAuth, noStore, (req, res) => {
-  res.json(store.updateAuthenticatorAccess(req.params.accessId, req.body));
-});
+app.put(
+  "/api/authenticator/access/:accessId",
+  requireAuth,
+  noStore,
+  asyncRoute(async (req, res) => {
+    const identity = req.body.whatsapp === undefined
+      ? {}
+      : await whatsapp.resolveIdentity(req.body);
+    res.json(
+      store.updateAuthenticatorAccess(req.params.accessId, {
+        ...req.body,
+        ...identity
+      })
+    );
+  })
+);
 
 app.delete("/api/authenticator/access/:accessId", requireAuth, noStore, (req, res) => {
   res.json({ ok: true, access: store.deleteAuthenticatorAccess(req.params.accessId) });

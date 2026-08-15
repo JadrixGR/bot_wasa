@@ -729,6 +729,7 @@
               <p class="muted">Guarda tus cuentas, genera sus códigos temporales y envíalos con un comando privado desde WhatsApp.</p>
             </div>
             <div class="button-row">
+              <button id="authenticatorUsageButton" class="button secondary" type="button">Control de uso</button>
               <button id="refreshAuthenticatorButton" class="button secondary" type="button">Actualizar códigos</button>
               <button id="newAuthenticatorButton" class="button primary" type="button">+ Nueva cuenta</button>
             </div>
@@ -752,7 +753,7 @@
           </article>
 
           <div class="notice authenticator-warning">
-            <strong>Comandos protegidos:</strong> siempre funcionan cuando tú los escribes desde el WhatsApp propietario. Además, con el botón <strong>Accesos</strong> de cada cuenta puedes autorizar números de clientes para que pidan su propio código 2FA, con límite diario y fecha de vencimiento opcional.
+            <strong>Comandos protegidos:</strong> siempre funcionan cuando tú los escribes desde el WhatsApp propietario. Autoriza un número o <strong>@usuario</strong> con el botón <strong>Accesos</strong>, o escribe <code>/codigo gpt04</code> dentro del chat del cliente para permitirle solicitar la cuenta <code>/gpt04</code>.
           </div>
           <div id="authenticatorKeyNotice" class="notice hidden"></div>
 
@@ -1138,12 +1139,12 @@
         <input id="accessAccountId" type="hidden">
         <input id="accessId" type="hidden">
         <div class="notice">
-          Los números autorizados podrán escribir <code id="accessCommandHint">/comando</code> desde su propio WhatsApp y recibir el código 2FA de esta cuenta.
+          Los números o <strong>@usuarios</strong> autorizados podrán escribir <code id="accessCommandHint">/comando</code> desde su propio WhatsApp y recibir el código 2FA de esta cuenta.
         </div>
         <div id="accessList" class="access-list"></div>
         <div class="form-grid">
           <label>Nombre del cliente<input id="accessName" type="text" maxlength="120" placeholder="Kevin"></label>
-          <label>WhatsApp<input id="accessWhatsapp" type="text" inputmode="tel" placeholder="921444991" required></label>
+          <label>WhatsApp<input id="accessWhatsapp" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="921444991 o @usuario" required><small>Acepta número, @usuario o una identidad ya registrada.</small></label>
           <label>Vence el (opcional)<input id="accessExpiresAt" type="date"></label>
           <label>Límite de códigos por día<input id="accessDailyLimit" type="number" min="0" max="100" step="1" placeholder="0 = sin límite"></label>
           <label class="toggle-row span-2"><input id="accessActive" type="checkbox" checked><span>Acceso activo</span></label>
@@ -1155,6 +1156,29 @@
           <button id="saveAccessButton" class="button primary" type="submit">Autorizar cliente</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog id="authenticatorUsageDialog">
+      <div class="usage-dialog-shell">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">CONTROL 2FA</p><h2 id="authenticatorUsageTitle">Uso de códigos por cliente</h2></div>
+          <button class="icon-button authenticator-usage-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="notice">
+          Consulta qué cuentas puede solicitar cada cliente, cuántos códigos recibió y la fecha y hora exactas de cada envío. Los códigos numéricos nunca se guardan aquí.
+        </div>
+        <section aria-labelledby="usageSummaryTitle">
+          <div class="usage-section-heading"><h3 id="usageSummaryTitle">Resumen por cliente</h3><span id="usageClientCount" class="pill blue">0 clientes</span></div>
+          <div id="authenticatorUsageSummary" class="usage-summary-grid"></div>
+        </section>
+        <section aria-labelledby="usageHistoryTitle">
+          <div class="usage-section-heading"><h3 id="usageHistoryTitle">Historial de envíos</h3><span id="usageEventCount" class="pill violet">0 envíos</span></div>
+          <div id="authenticatorUsageHistory" class="usage-history-list"></div>
+        </section>
+        <div class="dialog-actions">
+          <button class="button secondary authenticator-usage-close" type="button">Cerrar</button>
+        </div>
+      </div>
     </dialog>
 
     <datalist id="productOptions"></datalist>

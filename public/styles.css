@@ -3595,9 +3595,125 @@ html[data-theme="dark"] code { color: #43e0ff; }
 .access-row-actions button:hover { border-color: var(--primary); color: var(--primary); }
 .access-row-actions button.danger:hover { border-color: var(--red); color: var(--red); }
 
+/* Control e historial de uso 2FA */
+#authenticatorUsageDialog {
+  width: min(70rem, calc(100% - 2rem));
+  max-width: min(70rem, calc(100% - 2rem));
+}
+.usage-dialog-shell {
+  display: grid;
+  gap: 1.2rem;
+  max-height: calc(90vh - 3rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.usage-dialog-shell .notice { margin: 0; }
+.usage-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.usage-section-heading h3 { margin: 0; font-size: 1rem; }
+.usage-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.usage-summary-card {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: var(--soft-bg);
+}
+.usage-summary-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.usage-summary-heading > div { display: grid; gap: 0.2rem; min-width: 0; }
+.usage-summary-heading strong { font-size: 0.92rem; }
+.usage-summary-heading span { color: var(--muted); font-size: 0.73rem; }
+.usage-total {
+  display: grid;
+  flex: 0 0 auto;
+  color: var(--muted);
+  text-align: right;
+}
+.usage-total b { color: var(--primary); font-size: 1.25rem; }
+.usage-metrics { display: grid; grid-template-columns: 5rem 1fr; gap: 0.55rem; }
+.usage-metrics > span {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 0.7rem;
+  background: var(--panel);
+}
+.usage-metrics small { color: var(--muted); font-size: 0.64rem; }
+.usage-metrics strong { font-size: 0.74rem; }
+.usage-authorizations { display: grid; gap: 0.4rem; }
+.usage-authorizations > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+.usage-authorizations code { color: var(--primary); font-size: 0.73rem; }
+.usage-authorizations span:not(.pill) {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.usage-history-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+}
+.usage-history-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.usage-history-row:last-child { border-bottom: 0; }
+.usage-history-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--v3-green, #25d366);
+  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--v3-green, #25d366) 14%, transparent);
+}
+.usage-history-row > div { display: grid; gap: 0.18rem; min-width: 0; }
+.usage-history-row strong { font-size: 0.82rem; }
+.usage-history-row span { color: var(--muted); font-size: 0.72rem; }
+.usage-history-row code { color: var(--primary); }
+.usage-history-row time { color: var(--strong-muted); font-size: 0.7rem; white-space: nowrap; }
+.usage-empty {
+  margin: 0;
+  padding: 1rem;
+  border: 1px dashed var(--line);
+  border-radius: 0.9rem;
+}
+
 @media (max-width: 640px) {
   .catalog-grid { grid-template-columns: 1fr; }
   .access-row { align-items: flex-start; }
+  .usage-summary-grid { grid-template-columns: 1fr; }
+  .usage-history-row { grid-template-columns: auto minmax(0, 1fr); }
+  .usage-history-row time { grid-column: 2; white-space: normal; }
+  .usage-authorizations > div { grid-template-columns: auto minmax(0, 1fr); }
+  .usage-authorizations .pill { grid-column: 1 / -1; width: fit-content; }
 }
 /* =========================================================================
    JadrixServs V4.9.3 — Capa visual SaaS (dark-first)

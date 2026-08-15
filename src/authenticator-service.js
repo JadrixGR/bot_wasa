@@ -366,6 +366,19 @@ class AuthenticatorService {
     };
   }
 
+  findAccountsByEmail(email) {
+    return this.store.findAuthenticatorAccountsByEmail(email).map((account) => ({
+      id: account.id,
+      name: account.name,
+      service: account.service,
+      email: account.email,
+      command: account.command,
+      period: account.period,
+      digits: account.digits,
+      algorithm: account.algorithm
+    }));
+  }
+
   async getFreshCodeByCommand(
     command,
     {

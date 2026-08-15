@@ -12,11 +12,14 @@ const {
   compatibleBrowserProfile,
   extractAdReferral,
   extractMessageBody,
+  extractValidEmail,
   formatAuthenticatorCodeMessage,
   formatWhatsAppWebVersion,
   getDisconnectStatusCode,
   isSensitiveSignalSessionDump,
+  isUrgentAuthenticatorRequest,
   normalizeWhatsAppId,
+  parseAuthenticatorAuthorizationCommand,
   parseWhatsAppWebVersion
 } = require("../src/whatsapp-service");
 
@@ -279,6 +282,25 @@ test("formatea el código 2FA sin incluir el correo ni datos innecesarios", () =
   assert.match(message, /177525/);
   assert.match(message, /27 segundos/);
   assert.doesNotMatch(message, /privado@correo\.test/);
+});
+
+test("reconoce el comando de autorización, un correo válido y una urgencia 2FA", () => {
+  assert.equal(
+    parseAuthenticatorAuthorizationCommand("/codigo gpt04"),
+    "/gpt04"
+  );
+  assert.equal(
+    parseAuthenticatorAuthorizationCommand(" /CODIGO /GPT_04 "),
+    "/gpt_04"
+  );
+  assert.equal(parseAuthenticatorAuthorizationCommand("/codigo"), null);
+  assert.equal(extractValidEmail(" Cuenta.04@Correo.com "), "cuenta.04@correo.com");
+  assert.equal(extractValidEmail("correo-incompleto@"), null);
+  assert.equal(
+    isUrgentAuthenticatorRequest("Necesito el código 2FA con urgencia"),
+    true
+  );
+  assert.equal(isUrgentAuthenticatorRequest("Quiero ver los precios"), false);
 });
 
 test("lee el código de desconexión que entrega WhatsApp", () => {
@@ -1030,6 +1052,210 @@ test("un cliente no puede ejecutar una respuesta rápida privada", async () => {
   assert.equal(quickReplyLookups, 0);
   assert.equal(socket.calls.sent.length, 0);
   assert.equal(store.isCommandMessageProcessed("client-quick-reply-command"), false);
+});
+
+test("el propietario autoriza con /codigo gpt04 dentro del chat del cliente", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  let authorization;
+  store.authorizeAuthenticatorAccess = (accountId, identity, input) => {
+    authorization = { accountId, identity, input };
+    return {
+      created: true,
+      entry: {
+        id: "access-gpt04",
+        accountId,
+        name: input.name,
+        ...identity
+      }
+    };
+  };
+  const authenticator = {
+    findAccountByCommand: (command) =>
+      command === "/gpt04"
+        ? {
+            id: "auth-gpt04",
+            name: "GPT04",
+            service: "ChatGPT Plus",
+            command: "/gpt04"
+          }
+        : null
+  };
+  const service = makeService(fake, {
+    store,
+    authenticator,
+    sessionDir: path.join(testRuntimeDir, "owner-authorize-2fa-session"),
+    mediaDir: path.join(testRuntimeDir, "owner-authorize-2fa-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "owner-authorize-gpt04",
+          remoteJid: "720000000000@lid",
+          remoteJidUsername: "cliente_gpt04",
+          fromMe: true
+        },
+        message: { conversation: "/codigo gpt04" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(authorization.accountId, "auth-gpt04");
+  assert.equal(authorization.identity.whatsapp, "@cliente_gpt04");
+  assert.equal(authorization.identity.whatsappUsername, "@cliente_gpt04");
+  assert.equal(authorization.identity.whatsappChatId, "720000000000@lid");
+  assert.equal(store.isCommandMessageProcessed("owner-authorize-gpt04"), true);
+  assert.equal(socket.calls.sent.length, 0);
+  assert.ok(
+    store.logs.some((entry) => entry.message.includes("Cliente autorizado"))
+  );
+});
+
+test("un cliente autorizado por @usuario recibe el código y registra el uso", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  let checkedIdentity;
+  let usage;
+  store.checkAuthenticatorAccess = (_accountId, identity) => {
+    checkedIdentity = identity;
+    return {
+      allowed: true,
+      reason: "ok",
+      entry: {
+        id: "access-username-gpt04",
+        name: "Kevin",
+        whatsapp: "@cliente_gpt04"
+      }
+    };
+  };
+  store.registerAuthenticatorAccessUsage = (accessId, metadata) => {
+    usage = { accessId, metadata };
+  };
+  const account = {
+    id: "auth-gpt04",
+    name: "GPT04",
+    service: "ChatGPT Plus",
+    command: "/gpt04"
+  };
+  const authenticator = {
+    findAccountByCommand: (command) =>
+      String(command).toLowerCase() === "/gpt04" ? account : null,
+    getFreshCodeByCommand: async () => ({
+      ...account,
+      code: "481205",
+      secondsRemaining: 26,
+      waitedMilliseconds: 0
+    })
+  };
+  const service = makeService(fake, {
+    store,
+    authenticator,
+    sessionDir: path.join(testRuntimeDir, "username-authorized-2fa-session"),
+    mediaDir: path.join(testRuntimeDir, "username-authorized-2fa-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "client-username-gpt04",
+          remoteJid: "720000000000@lid",
+          remoteJidUsername: "cliente_gpt04",
+          fromMe: false
+        },
+        message: { conversation: "/gpt04" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(checkedIdentity.whatsappUsername, "@cliente_gpt04");
+  assert.equal(checkedIdentity.whatsappChatId, "720000000000@lid");
+  assert.equal(usage.accessId, "access-username-gpt04");
+  assert.equal(usage.metadata.command, "/gpt04");
+  assert.equal(socket.calls.sent.length, 1);
+  assert.match(socket.calls.sent[0].content.text, /481205/);
+});
+
+test("el bot atiende una urgencia por correo y entrega el comando autorizado", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  store.checkAuthenticatorAccess = () => ({
+    allowed: true,
+    reason: "ok",
+    entry: { id: "access-email-gpt04", name: "Kevin" }
+  });
+  const account = {
+    id: "auth-gpt04",
+    name: "GPT04",
+    service: "ChatGPT Plus",
+    email: "gpt04@correo.test",
+    command: "/gpt04"
+  };
+  const authenticator = {
+    findAccountByCommand: () => null,
+    findAccountsByEmail: (email) =>
+      email === "gpt04@correo.test" ? [account] : []
+  };
+  const service = makeService(fake, {
+    store,
+    authenticator,
+    sessionDir: path.join(testRuntimeDir, "urgent-email-2fa-session"),
+    mediaDir: path.join(testRuntimeDir, "urgent-email-2fa-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "urgent-code-request",
+          remoteJid: "51922223333@s.whatsapp.net",
+          fromMe: false
+        },
+        message: { conversation: "Necesito el código 2FA con urgencia" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "urgent-code-email",
+          remoteJid: "51922223333@s.whatsapp.net",
+          fromMe: false
+        },
+        message: { conversation: "GPT04@CORREO.TEST" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(socket.calls.sent.length, 2);
+  assert.match(socket.calls.sent[0].content.text, /Soy el bot de Jadrix Servis/);
+  assert.match(socket.calls.sent[0].content.text, /correo de la cuenta/);
+  assert.match(socket.calls.sent[1].content.text, /Encontramos el código del correo/);
+  assert.match(socket.calls.sent[1].content.text, /\/gpt04/);
+  assert.doesNotMatch(JSON.stringify(store.logs), /gpt04@correo\.test/i);
 });
 
 test("el propietario envía un código 2FA con su comando y vigencia segura", async () => {

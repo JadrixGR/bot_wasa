@@ -65,6 +65,8 @@ test("el Super Combo IA 2026 activa la secuencia inicial", () => {
 test("la V4.7 usa el modo de bienvenida única", () => {
   assert.equal(createInitialData().version, 4.92);
   assert.deepEqual(createInitialData().authenticatorAccounts, []);
+  assert.deepEqual(createInitialData().authenticatorAccess, []);
+  assert.deepEqual(createInitialData().authenticatorUsage, []);
   assert.equal(defaultSettings.inboundMode, "welcome_once");
   assert.equal(defaultSettings.welcomeRoutingMode, "smart");
   assert.equal(defaultSettings.adGreetings.length, 1);

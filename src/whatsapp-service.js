@@ -27,6 +27,9 @@ const AUTHENTICATOR_SEND_WINDOW = Object.freeze({
   maximumSeconds: 30,
   safetyMilliseconds: 2000
 });
+const AUTHENTICATOR_EMAIL_REQUEST_TTL_MS = 30 * 60 * 1000;
+const AUTHENTICATOR_URGENT_PROMPT =
+  "Soy el bot de Jadrix Servis. Si necesita el código con urgencia, puede enviarme el correo de la cuenta para poder enviarle el código.";
 
 let baileysModulePromise;
 
@@ -339,6 +342,34 @@ function formatAuthenticatorCodeMessage({
     "",
     `⏳ Válido por ${validity} segundos.`
   ].join("\n");
+}
+
+function parseAuthenticatorAuthorizationCommand(value) {
+  const match = /^\/codigo\s+\/?([a-z0-9][a-z0-9_-]{1,31})$/i.exec(
+    String(value || "").trim()
+  );
+  return match ? `/${match[1].toLowerCase()}` : null;
+}
+
+function extractValidEmail(value) {
+  const email = String(value || "").trim().toLowerCase();
+  if (email.length > 254 || !/^[^\s@]{1,64}@[^\s@]+\.[a-z]{2,63}$/i.test(email)) {
+    return null;
+  }
+  return email;
+}
+
+function isUrgentAuthenticatorRequest(value) {
+  const normalized = String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  const mentionsCode = /\b(codigo|2fa|autenticador)\b/.test(normalized);
+  const needsHelp =
+    /\b(urgente|urgencia|necesito|necesita|enviame|mandame|pasame|ahora|rapido|inmediato)\b/.test(
+      normalized
+    );
+  return mentionsCode && needsHelp;
 }
 
 class WhatsAppService {
@@ -1131,6 +1162,7 @@ class WhatsAppService {
     }
 
     if (await this.#handleClientAuthenticatorCommand(socket, message)) return;
+    if (await this.#handleAuthenticatorEmailAssistance(socket, message)) return;
 
     const chatId = message.key.remoteJid;
     const content = unwrapMessageContent(message.message);
@@ -1239,6 +1271,7 @@ class WhatsAppService {
       this.contactsByIdentity.set(key, normalized);
     }
     this.store.enrichClientsWithWhatsAppIdentity?.(normalized);
+    this.store.enrichAuthenticatorAccessWithWhatsAppIdentity?.(normalized);
     return normalized;
   }
 
@@ -1299,11 +1332,6 @@ class WhatsAppService {
     });
   }
 
-  async #resolveCustomerPhone(socket, message) {
-    const identity = await this.#resolveCustomerIdentity(socket, message);
-    return identity.whatsappPhone || null;
-  }
-
   async #handleClientAuthenticatorCommand(socket, message) {
     const body = extractMessageBody(message.message).trim();
     if (!/^\/[a-z0-9][a-z0-9_-]{1,31}$/i.test(body)) return false;
@@ -1313,10 +1341,17 @@ class WhatsAppService {
 
     const chatId = message.key.remoteJid;
     const target = normalizeWhatsAppId(chatId);
-    const phone =
-      (await this.#resolveCustomerPhone(socket, message)) ||
-      extractPhone(chatId);
-    const check = this.store.checkAuthenticatorAccess?.(account.id, phone) || {
+    const identity = await this.#resolveCustomerIdentity(socket, message);
+    const fallbackPhone = extractPhone(chatId);
+    const customerLabel =
+      identity.whatsappUsername || identity.whatsappPhone || fallbackPhone || target;
+    const check = this.store.checkAuthenticatorAccess?.(
+      account.id,
+      identity,
+      chatId,
+      message.key.remoteJidAlt || "",
+      fallbackPhone
+    ) || {
       allowed: false,
       reason: "sin-autorizacion",
       entry: null
@@ -1332,7 +1367,7 @@ class WhatsAppService {
       const reply = reasons[check.reason];
       this.store.addLog(
         "authenticator",
-        `Solicitud 2FA rechazada (${check.reason}) para ${phone || target} con ${account.command}`,
+        `Solicitud 2FA rechazada (${check.reason}) para ${customerLabel} con ${account.command}`,
         { command: account.command, authenticatorId: account.id, chatId: target }
       );
       this.store.save();
@@ -1374,10 +1409,14 @@ class WhatsAppService {
       if (commandMessageId) {
         this.store.markCommandMessageProcessed?.(commandMessageId);
       }
-      this.store.registerAuthenticatorAccessUsage?.(check.entry.id);
+      this.store.registerAuthenticatorAccessUsage?.(check.entry.id, {
+        accountName: fresh.name,
+        service: fresh.service,
+        command: fresh.command
+      });
       this.store.addLog(
         "authenticator",
-        `Código 2FA entregado al cliente ${check.entry.name || phone} con ${fresh.command} · ${fresh.service}`,
+        `Código 2FA entregado al cliente ${check.entry.name || customerLabel} con ${fresh.command} · ${fresh.service}`,
         {
           command: fresh.command,
           authenticatorId: fresh.id,
@@ -1390,7 +1429,7 @@ class WhatsAppService {
     } catch (error) {
       this.store.addLog(
         "authenticator",
-        `No se envió ${account.command} al cliente ${phone || target}: ${error.message}`,
+        `No se envió ${account.command} al cliente ${customerLabel}: ${error.message}`,
         { command: account.command, authenticatorId: account.id, chatId: target }
       );
       this.store.save();
@@ -1398,8 +1437,146 @@ class WhatsAppService {
     return true;
   }
 
+  async #handleAuthenticatorEmailAssistance(socket, message) {
+    const body = extractMessageBody(message.message).trim();
+    if (!body) return false;
+    const chatId = message.key.remoteJid;
+    const target = normalizeWhatsAppId(chatId);
+    const conversation = this.store.getConversation?.(chatId) || {};
+    const requestTime = new Date(
+      conversation.authenticatorEmailRequestedAt || 0
+    ).getTime();
+    const pendingEmail =
+      Number.isFinite(requestTime) &&
+      requestTime > 0 &&
+      Date.now() - requestTime <= AUTHENTICATOR_EMAIL_REQUEST_TTL_MS;
+    const email = extractValidEmail(body);
+
+    if (email) {
+      const accounts = this.authenticator?.findAccountsByEmail?.(email) || [];
+      if (!accounts.length) {
+        if (!pendingEmail) return false;
+        await this.sendText(
+          target,
+          "No encontramos una cuenta 2FA asociada a ese correo. Verifica que esté escrito correctamente y vuelve a enviarlo."
+        );
+        this.store.addLog(
+          "authenticator",
+          "Consulta urgente 2FA sin una cuenta coincidente",
+          { chatId: target }
+        );
+        this.store.save();
+        return true;
+      }
+
+      const identity = await this.#resolveCustomerIdentity(socket, message);
+      const checks = accounts.map((account) => ({
+        account,
+        check: this.store.checkAuthenticatorAccess?.(
+          account.id,
+          identity,
+          chatId,
+          message.key.remoteJidAlt || ""
+        ) || {
+          allowed: false,
+          reason: "sin-autorizacion",
+          entry: null
+        }
+      }));
+      const allowed = checks.filter((item) => item.check.allowed);
+      if (!allowed.length) {
+        const reason =
+          checks.find((item) => item.check.reason !== "sin-autorizacion")
+            ?.check.reason || "sin-autorizacion";
+        const replies = {
+          "sin-autorizacion":
+            "Encontramos la cuenta, pero este WhatsApp todavía no está autorizado para solicitar su código 2FA. Escríbenos para autorizarlo.",
+          inactivo:
+            "Encontramos la cuenta, pero tu acceso al código 2FA está desactivado. Escríbenos para reactivarlo.",
+          vencido:
+            "Encontramos la cuenta, pero tu autorización para solicitar el código 2FA ya venció.",
+          "limite-diario":
+            "Encontramos la cuenta, pero ya alcanzaste tu límite de códigos 2FA por hoy."
+        };
+        await this.sendText(target, replies[reason] || replies["sin-autorizacion"]);
+        this.store.addLog(
+          "authenticator",
+          `Consulta urgente 2FA rechazada (${reason})`,
+          { chatId: target, authenticatorIds: accounts.map((item) => item.id) }
+        );
+        this.store.save();
+        return true;
+      }
+
+      const commands = [...new Set(allowed.map((item) => item.account.command))];
+      const reply = commands.length === 1
+        ? [
+            "Encontramos el código del correo. Para enviártelo, envía en este chat de WhatsApp el siguiente comando:",
+            "",
+            commands[0]
+          ].join("\n")
+        : [
+            "Encontramos más de una cuenta autorizada para ese correo. Envía en este chat de WhatsApp el comando de la cuenta que necesitas:",
+            "",
+            ...commands
+          ].join("\n");
+      await this.sendText(target, reply);
+      this.store.updateConversation?.(chatId, {
+        authenticatorEmailRequestedAt: null,
+        authenticatorEmailMatchedAt: new Date().toISOString()
+      });
+      this.store.addLog(
+        "authenticator",
+        `Correo 2FA reconocido; se indicó ${commands.join(", ")}`,
+        {
+          chatId: target,
+          authenticatorIds: allowed.map((item) => item.account.id)
+        }
+      );
+      this.store.save();
+      return true;
+    }
+
+    if (isUrgentAuthenticatorRequest(body)) {
+      await this.sendText(target, AUTHENTICATOR_URGENT_PROMPT);
+      this.store.updateConversation?.(chatId, {
+        authenticatorEmailRequestedAt: new Date().toISOString()
+      });
+      this.store.addLog(
+        "authenticator",
+        "Se solicitó el correo para atender una urgencia 2FA",
+        { chatId: target }
+      );
+      this.store.save();
+      return true;
+    }
+
+    const looksLikeEmail =
+      pendingEmail &&
+      !body.startsWith("/") &&
+      body.length <= 254 &&
+      (body.includes("@") || (!body.includes(" ") && body.includes(".")));
+    if (looksLikeEmail) {
+      await this.sendText(
+        target,
+        "Ese correo no parece válido. Envíalo completo, por ejemplo nombre@dominio.com."
+      );
+      return true;
+    }
+    return false;
+  }
+
   async #handleOwnerCommand(socket, message) {
     const body = extractMessageBody(message.message);
+    const authorizedCommand = parseAuthenticatorAuthorizationCommand(body);
+    if (authorizedCommand) {
+      await this.#handleOwnerAuthenticatorAuthorization(
+        socket,
+        message,
+        authorizedCommand
+      );
+      return;
+    }
     const quickReply = this.store.findQuickReplyByCommand?.(body);
     if (quickReply) {
       await this.#handleOwnerQuickReply(message, quickReply);
@@ -1457,6 +1634,74 @@ class WhatsAppService {
         "command",
         `Comando duplicado ignorado: ${parsed.command}`,
         { commandMessageId: message.key.id || "" }
+      );
+      this.store.save();
+    }
+  }
+
+  async #handleOwnerAuthenticatorAuthorization(
+    socket,
+    message,
+    accountCommand
+  ) {
+    const commandMessageId = String(message.key.id || "");
+    if (
+      commandMessageId &&
+      this.store.isCommandMessageProcessed?.(commandMessageId)
+    ) {
+      return;
+    }
+    const account = this.authenticator?.findAccountByCommand(accountCommand);
+    if (!account) {
+      this.store.addLog(
+        "authenticator",
+        `No se autorizó ${accountCommand}: la cuenta 2FA no existe`,
+        { command: accountCommand, chatId: message.key.remoteJid }
+      );
+      this.store.save();
+      return;
+    }
+
+    try {
+      const identity = await this.#resolveCustomerIdentity(socket, message);
+      if (!identity?.whatsapp) {
+        throw new Error("WhatsApp no entregó una identidad válida del cliente.");
+      }
+      const registeredClient = this.store.findClientByWhatsApp?.(identity);
+      const name =
+        registeredClient?.name ||
+        identity.whatsappUsername ||
+        identity.whatsappPhone ||
+        "Cliente";
+      const result = this.store.authorizeAuthenticatorAccess(
+        account.id,
+        identity,
+        { name }
+      );
+      if (commandMessageId) {
+        this.store.markCommandMessageProcessed?.(commandMessageId);
+      }
+      this.store.addLog(
+        "authenticator",
+        `${result.created ? "Cliente autorizado" : "Autorización 2FA renovada"}: ${result.entry.name || result.entry.whatsapp} → ${account.command}`,
+        {
+          command: account.command,
+          authenticatorId: account.id,
+          accessId: result.entry.id,
+          chatId: message.key.remoteJid,
+          authorizationSource: "owner-command"
+        }
+      );
+      this.store.save();
+    } catch (error) {
+      this.store.addLog(
+        "authenticator",
+        `No se autorizó ${account.command}: ${error.message}`,
+        {
+          command: account.command,
+          authenticatorId: account.id,
+          chatId: message.key.remoteJid
+        }
       );
       this.store.save();
     }
@@ -1975,9 +2220,12 @@ module.exports = {
   compatibleBrowserProfile,
   extractAdReferral,
   extractMessageBody,
+  extractValidEmail,
   formatAuthenticatorCodeMessage,
   formatWhatsAppWebVersion,
   getDisconnectStatusCode,
   isSensitiveSignalSessionDump,
+  isUrgentAuthenticatorRequest,
+  parseAuthenticatorAuthorizationCommand,
   parseWhatsAppWebVersion
 };

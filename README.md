@@ -88,14 +88,18 @@ Las imágenes se guardan en `MEDIA_DIR` (`/data/media` en Render), mientras que 
 
 - Cada cuenta del Autenticador tiene un comando único y editable, por ejemplo `/gpt01`.
 - Las cuentas ya guardadas reciben el comando automáticamente según su nombre: `GPT01` pasa a `/gpt01` y `GROK01` a `/grok01`.
-- El comando solo se ejecuta cuando lo escribes desde el WhatsApp propietario dentro del chat del cliente.
-- Si un cliente escribe `/gpt01`, el bot nunca genera ni envía el código 2FA.
+- El comando siempre se ejecuta cuando lo escribes desde el WhatsApp propietario dentro del chat del cliente.
+- Un cliente solo puede escribir `/gpt01` y recibir el código si fue autorizado específicamente para esa cuenta 2FA.
+- La autorización acepta número, `@usuario` o la identidad LID que entrega WhatsApp cuando el teléfono está oculto.
+- Para autorizar rápidamente desde tu WhatsApp, escribe `/codigo gpt01` dentro del chat del cliente. Esto le permite solicitar únicamente la cuenta `/gpt01`.
+- Cada acceso puede tener límite diario, fecha de vencimiento y estado activo o inactivo.
 - Si quedan menos de 20 segundos, el bot espera silenciosamente el siguiente código.
 - El mensaje se envía únicamente cuando el código conserva entre 20 y 30 segundos útiles.
 - Antes de enviarlo aparece “escribiendo…” y el cliente recibe solo el servicio, el código y su vigencia.
 - El código numérico y el correo asociado nunca se copian a los registros de actividad.
 - Los comandos de clientes como `/gptpro 30` siguen funcionando y no pueden repetirse como comandos 2FA.
 - Los eventos duplicados de WhatsApp se detectan para no reenviar el mismo código.
+- **Autenticador → Control de uso** muestra cuántos códigos recibió cada cliente, las cuentas autorizadas y la fecha y hora exactas de cada entrega. El historial nunca guarda el código numérico.
 
 ### Cómo enviar un código al chat de un cliente
 
@@ -106,6 +110,19 @@ Las imágenes se guardan en `MEDIA_DIR` (`/data/media` en Render), mientras que 
 5. El bot espera una ventana segura si hace falta y manda el código en ese mismo chat.
 
 Los códigos TOTP normales duran 30 segundos. Una cuenta configurada con un periodo inferior al necesario no se enviará, porque no puede garantizar 20 segundos de vigencia.
+
+### Cómo autorizar a un cliente para solicitar su código
+
+Puedes hacerlo de dos maneras:
+
+1. En el panel abre **Autenticador → Accesos**, escribe el número o `@usuario` del cliente y define su límite diario y vencimiento opcional.
+2. Desde tu WhatsApp propietario abre el chat del cliente y escribe `/codigo gpt04`. El bot reconoce el número, `@usuario` o LID del chat y autoriza a ese cliente solamente para la cuenta `/gpt04`.
+
+Después, el cliente puede escribir `/gpt04` desde su propio WhatsApp. Si su acceso está activo, no venció y no superó el límite diario, recibirá el código con una vigencia segura.
+
+### Solicitudes urgentes por correo
+
+Cuando un cliente indica que necesita un código 2FA con urgencia, el bot le pide el correo de la cuenta. Si recibe un correo válido que coincide con una cuenta del Autenticador y ese WhatsApp está autorizado, responde con el comando exacto que debe enviar. El correo no reemplaza la autorización: un cliente no autorizado no puede obtener el comando ni el código por esta vía.
 
 ## Autenticador 2FA protegido
 
@@ -393,6 +410,9 @@ Para probar el Autenticador:
 6. Revisa que la tarjeta muestre un comando como `/gpt01`.
 7. Desde tu WhatsApp propietario, envíalo en un chat y confirma que el código recibido indica entre 20 y 30 segundos.
 8. Repite la prueba cuando al código actual le queden menos de 20 segundos: el bot debe esperar el siguiente antes de enviarlo.
+9. En el chat de prueba escribe `/codigo gpt01` desde el WhatsApp propietario y luego envía `/gpt01` desde el teléfono del cliente.
+10. Abre **Autenticador → Control de uso** y confirma que aparecen el cliente, el total, la cuenta autorizada, la fecha y la hora del envío.
+11. Desde el cliente escribe “Necesito el código 2FA con urgencia”, envía el correo asociado y confirma que el bot responde con `/gpt01` únicamente si ese WhatsApp está autorizado.
 
 Desde un número que no esté registrado como cliente:
 

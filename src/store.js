@@ -31,6 +31,7 @@ const MAX_COUNTRY_GREETINGS = 80;
 const MAX_COUNTRY_PRICE_BOOKS = 80;
 const MAX_AD_GREETINGS = 50;
 const MAX_WELCOME_MESSAGES = 20;
+const MAX_AUTHENTICATOR_USAGE_EVENTS = 5000;
 
 function uniqueAuthenticatorCommand(baseCommand, usedCommands) {
   if (!usedCommands.has(baseCommand)) return baseCommand;
@@ -147,12 +148,12 @@ function migrateCatalog(parsed, initial) {
 
 function normalizeAuthenticatorAccessEntry(entry) {
   const base = entry && typeof entry === "object" ? entry : {};
-  const whatsapp = normalizeWhatsAppDigits(base.whatsapp);
+  const identity = normalizeWhatsAppIdentity(base);
   return {
     id: String(base.id || crypto.randomUUID()),
     accountId: String(base.accountId || ""),
     name: String(base.name || "").trim().slice(0, 120),
-    whatsapp,
+    ...identity,
     active: base.active !== false,
     expiresAt: String(base.expiresAt || "").trim() || null,
     dailyLimit:
@@ -166,6 +167,22 @@ function normalizeAuthenticatorAccessEntry(entry) {
     notes: String(base.notes || "").trim().slice(0, 300),
     createdAt: base.createdAt || new Date().toISOString(),
     updatedAt: base.updatedAt || new Date().toISOString()
+  };
+}
+
+function normalizeAuthenticatorUsageEvent(entry) {
+  const base = entry && typeof entry === "object" ? entry : {};
+  const identity = normalizeWhatsAppIdentity(base);
+  return {
+    id: String(base.id || crypto.randomUUID()),
+    accessId: String(base.accessId || ""),
+    accountId: String(base.accountId || ""),
+    clientName: String(base.clientName || "").trim().slice(0, 120),
+    ...identity,
+    accountName: String(base.accountName || "").trim().slice(0, 120),
+    service: String(base.service || "").trim().slice(0, 120),
+    command: String(base.command || "").trim().toLowerCase().slice(0, 33),
+    sentAt: base.sentAt || base.createdAt || new Date().toISOString()
   };
 }
 
@@ -714,6 +731,17 @@ class JsonStore {
           .map((entry) => normalizeAuthenticatorAccessEntry(entry))
           .filter((entry) => entry.accountId && entry.whatsapp)
       : [];
+    const normalizedAuthenticatorUsage = Array.isArray(
+      parsed.authenticatorUsage
+    )
+      ? parsed.authenticatorUsage
+          .map((entry) => normalizeAuthenticatorUsageEvent(entry))
+          .filter(
+            (entry) => entry.accessId && entry.accountId && entry.sentAt
+          )
+          .sort((a, b) => String(b.sentAt).localeCompare(String(a.sentAt)))
+          .slice(0, MAX_AUTHENTICATOR_USAGE_EVENTS)
+      : [];
     const normalizedQuickReplies = (Array.isArray(parsed.quickReplies)
       ? parsed.quickReplies
       : []
@@ -780,6 +808,7 @@ class JsonStore {
         : [],
       authenticatorAccounts: authenticatorMigration.accounts,
       authenticatorAccess: normalizedAuthenticatorAccess,
+      authenticatorUsage: normalizedAuthenticatorUsage,
       quickReplies: normalizedQuickReplies,
       products: catalogMigration.products,
       plans: catalogMigration.plans,
@@ -1231,6 +1260,16 @@ class JsonStore {
       (item) => item.command === command
     );
     return account ? structuredClone(account) : null;
+  }
+
+  findAuthenticatorAccountsByEmail(value) {
+    const email = String(value || "").trim().toLowerCase();
+    if (!email) return [];
+    return structuredClone(
+      (this.data.authenticatorAccounts || []).filter(
+        (item) => String(item.email || "").trim().toLowerCase() === email
+      )
+    );
   }
 
   isCommandMessageProcessed(value) {
@@ -1811,13 +1850,14 @@ class JsonStore {
       updatedAt: new Date().toISOString()
     });
     if (!entry.whatsapp) {
-      throw new Error("Ingresa el número de WhatsApp del cliente autorizado.");
+      throw new Error("Ingresa un número o @usuario de WhatsApp válido.");
     }
     const duplicate = this.data.authenticatorAccess.find(
-      (item) => item.accountId === accountId && item.whatsapp === entry.whatsapp
+      (item) =>
+        item.accountId === accountId && identitiesOverlap(item, entry)
     );
     if (duplicate) {
-      throw new Error("Ese número ya está autorizado en esta cuenta 2FA.");
+      throw new Error("Ese WhatsApp ya está autorizado en esta cuenta 2FA.");
     }
     this.data.authenticatorAccess.push(entry);
     this.addLog(
@@ -1845,7 +1885,16 @@ class JsonStore {
       updatedAt: new Date().toISOString()
     });
     if (!updated.whatsapp) {
-      throw new Error("Ingresa el número de WhatsApp del cliente autorizado.");
+      throw new Error("Ingresa un número o @usuario de WhatsApp válido.");
+    }
+    const duplicate = this.data.authenticatorAccess.find(
+      (entry) =>
+        entry.id !== id &&
+        entry.accountId === current.accountId &&
+        identitiesOverlap(entry, updated)
+    );
+    if (duplicate) {
+      throw new Error("Ese WhatsApp ya está autorizado en esta cuenta 2FA.");
     }
     this.data.authenticatorAccess[index] = updated;
     this.addLog(
@@ -1873,20 +1922,20 @@ class JsonStore {
     return structuredClone(deleted);
   }
 
-  findAuthenticatorAccess(accountId, ...phones) {
+  findAuthenticatorAccess(accountId, ...identities) {
     this.data.authenticatorAccess ||= [];
-    const candidates = new Set(
-      phones.map(normalizeWhatsAppDigits).filter(Boolean)
-    );
+    const candidates = whatsappIdentityKeys(...identities);
     if (!candidates.size) return null;
     const entry = this.data.authenticatorAccess.find(
-      (item) => item.accountId === accountId && candidates.has(item.whatsapp)
+      (item) =>
+        item.accountId === accountId &&
+        [...whatsappIdentityKeys(item)].some((key) => candidates.has(key))
     );
     return entry ? structuredClone(entry) : null;
   }
 
-  checkAuthenticatorAccess(accountId, ...phones) {
-    const entry = this.findAuthenticatorAccess(accountId, ...phones);
+  checkAuthenticatorAccess(accountId, ...identities) {
+    const entry = this.findAuthenticatorAccess(accountId, ...identities);
     if (!entry) return { allowed: false, reason: "sin-autorizacion", entry: null };
     if (!entry.active) return { allowed: false, reason: "inactivo", entry };
     const today = todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima");
@@ -1902,7 +1951,66 @@ class JsonStore {
     return { allowed: true, reason: "ok", entry };
   }
 
-  registerAuthenticatorAccessUsage(id) {
+  authorizeAuthenticatorAccess(accountId, identityInput, input = {}) {
+    this.data.authenticatorAccess ||= [];
+    const identity = normalizeWhatsAppIdentity(identityInput);
+    if (!identity.whatsapp) {
+      throw new Error("WhatsApp no entregó una identidad válida del cliente.");
+    }
+    const existing = this.data.authenticatorAccess.find(
+      (entry) =>
+        entry.accountId === accountId && identitiesOverlap(entry, identity)
+    );
+    if (!existing) {
+      return {
+        created: true,
+        entry: this.createAuthenticatorAccess(accountId, {
+          ...input,
+          ...identity,
+          active: true
+        })
+      };
+    }
+
+    const entry = this.updateAuthenticatorAccess(existing.id, {
+      ...identity,
+      name: String(input.name || existing.name || "").trim(),
+      active: true,
+      expiresAt: null
+    });
+    return { created: false, entry };
+  }
+
+  enrichAuthenticatorAccessWithWhatsAppIdentity(value) {
+    const identity = normalizeWhatsAppIdentity(value);
+    if (!identity.whatsapp) return 0;
+    this.data.authenticatorAccess ||= [];
+    let changed = 0;
+    for (const entry of this.data.authenticatorAccess) {
+      if (!identitiesOverlap(entry, identity)) continue;
+      const merged = normalizeWhatsAppIdentity({
+        ...entry,
+        whatsappPhone: identity.whatsappPhone || entry.whatsappPhone,
+        whatsappUsername:
+          identity.whatsappUsername || entry.whatsappUsername,
+        whatsappChatId: identity.whatsappChatId || entry.whatsappChatId
+      });
+      if (
+        merged.whatsapp === entry.whatsapp &&
+        merged.whatsappPhone === entry.whatsappPhone &&
+        merged.whatsappUsername === entry.whatsappUsername &&
+        merged.whatsappChatId === entry.whatsappChatId
+      ) {
+        continue;
+      }
+      Object.assign(entry, merged, { updatedAt: new Date().toISOString() });
+      changed += 1;
+    }
+    if (changed) this.save();
+    return changed;
+  }
+
+  registerAuthenticatorAccessUsage(id, metadata = {}) {
     this.data.authenticatorAccess ||= [];
     const entry = this.data.authenticatorAccess.find((item) => item.id === id);
     if (!entry) return null;
@@ -1912,8 +2020,150 @@ class JsonStore {
     entry.totalSent = Number(entry.totalSent || 0) + 1;
     entry.lastSentAt = new Date().toISOString();
     entry.updatedAt = entry.lastSentAt;
+    const account = (this.data.authenticatorAccounts || []).find(
+      (item) => item.id === entry.accountId
+    );
+    this.data.authenticatorUsage ||= [];
+    const usage = normalizeAuthenticatorUsageEvent({
+      id: crypto.randomUUID(),
+      accessId: entry.id,
+      accountId: entry.accountId,
+      clientName: entry.name,
+      ...entry,
+      accountName: account?.name || metadata.accountName,
+      service: account?.service || metadata.service,
+      command: account?.command || metadata.command,
+      sentAt: entry.lastSentAt
+    });
+    this.data.authenticatorUsage.unshift(usage);
+    this.data.authenticatorUsage = this.data.authenticatorUsage.slice(
+      0,
+      MAX_AUTHENTICATOR_USAGE_EVENTS
+    );
     this.save();
-    return structuredClone(entry);
+    return { entry: structuredClone(entry), usage: structuredClone(usage) };
+  }
+
+  getAuthenticatorUsageReport({ accountId = null, limit = 500 } = {}) {
+    this.data.authenticatorAccess ||= [];
+    this.data.authenticatorUsage ||= [];
+    const today = todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima");
+    const accounts = new Map(
+      (this.data.authenticatorAccounts || []).map((account) => [
+        account.id,
+        account
+      ])
+    );
+    const selectedAccess = this.data.authenticatorAccess.filter(
+      (entry) => !accountId || entry.accountId === accountId
+    );
+    const selectedUsage = this.data.authenticatorUsage
+      .filter((entry) => !accountId || entry.accountId === accountId)
+      .slice()
+      .sort((a, b) => String(b.sentAt).localeCompare(String(a.sentAt)));
+    const summaryByClient = new Map();
+    const clientKey = (entry) =>
+      entry.whatsappPhone ||
+      entry.whatsappUsername ||
+      entry.whatsappChatId ||
+      entry.whatsapp ||
+      `access:${entry.accessId || entry.id}`;
+
+    for (const entry of selectedAccess) {
+      const key = clientKey(entry);
+      const account = accounts.get(entry.accountId);
+      const summary = summaryByClient.get(key) || {
+        key,
+        name: entry.name || "Cliente",
+        whatsapp: entry.whatsapp,
+        whatsappPhone: entry.whatsappPhone,
+        whatsappUsername: entry.whatsappUsername,
+        whatsappChatId: entry.whatsappChatId,
+        totalSent: 0,
+        usedToday: 0,
+        lastSentAt: null,
+        authorizations: []
+      };
+      summary.totalSent += Number(entry.totalSent || 0);
+      summary.usedToday += entry.usageDate === today
+        ? Number(entry.usedToday || 0)
+        : 0;
+      if (
+        entry.lastSentAt &&
+        (!summary.lastSentAt || entry.lastSentAt > summary.lastSentAt)
+      ) {
+        summary.lastSentAt = entry.lastSentAt;
+      }
+      summary.authorizations.push({
+        accessId: entry.id,
+        accountId: entry.accountId,
+        accountName: account?.name || "Cuenta eliminada",
+        service: account?.service || "",
+        command: account?.command || "",
+        active: entry.active !== false,
+        expiresAt: entry.expiresAt,
+        dailyLimit: entry.dailyLimit,
+        authorizedAt: entry.createdAt
+      });
+      summaryByClient.set(key, summary);
+    }
+
+    const knownAccessIds = new Set(selectedAccess.map((entry) => entry.id));
+    for (const usage of selectedUsage) {
+      if (knownAccessIds.has(usage.accessId)) continue;
+      const key = clientKey(usage);
+      const summary = summaryByClient.get(key) || {
+        key,
+        name: usage.clientName || "Cliente eliminado",
+        whatsapp: usage.whatsapp,
+        whatsappPhone: usage.whatsappPhone,
+        whatsappUsername: usage.whatsappUsername,
+        whatsappChatId: usage.whatsappChatId,
+        totalSent: 0,
+        usedToday: 0,
+        lastSentAt: null,
+        authorizations: []
+      };
+      summary.totalSent += 1;
+      if (
+        todayInTimeZone(
+          process.env.BOT_TIMEZONE || "America/Lima",
+          new Date(usage.sentAt)
+        ) === today
+      ) {
+        summary.usedToday += 1;
+      }
+      if (!summary.lastSentAt || usage.sentAt > summary.lastSentAt) {
+        summary.lastSentAt = usage.sentAt;
+      }
+      if (!summary.authorizations.some((item) => item.accessId === usage.accessId)) {
+        summary.authorizations.push({
+          accessId: usage.accessId,
+          accountId: usage.accountId,
+          accountName: usage.accountName || "Cuenta eliminada",
+          service: usage.service || "",
+          command: usage.command || "",
+          active: false,
+          expiresAt: null,
+          dailyLimit: 0,
+          authorizedAt: null
+        });
+      }
+      summaryByClient.set(key, summary);
+    }
+
+    const maximum = Math.min(1000, Math.max(1, Number(limit) || 500));
+    return {
+      summary: [...summaryByClient.values()].sort(
+        (a, b) =>
+          Number(b.totalSent) - Number(a.totalSent) ||
+          String(a.name).localeCompare(String(b.name), "es", {
+            sensitivity: "base"
+          })
+      ),
+      events: structuredClone(selectedUsage.slice(0, maximum)),
+      generatedAt: new Date().toISOString()
+    };
   }
 
   listClients({ includeArchived = false } = {}) {

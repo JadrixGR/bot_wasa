@@ -27,6 +27,17 @@ IMPORTANTE
 - Un mismo número puede tener hasta 2 compras o servicios registrados.
 - Si usas una duración o un precio especial, revisa y edita el precio desde el panel.
 
+AUTORIZACIÓN DE CÓDIGOS 2FA
+
+  /codigo gpt04
+
+- Escribe este comando TÚ desde tu propio WhatsApp dentro del chat del cliente.
+- Reemplaza "gpt04" por el comando de la cuenta 2FA que aparece en Autenticador.
+- Autoriza únicamente a ese cliente para solicitar únicamente esa cuenta.
+- El bot reconoce número, @usuario o LID si WhatsApp oculta el teléfono.
+- Después de autorizarlo, el cliente puede escribir /gpt04 desde su WhatsApp.
+- Revisa totales, fechas y horas en Autenticador → Control de uso.
+
 COMANDOS DE PRODUCTOS
 
   /claudepro DIAS       Claude Pro

@@ -654,6 +654,106 @@ test("registra y encuentra un cliente con @usuario y LID cuando el teléfono est
   }
 });
 
+test("autoriza 2FA por @usuario, enlaza su LID y conserva el historial de envíos", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    store.data.authenticatorAccounts.push({
+      id: "auth-gpt04",
+      name: "GPT04",
+      service: "ChatGPT Plus",
+      email: "gpt04@correo.test",
+      command: "/gpt04"
+    });
+
+    const access = store.createAuthenticatorAccess("auth-gpt04", {
+      name: "Kevin",
+      whatsapp: "@kevin_04",
+      dailyLimit: 3
+    });
+    assert.equal(access.whatsapp, "@kevin_04");
+    assert.equal(access.whatsappUsername, "@kevin_04");
+    assert.equal(
+      store.checkAuthenticatorAccess("auth-gpt04", "@kevin_04").allowed,
+      true
+    );
+
+    store.enrichAuthenticatorAccessWithWhatsAppIdentity({
+      whatsapp: "@kevin_04",
+      whatsappUsername: "@kevin_04",
+      whatsappChatId: "700000000000@lid"
+    });
+    assert.equal(
+      store.checkAuthenticatorAccess(
+        "auth-gpt04",
+        "700000000000@lid"
+      ).allowed,
+      true
+    );
+
+    const recorded = store.registerAuthenticatorAccessUsage(access.id);
+    assert.equal(recorded.entry.totalSent, 1);
+    assert.equal(recorded.usage.command, "/gpt04");
+    assert.equal(recorded.usage.clientName, "Kevin");
+    const report = store.getAuthenticatorUsageReport();
+    assert.equal(report.summary.length, 1);
+    assert.equal(report.summary[0].totalSent, 1);
+    assert.equal(report.summary[0].authorizations[0].command, "/gpt04");
+    assert.equal(report.events.length, 1);
+    assert.ok(report.events[0].sentAt);
+
+    const reloaded = new JsonStore(directory);
+    assert.equal(reloaded.getAuthenticatorUsageReport().events.length, 1);
+    assert.equal(
+      reloaded.checkAuthenticatorAccess("auth-gpt04", "700000000000@lid")
+        .allowed,
+      true
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("el comando administrativo puede crear o reactivar una autorización 2FA", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    store.data.authenticatorAccounts.push({
+      id: "auth-gpt04",
+      name: "GPT04",
+      service: "ChatGPT Plus",
+      email: "gpt04@correo.test",
+      command: "/gpt04"
+    });
+    const first = store.authorizeAuthenticatorAccess(
+      "auth-gpt04",
+      {
+        whatsapp: "@cliente_04",
+        whatsappUsername: "@cliente_04",
+        whatsappChatId: "710000000000@lid"
+      },
+      { name: "Cliente 04" }
+    );
+    assert.equal(first.created, true);
+    store.updateAuthenticatorAccess(first.entry.id, {
+      active: false,
+      expiresAt: "2026-01-01"
+    });
+
+    const renewed = store.authorizeAuthenticatorAccess(
+      "auth-gpt04",
+      { whatsapp: "@cliente_04", whatsappUsername: "@cliente_04" },
+      { name: "Cliente 04" }
+    );
+    assert.equal(renewed.created, false);
+    assert.equal(renewed.entry.id, first.entry.id);
+    assert.equal(renewed.entry.active, true);
+    assert.equal(renewed.entry.expiresAt, null);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("cada comando nuevo crea una compra independiente aunque repita el producto", () => {
   const directory = temporaryDataDir();
   try {

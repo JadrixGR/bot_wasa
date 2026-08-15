@@ -22,6 +22,8 @@ const state = {
   },
   accessEntries: [],
   accessAccountId: null,
+  authenticatorUsage: { summary: [], events: [] },
+  authenticatorUsageAccountId: null,
   authenticatorSecurity: null,
   activeSection: "dashboard",
   loadedSections: new Set(),
@@ -314,6 +316,24 @@ function formatDate(value) {
     .format(new Date(year, month - 1, day));
 }
 
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("es-PE", {
+    timeZone: "America/Lima",
+    dateStyle: "medium",
+    timeStyle: "medium"
+  }).format(date);
+}
+
+function whatsappIdentityLabel(entry) {
+  if (entry?.whatsappUsername) return entry.whatsappUsername;
+  const phone = String(entry?.whatsappPhone || entry?.whatsapp || "").trim();
+  if (/^\d{10,15}$/.test(phone)) return `+${phone}`;
+  return phone || entry?.whatsappChatId || "Identidad no disponible";
+}
+
 function addMonths(value, months) {
   const [year, month, day] = value.split("-").map(Number);
   const date = new Date(year, month - 1 + Number(months), 1);
@@ -544,6 +564,7 @@ function renderAuthenticator() {
           <span>${escapeHtml(account.algorithm)} · ${escapeHtml(account.digits)} dígitos · ${escapeHtml(account.period)} s</span>
           <div>
             <button data-auth-action="access" data-id="${escapeHtml(account.id)}" type="button">Accesos</button>
+            <button data-auth-action="usage" data-id="${escapeHtml(account.id)}" type="button">Historial</button>
             <button data-auth-action="edit" data-id="${escapeHtml(account.id)}" type="button">Editar</button>
             <button class="danger" data-auth-action="delete" data-id="${escapeHtml(account.id)}" type="button">Eliminar</button>
           </div>
@@ -1118,8 +1139,9 @@ function renderAccessList() {
       <div class="access-row ${entry.active ? "" : "is-off"}">
         <div>
           <strong>${escapeHtml(entry.name || "Cliente")}</strong>
-          <span class="muted">+${escapeHtml(entry.whatsapp)}</span>
+          <span class="muted">${escapeHtml(whatsappIdentityLabel(entry))}</span>
           <span class="muted">${entry.dailyLimit ? `${escapeHtml(entry.dailyLimit)} códigos/día` : "Sin límite diario"}${entry.expiresAt ? ` · vence ${escapeHtml(entry.expiresAt)}` : ""}</span>
+          <span class="muted">${escapeHtml(entry.totalSent || 0)} enviados en total${entry.lastSentAt ? ` · último ${escapeHtml(formatDateTime(entry.lastSentAt))}` : ""}</span>
         </div>
         <div class="access-row-actions">
           <span class="pill ${entry.active ? "green" : "red"}">${entry.active ? "Activo" : "Inactivo"}</span>
@@ -1193,6 +1215,72 @@ async function saveAccess(event) {
   } finally {
     button.disabled = false;
     button.textContent = $("#accessId").value ? "Guardar cambios" : "Autorizar cliente";
+  }
+}
+
+function renderAuthenticatorUsage() {
+  const report = state.authenticatorUsage || { summary: [], events: [] };
+  const summary = report.summary || [];
+  const events = report.events || [];
+  $("#usageClientCount").textContent =
+    `${summary.length} cliente${summary.length === 1 ? "" : "s"}`;
+  $("#usageEventCount").textContent =
+    `${events.length} envío${events.length === 1 ? "" : "s"}`;
+
+  $("#authenticatorUsageSummary").innerHTML = summary.length
+    ? summary.map((client) => `
+        <article class="usage-summary-card">
+          <div class="usage-summary-heading">
+            <div>
+              <strong>${escapeHtml(client.name || "Cliente")}</strong>
+              <span>${escapeHtml(whatsappIdentityLabel(client))}</span>
+            </div>
+            <span class="usage-total"><b>${escapeHtml(client.totalSent || 0)}</b> códigos</span>
+          </div>
+          <div class="usage-metrics">
+            <span><small>Hoy</small><strong>${escapeHtml(client.usedToday || 0)}</strong></span>
+            <span><small>Último envío</small><strong>${escapeHtml(formatDateTime(client.lastSentAt))}</strong></span>
+          </div>
+          <div class="usage-authorizations">
+            ${(client.authorizations || []).map((authorization) => `
+              <div>
+                <code>${escapeHtml(authorization.command || "Cuenta eliminada")}</code>
+                <span>${escapeHtml(authorization.service || authorization.accountName || "Cuenta 2FA")}</span>
+                <span class="pill ${authorization.active ? "green" : "red"}">${authorization.active ? "Autorizado" : "Inactivo"}</span>
+              </div>`).join("")}
+          </div>
+        </article>`).join("")
+    : `<p class="muted usage-empty">Todavía no hay clientes autorizados ni envíos registrados.</p>`;
+
+  $("#authenticatorUsageHistory").innerHTML = events.length
+    ? events.map((entry) => `
+        <div class="usage-history-row">
+          <span class="usage-history-dot" aria-hidden="true"></span>
+          <div>
+            <strong>${escapeHtml(entry.clientName || "Cliente")}</strong>
+            <span>${escapeHtml(whatsappIdentityLabel(entry))} · <code>${escapeHtml(entry.command || "Cuenta eliminada")}</code> · ${escapeHtml(entry.service || entry.accountName || "Cuenta 2FA")}</span>
+          </div>
+          <time datetime="${escapeHtml(entry.sentAt)}">${escapeHtml(formatDateTime(entry.sentAt))}</time>
+        </div>`).join("")
+    : `<p class="muted usage-empty">Aún no se ha entregado ningún código a clientes autorizados.</p>`;
+}
+
+async function openAuthenticatorUsageDialog(account = null) {
+  state.authenticatorUsageAccountId = account?.id || null;
+  $("#authenticatorUsageTitle").textContent = account
+    ? `Uso · ${account.name}`
+    : "Uso de códigos por cliente";
+  state.authenticatorUsage = { summary: [], events: [] };
+  renderAuthenticatorUsage();
+  $("#authenticatorUsageDialog").showModal();
+  try {
+    const query = account?.id
+      ? `?accountId=${encodeURIComponent(account.id)}`
+      : "";
+    state.authenticatorUsage = await api(`/api/authenticator/usage${query}`);
+    renderAuthenticatorUsage();
+  } catch (error) {
+    showToast(error.message, true);
   }
 }
 
@@ -2423,6 +2511,9 @@ function bindEvents() {
   $("#newAuthenticatorButton").addEventListener("click", () =>
     openAuthenticatorDialog()
   );
+  $("#authenticatorUsageButton").addEventListener("click", () =>
+    openAuthenticatorUsageDialog()
+  );
   $$("[data-authenticator-new]").forEach((button) =>
     button.addEventListener("click", () => openAuthenticatorDialog())
   );
@@ -2494,6 +2585,11 @@ function bindEvents() {
 
     if (button.dataset.authAction === "access") {
       await openAccessDialog(account);
+      return;
+    }
+
+    if (button.dataset.authAction === "usage") {
+      await openAuthenticatorUsageDialog(account);
       return;
     }
 
@@ -2974,6 +3070,9 @@ function bindEvents() {
   });
 
   $("#accessForm").addEventListener("submit", saveAccess);
+  $$(".authenticator-usage-close").forEach((button) =>
+    button.addEventListener("click", () => $("#authenticatorUsageDialog").close())
+  );
   $$(".access-close").forEach((button) =>
     button.addEventListener("click", () => $("#accessDialog").close())
   );
