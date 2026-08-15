@@ -163,6 +163,10 @@ function normalizeAuthenticatorAccessEntry(entry) {
     usageDate: String(base.usageDate || "") || null,
     usedToday: Number(base.usedToday) || 0,
     totalSent: Number(base.totalSent) || 0,
+    urgentAllowance: Math.max(
+      0,
+      Math.min(5, Math.floor(Number(base.urgentAllowance) || 0))
+    ),
     lastSentAt: base.lastSentAt || null,
     notes: String(base.notes || "").trim().slice(0, 300),
     createdAt: base.createdAt || new Date().toISOString(),
@@ -182,6 +186,7 @@ function normalizeAuthenticatorUsageEvent(entry) {
     accountName: String(base.accountName || "").trim().slice(0, 120),
     service: String(base.service || "").trim().slice(0, 120),
     command: String(base.command || "").trim().toLowerCase().slice(0, 33),
+    urgent: Boolean(base.urgent),
     sentAt: base.sentAt || base.createdAt || new Date().toISOString()
   };
 }
@@ -1937,6 +1942,9 @@ class JsonStore {
   checkAuthenticatorAccess(accountId, ...identities) {
     const entry = this.findAuthenticatorAccess(accountId, ...identities);
     if (!entry) return { allowed: false, reason: "sin-autorizacion", entry: null };
+    if (Number(entry.urgentAllowance || 0) > 0) {
+      return { allowed: true, reason: "urgencia-correo", entry };
+    }
     if (!entry.active) return { allowed: false, reason: "inactivo", entry };
     const today = todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima");
     if (entry.expiresAt && compareDateOnly(entry.expiresAt, today) < 0) {
@@ -1961,13 +1969,18 @@ class JsonStore {
       (entry) =>
         entry.accountId === accountId && identitiesOverlap(entry, identity)
     );
+    const urgentAllowance = Math.max(
+      0,
+      Math.min(5, Math.floor(Number(input.urgentAllowance) || 0))
+    );
     if (!existing) {
       return {
         created: true,
         entry: this.createAuthenticatorAccess(accountId, {
           ...input,
           ...identity,
-          active: true
+          active: true,
+          urgentAllowance
         })
       };
     }
@@ -1976,7 +1989,9 @@ class JsonStore {
       ...identity,
       name: String(input.name || existing.name || "").trim(),
       active: true,
-      expiresAt: null
+      expiresAt: null,
+      urgentAllowance:
+        Number(existing.urgentAllowance || 0) + urgentAllowance
     });
     return { created: false, entry };
   }
@@ -2018,6 +2033,13 @@ class JsonStore {
     entry.usedToday = entry.usageDate === today ? Number(entry.usedToday || 0) + 1 : 1;
     entry.usageDate = today;
     entry.totalSent = Number(entry.totalSent || 0) + 1;
+    const urgent = Number(entry.urgentAllowance || 0) > 0;
+    if (urgent) {
+      entry.urgentAllowance = Math.max(
+        0,
+        Number(entry.urgentAllowance || 0) - 1
+      );
+    }
     entry.lastSentAt = new Date().toISOString();
     entry.updatedAt = entry.lastSentAt;
     const account = (this.data.authenticatorAccounts || []).find(
@@ -2033,6 +2055,7 @@ class JsonStore {
       accountName: account?.name || metadata.accountName,
       service: account?.service || metadata.service,
       command: account?.command || metadata.command,
+      urgent,
       sentAt: entry.lastSentAt
     });
     this.data.authenticatorUsage.unshift(usage);
@@ -2103,6 +2126,7 @@ class JsonStore {
         active: entry.active !== false,
         expiresAt: entry.expiresAt,
         dailyLimit: entry.dailyLimit,
+        urgentAllowance: Number(entry.urgentAllowance || 0),
         authorizedAt: entry.createdAt
       });
       summaryByClient.set(key, summary);
@@ -2146,6 +2170,7 @@ class JsonStore {
           active: false,
           expiresAt: null,
           dailyLimit: 0,
+          urgentAllowance: 0,
           authorizedAt: null
         });
       }

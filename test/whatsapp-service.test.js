@@ -1193,11 +1193,31 @@ test("un cliente autorizado por @usuario recibe el código y registra el uso", a
 test("el bot atiende una urgencia por correo y entrega el comando autorizado", async () => {
   const fake = makeFakeBaileys({ registered: true });
   const store = makeStore();
-  store.checkAuthenticatorAccess = () => ({
-    allowed: true,
-    reason: "ok",
-    entry: { id: "access-email-gpt04", name: "Kevin" }
-  });
+  let urgentAuthorization = null;
+  store.authorizeAuthenticatorAccess = (accountId, identity, input) => {
+    urgentAuthorization = { accountId, identity, input };
+    return {
+      created: true,
+      entry: {
+        id: "access-email-gpt04",
+        accountId,
+        name: input.name,
+        urgentAllowance: input.urgentAllowance,
+        ...identity
+      }
+    };
+  };
+  store.checkAuthenticatorAccess = () =>
+    urgentAuthorization
+      ? {
+          allowed: true,
+          reason: "urgencia-correo",
+          entry: {
+            id: "access-email-gpt04",
+            name: "Cliente urgente"
+          }
+        }
+      : { allowed: false, reason: "sin-autorizacion", entry: null };
   const account = {
     id: "auth-gpt04",
     name: "GPT04",
@@ -1206,9 +1226,16 @@ test("el bot atiende una urgencia por correo y entrega el comando autorizado", a
     command: "/gpt04"
   };
   const authenticator = {
-    findAccountByCommand: () => null,
+    findAccountByCommand: (command) =>
+      String(command).toLowerCase() === "/gpt04" ? account : null,
     findAccountsByEmail: (email) =>
-      email === "gpt04@correo.test" ? [account] : []
+      email === "gpt04@correo.test" ? [account] : [],
+    getFreshCodeByCommand: async () => ({
+      ...account,
+      code: "604821",
+      secondsRemaining: 25,
+      waitedMilliseconds: 0
+    })
   };
   const service = makeService(fake, {
     store,
@@ -1250,11 +1277,34 @@ test("el bot atiende una urgencia por correo y entrega el comando autorizado", a
   });
   await settleMessageQueue(service);
 
-  assert.equal(socket.calls.sent.length, 2);
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "urgent-code-command",
+          remoteJid: "51922223333@s.whatsapp.net",
+          fromMe: false
+        },
+        message: { conversation: "/gpt04" }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(urgentAuthorization.accountId, "auth-gpt04");
+  assert.equal(urgentAuthorization.input.urgentAllowance, 1);
+  assert.equal(urgentAuthorization.identity.whatsappPhone, "51922223333");
+  assert.equal(socket.calls.sent.length, 3);
   assert.match(socket.calls.sent[0].content.text, /Soy el bot de Jadrix Servis/);
   assert.match(socket.calls.sent[0].content.text, /correo de la cuenta/);
-  assert.match(socket.calls.sent[1].content.text, /Encontramos el código del correo/);
+  assert.match(socket.calls.sent[1].content.text, /¡Cuenta registrada!/);
+  assert.match(
+    socket.calls.sent[1].content.text,
+    /generaré tu código de inmediato, para que accedas a la cuenta/
+  );
   assert.match(socket.calls.sent[1].content.text, /\/gpt04/);
+  assert.match(socket.calls.sent[2].content.text, /604821/);
   assert.doesNotMatch(JSON.stringify(store.logs), /gpt04@correo\.test/i);
 });
 

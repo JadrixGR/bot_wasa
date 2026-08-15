@@ -122,7 +122,7 @@ Después, el cliente puede escribir `/gpt04` desde su propio WhatsApp. Si su acc
 
 ### Solicitudes urgentes por correo
 
-Cuando un cliente indica que necesita un código 2FA con urgencia, el bot le pide el correo de la cuenta. Si recibe un correo válido que coincide con una cuenta del Autenticador y ese WhatsApp está autorizado, responde con el comando exacto que debe enviar. El correo no reemplaza la autorización: un cliente no autorizado no puede obtener el comando ni el código por esta vía.
+Cuando un cliente indica que necesita un código 2FA con urgencia, el bot le pide el correo de la cuenta. Si recibe un correo válido que coincide con una cuenta del Autenticador, registra automáticamente para ese WhatsApp una excepción urgente de un solo código y responde con el comando exacto que debe enviar, por ejemplo `/gpt04`. Cuando el cliente escribe ese comando, recibe el código 2FA y la excepción queda consumida; las solicitudes posteriores vuelven a respetar su autorización y límite normal.
 
 ## Autenticador 2FA protegido
 
@@ -412,7 +412,7 @@ Para probar el Autenticador:
 8. Repite la prueba cuando al código actual le queden menos de 20 segundos: el bot debe esperar el siguiente antes de enviarlo.
 9. En el chat de prueba escribe `/codigo gpt01` desde el WhatsApp propietario y luego envía `/gpt01` desde el teléfono del cliente.
 10. Abre **Autenticador → Control de uso** y confirma que aparecen el cliente, el total, la cuenta autorizada, la fecha y la hora del envío.
-11. Desde el cliente escribe “Necesito el código 2FA con urgencia”, envía el correo asociado y confirma que el bot responde con `/gpt01` únicamente si ese WhatsApp está autorizado.
+11. Desde un cliente no autorizado escribe “Necesito el código 2FA con urgencia”, envía el correo asociado y confirma que el bot registra una excepción, responde con `/gpt01` y entrega un solo código cuando el cliente envía ese comando.
 
 Desde un número que no esté registrado como cliente:
 

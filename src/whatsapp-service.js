@@ -29,7 +29,11 @@ const AUTHENTICATOR_SEND_WINDOW = Object.freeze({
 });
 const AUTHENTICATOR_EMAIL_REQUEST_TTL_MS = 30 * 60 * 1000;
 const AUTHENTICATOR_URGENT_PROMPT =
-  "Soy el bot de Jadrix Servis. Si necesita el código con urgencia, puede enviarme el correo de la cuenta para poder enviarle el código.";
+  [
+    "👋 ¡Hola! Soy el bot de Jadrix Servis.",
+    "",
+    "🔐 Si necesitas el código con urgencia, envíame el correo de la cuenta y te ayudaré a obtenerlo de inmediato. ⚡"
+  ].join("\n");
 
 let baileysModulePromise;
 
@@ -1470,19 +1474,63 @@ class WhatsAppService {
       }
 
       const identity = await this.#resolveCustomerIdentity(socket, message);
-      const checks = accounts.map((account) => ({
-        account,
-        check: this.store.checkAuthenticatorAccess?.(
-          account.id,
-          identity,
-          chatId,
-          message.key.remoteJidAlt || ""
-        ) || {
-          allowed: false,
-          reason: "sin-autorizacion",
-          entry: null
-        }
-      }));
+      let checks;
+      if (
+        pendingEmail &&
+        typeof this.store.authorizeAuthenticatorAccess === "function"
+      ) {
+        const registeredClient = this.store.findClientByWhatsApp?.(identity);
+        const name =
+          registeredClient?.name ||
+          identity.whatsappUsername ||
+          identity.whatsappPhone ||
+          "Cliente";
+        checks = accounts.map((account) => {
+          try {
+            const authorization = this.store.authorizeAuthenticatorAccess(
+              account.id,
+              identity,
+              { name, urgentAllowance: 1 }
+            );
+            return {
+              account,
+              check: {
+                allowed: true,
+                reason: "urgencia-correo",
+                entry: authorization.entry
+              }
+            };
+          } catch (error) {
+            this.store.addLog(
+              "authenticator",
+              `No se pudo crear la autorización urgente para ${account.command}: ${error.message}`,
+              { chatId: target, authenticatorId: account.id }
+            );
+            return {
+              account,
+              check: {
+                allowed: false,
+                reason: "sin-autorizacion",
+                entry: null
+              }
+            };
+          }
+        });
+      } else {
+        checks = accounts.map((account) => ({
+          account,
+          check: this.store.checkAuthenticatorAccess?.(
+            account.id,
+            identity,
+            chatId,
+            message.key.remoteJidAlt || ""
+          ) || {
+            allowed: false,
+            reason: "sin-autorizacion",
+            entry: null
+          }
+        }));
+      }
       const allowed = checks.filter((item) => item.check.allowed);
       if (!allowed.length) {
         const reason =
@@ -1511,14 +1559,22 @@ class WhatsAppService {
       const commands = [...new Set(allowed.map((item) => item.account.command))];
       const reply = commands.length === 1
         ? [
-            "Encontramos el código del correo. Para enviártelo, envía en este chat de WhatsApp el siguiente comando:",
+            "✅ *¡Cuenta registrada!*",
             "",
-            commands[0]
+            "Para proceder a enviarte el código, escribe el siguiente comando:",
+            "",
+            `👉 ${commands[0]}`,
+            "",
+            "En cuanto lo envíes, generaré tu código de inmediato, para que accedas a la cuenta. 🔐⚡"
           ].join("\n")
         : [
-            "Encontramos más de una cuenta autorizada para ese correo. Envía en este chat de WhatsApp el comando de la cuenta que necesitas:",
+            "✅ *¡Cuentas registradas!*",
             "",
-            ...commands
+            "Encontré más de una cuenta asociada. Escribe el comando de la cuenta cuyo código necesitas:",
+            "",
+            ...commands.map((command) => `👉 ${command}`),
+            "",
+            "En cuanto lo envíes, generaré tu código de inmediato, para que accedas a la cuenta. 🔐⚡"
           ].join("\n");
       await this.sendText(target, reply);
       this.store.updateConversation?.(chatId, {

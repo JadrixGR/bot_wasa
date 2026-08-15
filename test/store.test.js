@@ -754,6 +754,53 @@ test("el comando administrativo puede crear o reactivar una autorización 2FA", 
   }
 });
 
+test("el correo urgente concede un solo código aunque el límite diario esté alcanzado", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    store.data.authenticatorAccounts.push({
+      id: "auth-urgente",
+      name: "GPT urgente",
+      service: "ChatGPT Plus",
+      email: "urgente@correo.test",
+      command: "/gpturgente"
+    });
+    const access = store.createAuthenticatorAccess("auth-urgente", {
+      name: "Cliente urgente",
+      whatsapp: "51911112222",
+      dailyLimit: 1
+    });
+    store.updateAuthenticatorAccess(access.id, {
+      usageDate: todayInTimeZone("America/Lima"),
+      usedToday: 1,
+      active: false
+    });
+
+    const urgent = store.authorizeAuthenticatorAccess(
+      "auth-urgente",
+      "51911112222",
+      { name: "Cliente urgente", urgentAllowance: 1 }
+    );
+    assert.equal(urgent.entry.urgentAllowance, 1);
+    const check = store.checkAuthenticatorAccess(
+      "auth-urgente",
+      "51911112222"
+    );
+    assert.equal(check.allowed, true);
+    assert.equal(check.reason, "urgencia-correo");
+
+    const recorded = store.registerAuthenticatorAccessUsage(access.id);
+    assert.equal(recorded.usage.urgent, true);
+    assert.equal(recorded.entry.urgentAllowance, 0);
+    assert.equal(
+      store.checkAuthenticatorAccess("auth-urgente", "51911112222").reason,
+      "limite-diario"
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("cada comando nuevo crea una compra independiente aunque repita el producto", () => {
   const directory = temporaryDataDir();
   try {

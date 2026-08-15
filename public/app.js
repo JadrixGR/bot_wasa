@@ -1142,6 +1142,7 @@ function renderAccessList() {
           <span class="muted">${escapeHtml(whatsappIdentityLabel(entry))}</span>
           <span class="muted">${entry.dailyLimit ? `${escapeHtml(entry.dailyLimit)} códigos/día` : "Sin límite diario"}${entry.expiresAt ? ` · vence ${escapeHtml(entry.expiresAt)}` : ""}</span>
           <span class="muted">${escapeHtml(entry.totalSent || 0)} enviados en total${entry.lastSentAt ? ` · último ${escapeHtml(formatDateTime(entry.lastSentAt))}` : ""}</span>
+          ${entry.urgentAllowance ? `<span class="muted">⚡ ${escapeHtml(entry.urgentAllowance)} código urgente pendiente</span>` : ""}
         </div>
         <div class="access-row-actions">
           <span class="pill ${entry.active ? "green" : "red"}">${entry.active ? "Activo" : "Inactivo"}</span>
@@ -1246,7 +1247,7 @@ function renderAuthenticatorUsage() {
               <div>
                 <code>${escapeHtml(authorization.command || "Cuenta eliminada")}</code>
                 <span>${escapeHtml(authorization.service || authorization.accountName || "Cuenta 2FA")}</span>
-                <span class="pill ${authorization.active ? "green" : "red"}">${authorization.active ? "Autorizado" : "Inactivo"}</span>
+                <span class="pill ${authorization.urgentAllowance ? "violet" : authorization.active ? "green" : "red"}">${authorization.urgentAllowance ? "Urgente pendiente" : authorization.active ? "Autorizado" : "Inactivo"}</span>
               </div>`).join("")}
           </div>
         </article>`).join("")
@@ -1258,7 +1259,7 @@ function renderAuthenticatorUsage() {
           <span class="usage-history-dot" aria-hidden="true"></span>
           <div>
             <strong>${escapeHtml(entry.clientName || "Cliente")}</strong>
-            <span>${escapeHtml(whatsappIdentityLabel(entry))} · <code>${escapeHtml(entry.command || "Cuenta eliminada")}</code> · ${escapeHtml(entry.service || entry.accountName || "Cuenta 2FA")}</span>
+            <span>${escapeHtml(whatsappIdentityLabel(entry))} · <code>${escapeHtml(entry.command || "Cuenta eliminada")}</code> · ${escapeHtml(entry.service || entry.accountName || "Cuenta 2FA")}${entry.urgent ? " · ⚡ Urgencia" : ""}</span>
           </div>
           <time datetime="${escapeHtml(entry.sentAt)}">${escapeHtml(formatDateTime(entry.sentAt))}</time>
         </div>`).join("")
