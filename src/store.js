@@ -215,6 +215,20 @@ function normalizeQuickReplyImage(image) {
   };
 }
 
+function normalizeWelcomeAudio(audio) {
+  const source = audio && typeof audio === "object" ? audio : {};
+  const filePath = String(source.path || "").trim();
+  if (!filePath) return null;
+  return {
+    id: String(source.id || crypto.randomUUID()),
+    path: filePath,
+    originalName: String(source.originalName || "audio").trim().slice(0, 180),
+    mimetype: String(source.mimetype || "application/octet-stream").slice(0, 120),
+    size: Math.max(0, Number(source.size) || 0),
+    uploadedAt: source.uploadedAt || new Date().toISOString()
+  };
+}
+
 function normalizeWelcomeSequence(
   input,
   { previousSequence = [], label = "La bienvenida" } = {}
@@ -262,10 +276,26 @@ function normalizeWelcomeSequence(
       image = normalizeQuickReplyImage(previous.image);
     }
 
+    let audio = null;
+    if (Object.prototype.hasOwnProperty.call(objectEntry, "audio")) {
+      if (objectEntry.audio) {
+        audio = normalizeWelcomeAudio(objectEntry.audio);
+        if (!audio?.path && previous?.audio) {
+          const requestedAudioId = String(objectEntry.audio.id || "");
+          if (!requestedAudioId || requestedAudioId === String(previous.audio.id)) {
+            audio = normalizeWelcomeAudio(previous.audio);
+          }
+        }
+      }
+    } else if (previous?.audio) {
+      audio = normalizeWelcomeAudio(previous.audio);
+    }
+
     return {
       id,
       text: text.slice(0, 4096),
-      image
+      image,
+      audio
     };
   });
 }
@@ -278,6 +308,9 @@ function sequenceSource(source, previousSequence = []) {
       text,
       ...(previousSequence[index]?.image
         ? { image: previousSequence[index].image }
+        : {}),
+      ...(previousSequence[index]?.audio
+        ? { audio: previousSequence[index].audio }
         : {})
     }));
   }
@@ -1690,6 +1723,79 @@ class JsonStore {
     const deleted = stored.image;
     stored.image = null;
     this.addLog("welcome-media", "Imagen eliminada de una bienvenida", {
+      scope: normalizedScope,
+      profileId: profileId || null,
+      messageId: stored.id
+    });
+    this.save();
+    return structuredClone(deleted);
+  }
+
+  setWelcomeMessageAudio(scope, profileId, messageId, audio) {
+    const message = this.getWelcomeMessage(scope, profileId, messageId);
+    if (!message) throw new Error("Mensaje de bienvenida no encontrado.");
+    const normalized = normalizeWelcomeAudio(audio);
+    if (!normalized) throw new Error("El audio cargado no es válido.");
+
+    const normalizedScope = String(scope || "").toLowerCase();
+    let sequence;
+    let targetName = "general";
+    if (normalizedScope === "general") {
+      sequence = this.data.settings.greetingSequence;
+    } else if (normalizedScope === "country") {
+      const profile = this.data.settings.countryGreetings?.find(
+        (entry) => String(entry.id) === String(profileId || "")
+      );
+      sequence = profile?.sequence;
+      targetName = profile?.country || "país";
+    } else if (normalizedScope === "ad") {
+      const profile = this.data.settings.adGreetings?.find(
+        (entry) => String(entry.id) === String(profileId || "")
+      );
+      sequence = profile?.sequence;
+      targetName = profile?.name || "anuncio";
+    } else {
+      throw new Error("Tipo de bienvenida no permitido.");
+    }
+
+    const stored = (Array.isArray(sequence) ? sequence : []).find(
+      (entry) => String(entry.id) === String(messageId || "")
+    );
+    const previous = stored.audio ? structuredClone(stored.audio) : null;
+    stored.audio = normalized;
+    this.addLog(
+      "welcome-media",
+      `Audio agregado a la bienvenida de ${targetName}: ${normalized.originalName}`,
+      { scope: normalizedScope, profileId: profileId || null, messageId: stored.id }
+    );
+    this.save();
+    return { audio: structuredClone(normalized), previous };
+  }
+
+  deleteWelcomeMessageAudio(scope, profileId, messageId) {
+    const message = this.getWelcomeMessage(scope, profileId, messageId);
+    if (!message) throw new Error("Mensaje de bienvenida no encontrado.");
+    if (!message.audio) throw new Error("Este mensaje no tiene un audio.");
+
+    const normalizedScope = String(scope || "").toLowerCase();
+    let sequence;
+    if (normalizedScope === "general") {
+      sequence = this.data.settings.greetingSequence;
+    } else if (normalizedScope === "country") {
+      sequence = this.data.settings.countryGreetings.find(
+        (profile) => String(profile.id) === String(profileId || "")
+      )?.sequence;
+    } else if (normalizedScope === "ad") {
+      sequence = this.data.settings.adGreetings.find(
+        (profile) => String(profile.id) === String(profileId || "")
+      )?.sequence;
+    }
+    const stored = (Array.isArray(sequence) ? sequence : []).find(
+      (entry) => String(entry.id) === String(messageId || "")
+    );
+    const deleted = stored.audio;
+    stored.audio = null;
+    this.addLog("welcome-media", "Audio eliminado de una bienvenida", {
       scope: normalizedScope,
       profileId: profileId || null,
       messageId: stored.id

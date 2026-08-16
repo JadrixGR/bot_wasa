@@ -249,6 +249,63 @@ test("guarda bienvenidas por anuncio y permite activar el modo general", () => {
   }
 });
 
+test("guarda y elimina el audio asociado a un mensaje de anuncio", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    store.updateSettings({
+      adGreetings: [
+        {
+          id: "anuncio-antiguo",
+          name: "Producto antiguo",
+          matchTerms: ["META-AD-ANTIGUO"],
+          sequence: [
+            {
+              id: "mensaje-audio-antiguo",
+              text: "Escucha esta información importante.",
+              image: null
+            }
+          ]
+        }
+      ]
+    });
+
+    const audioPath = path.join(directory, "explicacion.ogg");
+    const result = store.setWelcomeMessageAudio(
+      "ad",
+      "anuncio-antiguo",
+      "mensaje-audio-antiguo",
+      {
+        id: "audio-antiguo",
+        path: audioPath,
+        originalName: "producto-no-disponible.ogg",
+        mimetype: "audio/ogg; codecs=opus",
+        size: 1234
+      }
+    );
+    assert.equal(result.audio.path, audioPath);
+    assert.equal(
+      store.getWelcomeMessage("ad", "anuncio-antiguo", "mensaje-audio-antiguo")
+        .audio.originalName,
+      "producto-no-disponible.ogg"
+    );
+
+    const deleted = store.deleteWelcomeMessageAudio(
+      "ad",
+      "anuncio-antiguo",
+      "mensaje-audio-antiguo"
+    );
+    assert.equal(deleted.id, "audio-antiguo");
+    assert.equal(
+      store.getWelcomeMessage("ad", "anuncio-antiguo", "mensaje-audio-antiguo")
+        .audio,
+      null
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("acepta secuencias variables y rechaza anuncios sin identificadores o mensajes", () => {
   const directory = temporaryDataDir();
   try {

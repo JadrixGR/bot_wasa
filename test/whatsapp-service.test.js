@@ -746,6 +746,79 @@ test("un contacto de anuncio recibe la secuencia específica detectada por exter
   );
 });
 
+test("un contacto de anuncio recibe el audio configurado como nota de voz", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  const mediaDirectory = path.join(testRuntimeDir, "ad-audio-media");
+  fs.mkdirSync(mediaDirectory, { recursive: true });
+  const audioPath = path.join(mediaDirectory, "producto-antiguo.ogg");
+  fs.writeFileSync(audioPath, Buffer.from("OggS-audio-de-prueba"));
+  store.getSettings = () => ({
+    welcomeRoutingMode: "smart",
+    greetingMessages: ["General"],
+    countryGreetings: [],
+    adGreetings: [
+      {
+        id: "anuncio-producto-antiguo",
+        name: "Producto antiguo",
+        enabled: true,
+        matchTerms: ["META-AD-PRODUCTO-ANTIGUO"],
+        sequence: [
+          {
+            id: "mensaje-producto-antiguo",
+            text: "Gracias por escribirnos. Escucha esta información.",
+            image: null,
+            audio: { path: audioPath, mimetype: "audio/ogg; codecs=opus" }
+          }
+        ]
+      }
+    ]
+  });
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "ad-audio-session"),
+    mediaDir: mediaDirectory
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [
+      {
+        key: {
+          id: "ad-audio-message-1",
+          remoteJid: "51922224444@s.whatsapp.net",
+          fromMe: false
+        },
+        message: {
+          extendedTextMessage: {
+            text: "Hola, quiero este producto",
+            contextInfo: {
+              externalAdReply: {
+                title: "Producto antiguo",
+                body: "META-AD-PRODUCTO-ANTIGUO",
+                sourceId: "meta-ad-antiguo"
+              }
+            }
+          }
+        }
+      }
+    ]
+  });
+  await settleMessageQueue(service);
+
+  assert.equal(socket.calls.sent.length, 2, JSON.stringify(store.logs));
+  assert.ok(Buffer.isBuffer(socket.calls.sent[0].content.audio));
+  assert.equal(socket.calls.sent[0].content.ptt, true);
+  assert.equal(
+    socket.calls.sent[1].content.text,
+    "Gracias por escribirnos. Escucha esta información."
+  );
+});
+
 test("una bienvenida envía la imagen y el primer texto dentro de la misma burbuja", async () => {
   const fake = makeFakeBaileys({ registered: true });
   const store = makeStore();

@@ -1510,13 +1510,16 @@ const WELCOME_EDITOR_CONTAINERS = {
   ad: "#adGreetingMessages"
 };
 
-function createWelcomeMessage(text = "", image = null, id = "") {
+function createWelcomeMessage(text = "", image = null, id = "", audio = null) {
   return {
     id: id || crypto.randomUUID(),
     text: String(text || ""),
     image: image || null,
+    audio: audio || null,
     pendingFile: null,
-    pendingUrl: ""
+    pendingUrl: "",
+    pendingAudioFile: null,
+    pendingAudioUrl: ""
   };
 }
 
@@ -1526,7 +1529,7 @@ function normalizeWelcomeEditorItems(sequence, fallbackMessages = []) {
     : (Array.isArray(fallbackMessages) ? fallbackMessages : []);
   const items = source.map((entry) =>
     entry && typeof entry === "object" && !Array.isArray(entry)
-      ? createWelcomeMessage(entry.text, entry.image, entry.id)
+      ? createWelcomeMessage(entry.text, entry.image, entry.id, entry.audio)
       : createWelcomeMessage(entry)
   );
   return items.length ? items : [createWelcomeMessage()];
@@ -1535,6 +1538,7 @@ function normalizeWelcomeEditorItems(sequence, fallbackMessages = []) {
 function clearWelcomeEditor(kind) {
   for (const item of state.welcomeEditors[kind] || []) {
     if (item.pendingUrl) URL.revokeObjectURL(item.pendingUrl);
+    if (item.pendingAudioUrl) URL.revokeObjectURL(item.pendingAudioUrl);
   }
   state.welcomeEditors[kind] = [];
 }
@@ -1562,6 +1566,20 @@ function welcomeEditorImageMarkup(item, index) {
     </figure>`;
 }
 
+function welcomeEditorAudioMarkup(item, index) {
+  const url = item.pendingAudioUrl || item.audio?.url || "";
+  const name = item.pendingAudioFile?.name || item.audio?.originalName || "";
+  if (!url) {
+    return `<div class="welcome-message-audio-empty"><span>🎙️ Sin audio</span><small>Opcional para anuncios</small></div>`;
+  }
+  return `
+    <div class="welcome-message-audio-preview">
+      <audio controls preload="metadata" src="${escapeHtml(url)}" aria-label="Audio del mensaje ${index + 1}"></audio>
+      <div><strong>${escapeHtml(name || `Audio ${index + 1}`)}</strong><small>${item.pendingAudioFile ? "Nuevo audio" : formatFileSize(item.audio?.size)}</small></div>
+      <button data-welcome-action="remove-audio" data-message-id="${escapeHtml(item.id)}" type="button" aria-label="Quitar audio del mensaje ${index + 1}">×</button>
+    </div>`;
+}
+
 function renderWelcomeEditor(kind) {
   const container = $(WELCOME_EDITOR_CONTAINERS[kind]);
   if (!container) return;
@@ -1582,6 +1600,15 @@ function renderWelcomeEditor(kind) {
             <small>PNG, JPG o WEBP · máx. 8 MB</small>
           </label>
         </div>
+        ${kind === "ad" ? `
+          <div class="welcome-message-audio">
+            ${welcomeEditorAudioMarkup(item, index)}
+            <label class="welcome-audio-picker">
+              <input data-welcome-audio-file data-message-id="${escapeHtml(item.id)}" type="file" accept=".ogg,.opus,.mp3,.wav,.m4a,audio/ogg,audio/opus,audio/mpeg,audio/wav,audio/mp4">
+              <span>${item.pendingAudioFile || item.audio ? "Cambiar audio" : "+ Agregar audio"}</span>
+              <small>Se enviará como nota de voz · máx. 20 MB</small>
+            </label>
+          </div>` : ""}
       </div>
       <div class="welcome-message-actions">
         <button data-welcome-action="up" data-message-id="${escapeHtml(item.id)}" type="button" aria-label="Subir mensaje ${index + 1}" ${index === 0 ? "disabled" : ""}>↑</button>
@@ -1627,9 +1654,17 @@ function handleWelcomeEditorAction(kind, event) {
     item.pendingUrl = "";
     item.image = null;
   }
+  if (action === "remove-audio") {
+    const item = items[index];
+    if (item.pendingAudioUrl) URL.revokeObjectURL(item.pendingAudioUrl);
+    item.pendingAudioFile = null;
+    item.pendingAudioUrl = "";
+    item.audio = null;
+  }
   if (action === "remove" && items.length > 1) {
     const [removed] = items.splice(index, 1);
     if (removed.pendingUrl) URL.revokeObjectURL(removed.pendingUrl);
+    if (removed.pendingAudioUrl) URL.revokeObjectURL(removed.pendingAudioUrl);
   }
   if (action === "up" && index > 0) {
     [items[index - 1], items[index]] = [items[index], items[index - 1]];
@@ -1641,6 +1676,32 @@ function handleWelcomeEditorAction(kind, event) {
 }
 
 function handleWelcomeEditorFile(kind, event) {
+  const audioInput = event.target.closest("input[data-welcome-audio-file]");
+  if (audioInput) {
+    const file = audioInput.files?.[0];
+    if (!file) return;
+    const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] || "";
+    if (!new Set([".ogg", ".opus", ".mp3", ".wav", ".m4a"]).has(extension)) {
+      showToast(`${file.name} no es un audio OGG, OPUS, MP3, WAV ni M4A.`, true);
+      audioInput.value = "";
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      showToast(`${file.name} supera los 20 MB.`, true);
+      audioInput.value = "";
+      return;
+    }
+    const item = state.welcomeEditors[kind].find(
+      (entry) => entry.id === audioInput.dataset.messageId
+    );
+    if (!item) return;
+    if (item.pendingAudioUrl) URL.revokeObjectURL(item.pendingAudioUrl);
+    item.pendingAudioFile = file;
+    item.pendingAudioUrl = URL.createObjectURL(file);
+    renderWelcomeEditor(kind);
+    return;
+  }
+
   const input = event.target.closest("input[data-welcome-file]");
   if (!input) return;
   const file = input.files?.[0];
@@ -1684,6 +1745,15 @@ function welcomeEditorSequence(kind) {
             size: item.image.size,
             uploadedAt: item.image.uploadedAt
           }
+        : null,
+      audio: item.audio
+        ? {
+            id: item.audio.id,
+            originalName: item.audio.originalName,
+            mimetype: item.audio.mimetype,
+            size: item.audio.size,
+            uploadedAt: item.audio.uploadedAt
+          }
         : null
     };
   });
@@ -1707,6 +1777,29 @@ async function uploadWelcomeEditorImages(kind, profileId, button) {
           "X-File-Name": encodeURIComponent(item.pendingFile.name)
         },
         body: item.pendingFile
+      }
+    );
+  }
+}
+
+async function uploadWelcomeEditorAudios(kind, profileId, button) {
+  const pending = (state.welcomeEditors[kind] || []).filter(
+    (item) => item.pendingAudioFile
+  );
+  for (let index = 0; index < pending.length; index += 1) {
+    const item = pending[index];
+    if (button) {
+      button.textContent = `Subiendo audio ${index + 1} de ${pending.length}…`;
+    }
+    await api(
+      `/api/welcome-audios/${encodeURIComponent(kind)}/${encodeURIComponent(profileId || "general")}/${encodeURIComponent(item.id)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-File-Name": encodeURIComponent(item.pendingAudioFile.name)
+        },
+        body: item.pendingAudioFile
       }
     );
   }
@@ -1763,6 +1856,7 @@ function renderAdGreetings() {
     );
     const preview = sequence[0]?.text || "";
     const imageCount = sequence.filter((message) => message.image).length;
+    const audioCount = sequence.filter((message) => message.audio).length;
     return `
       <article class="ad-greeting-card ${profile.enabled === false ? "is-disabled" : ""}">
         <div class="ad-greeting-card-top">
@@ -1773,7 +1867,7 @@ function renderAdGreetings() {
         <p class="ad-match-preview"><strong>Reconoce:</strong> ${escapeHtml(terms || "Sin identificadores")}</p>
         <p class="country-message-preview">${escapeHtml(preview)}</p>
         <div class="country-greeting-card-footer">
-          <span>${sequence.length} mensaje${sequence.length === 1 ? "" : "s"} · ${imageCount} ${imageCount === 1 ? "imagen" : "imágenes"} · ${(profile.matchTerms || []).length} coincidencia${(profile.matchTerms || []).length === 1 ? "" : "s"}</span>
+          <span>${sequence.length} mensaje${sequence.length === 1 ? "" : "s"} · ${imageCount} ${imageCount === 1 ? "imagen" : "imágenes"} · ${audioCount} ${audioCount === 1 ? "audio" : "audios"} · ${(profile.matchTerms || []).length} coincidencia${(profile.matchTerms || []).length === 1 ? "" : "s"}</span>
           <div>
             <button class="button secondary compact-button" data-ad-greeting-action="edit" data-id="${escapeHtml(profile.id)}" type="button">Editar</button>
             <button class="button danger-ghost compact-button" data-ad-greeting-action="delete" data-id="${escapeHtml(profile.id)}" type="button">Eliminar</button>
@@ -1850,6 +1944,7 @@ async function saveAdGreeting(event) {
     });
     state.settings = payload.settings;
     await uploadWelcomeEditorImages("ad", id, button);
+    await uploadWelcomeEditorAudios("ad", id, button);
     clearWelcomeEditor("ad");
     $("#adGreetingDialog").close();
     const refreshed = await api("/api/settings");

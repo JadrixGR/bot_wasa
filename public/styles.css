@@ -5599,9 +5599,18 @@ html[data-theme="dark"] .notice.error-notice { color: #ff9ba8; }
   gap: 0.6rem;
   min-width: 0;
 }
+.welcome-message-audio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.72fr);
+  gap: 0.6rem;
+  min-width: 0;
+}
 .welcome-message-image-empty,
 .welcome-message-image-preview,
-.welcome-image-picker {
+.welcome-image-picker,
+.welcome-message-audio-empty,
+.welcome-message-audio-preview,
+.welcome-audio-picker {
   min-height: 4.4rem;
   border: 1px dashed color-mix(in srgb, var(--line) 86%, var(--primary));
   border-radius: 0.8rem;
@@ -5614,6 +5623,15 @@ html[data-theme="dark"] .notice.error-notice { color: #ff9ba8; }
   text-align: center;
   color: var(--muted);
 }
+.welcome-message-audio-empty {
+  display: grid;
+  place-content: center;
+  gap: 0.1rem;
+  text-align: center;
+  color: var(--muted);
+}
+.welcome-message-audio-empty span { color: var(--ink); font-size: 0.72rem; font-weight: 800; }
+.welcome-message-audio-empty small { font-size: 0.64rem; }
 .welcome-message-image-empty span { color: var(--ink); font-size: 0.72rem; font-weight: 800; }
 .welcome-message-image-empty small { font-size: 0.64rem; }
 .welcome-message-image-preview {
@@ -5632,6 +5650,7 @@ html[data-theme="dark"] .notice.error-notice { color: #ff9ba8; }
 .welcome-message-image-preview figcaption strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; }
 .welcome-message-image-preview figcaption small { color: var(--muted); font-size: 0.62rem; }
 .welcome-message-image-preview > button,
+.welcome-message-audio-preview > button,
 .welcome-message-actions button {
   display: grid;
   place-items: center;
@@ -5640,10 +5659,13 @@ html[data-theme="dark"] .notice.error-notice { color: #ff9ba8; }
   background: color-mix(in srgb, var(--panel) 92%, transparent);
   transition: color 180ms ease-out, border-color 180ms ease-out, transform 180ms ease-out;
 }
-.welcome-message-image-preview > button { width: 1.8rem; height: 1.8rem; border-radius: 0.55rem; }
+.welcome-message-image-preview > button,
+.welcome-message-audio-preview > button { width: 1.8rem; height: 1.8rem; border-radius: 0.55rem; }
 .welcome-message-image-preview > button:hover,
+.welcome-message-audio-preview > button:hover,
 .welcome-message-actions button.danger:hover { color: var(--red); border-color: var(--red); }
-.welcome-image-picker {
+.welcome-image-picker,
+.welcome-audio-picker {
   position: relative;
   display: grid;
   place-content: center;
@@ -5653,10 +5675,26 @@ html[data-theme="dark"] .notice.error-notice { color: #ff9ba8; }
   cursor: pointer;
   transition: border-color 180ms ease-out, background 180ms ease-out, transform 180ms ease-out;
 }
-.welcome-image-picker:hover { transform: translateY(-1px); border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
-.welcome-image-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.welcome-image-picker span { color: var(--primary); font-size: 0.72rem; font-weight: 850; }
-.welcome-image-picker small { color: var(--muted); font-size: 0.61rem; }
+.welcome-image-picker:hover,
+.welcome-audio-picker:hover { transform: translateY(-1px); border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.welcome-image-picker input,
+.welcome-audio-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.welcome-image-picker span,
+.welcome-audio-picker span { color: var(--primary); font-size: 0.72rem; font-weight: 850; }
+.welcome-image-picker small,
+.welcome-audio-picker small { color: var(--muted); font-size: 0.61rem; }
+.welcome-message-audio-preview {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(0, 0.75fr) auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem;
+  border-style: solid;
+}
+.welcome-message-audio-preview audio { width: 100%; min-width: 8rem; height: 2.4rem; }
+.welcome-message-audio-preview > div { display: grid; min-width: 0; gap: 0.15rem; }
+.welcome-message-audio-preview strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.7rem; }
+.welcome-message-audio-preview small { color: var(--muted); font-size: 0.62rem; }
 .welcome-message-actions { display: grid; align-content: start; gap: 0.3rem; margin-top: 1.45rem; }
 .welcome-message-actions button { width: 2rem; height: 2rem; border-radius: 0.6rem; }
 .welcome-message-actions button:hover:not(:disabled) { color: var(--primary); border-color: var(--primary); transform: translateY(-1px); }
@@ -5664,7 +5702,10 @@ html[data-theme="dark"] .notice.error-notice { color: #ff9ba8; }
 html[data-theme="dark"] .welcome-message-row { background: rgba(8, 12, 27, 0.62); }
 html[data-theme="dark"] .welcome-message-image-empty,
 html[data-theme="dark"] .welcome-message-image-preview,
-html[data-theme="dark"] .welcome-image-picker { background: rgba(13, 17, 34, 0.88); }
+html[data-theme="dark"] .welcome-image-picker,
+html[data-theme="dark"] .welcome-message-audio-empty,
+html[data-theme="dark"] .welcome-message-audio-preview,
+html[data-theme="dark"] .welcome-audio-picker { background: rgba(13, 17, 34, 0.88); }
 
 @media (max-width: 720px) {
   .welcome-sequence-heading,
@@ -5674,5 +5715,8 @@ html[data-theme="dark"] .welcome-image-picker { background: rgba(13, 17, 34, 0.8
   .welcome-message-row { grid-template-columns: auto minmax(0, 1fr); }
   .welcome-message-number { margin-top: 1.45rem; }
   .welcome-message-actions { grid-column: 2; display: flex; margin-top: 0; }
-  .welcome-message-media { grid-template-columns: 1fr; }
+  .welcome-message-media,
+  .welcome-message-audio { grid-template-columns: 1fr; }
+  .welcome-message-audio-preview { grid-template-columns: 1fr auto; }
+  .welcome-message-audio-preview audio { grid-column: 1 / -1; }
 }

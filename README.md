@@ -2,7 +2,7 @@
 
 ## Bienvenidas distintas por anuncio
 
-En **Mensajes automáticos → Bienvenidas por anuncio** puedes crear una secuencia de 1 a 20 mensajes para cada campaña de Meta o Instagram.
+En **Mensajes automáticos → Bienvenidas por anuncio** puedes crear una secuencia de 1 a 20 mensajes para cada campaña de Meta o Instagram. Cada mensaje puede incluir una imagen y un audio opcionales; el audio se envía como nota de voz antes del texto.
 
 - El bot inspecciona `externalAdReply`, la referencia que WhatsApp adjunta al primer mensaje proveniente de un anuncio.
 - Puede reconocer la campaña mediante su título, texto, ID estable o enlace de origen.
@@ -24,7 +24,7 @@ La actualización incluye un perfil inicial para el anuncio **ChatGPT Personal y
 
 No uses solamente palabras genéricas como `ChatGPT` o `oferta`, porque podrían coincidir con varias campañas. Es mejor utilizar el encabezado completo, una frase promocional única o el ID que entrega Meta.
 
-Las imágenes de bienvenida se guardan en `MEDIA_DIR` (`/data/media` en Render) y sus referencias se conservan en `/data/jadrixservs-v4.json`. Para no perderlas al desplegar o reiniciar, conserva ambos dentro del disco persistente de Render.
+Las imágenes y los audios de bienvenida se guardan en `MEDIA_DIR` (`/data/media` en Render) y sus referencias se conservan en `/data/jadrixservs-v4.json`. Para no perderlos al desplegar o reiniciar, conserva ambos dentro del disco persistente de Render.
 
 ## Respuestas con Gemini IA
 

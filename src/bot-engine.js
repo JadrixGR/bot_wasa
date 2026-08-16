@@ -23,7 +23,8 @@ function welcomeSequence(source, fallbackMessages = []) {
       .map((item) => ({
         id: String(item?.id || ""),
         text: String(item?.text || "").trim(),
-        image: item?.image || null
+        image: item?.image || null,
+        audio: item?.audio || null
       }))
       .filter((item) => item.text);
     const legacyMessages = Array.isArray(source?.messages)
@@ -38,7 +39,8 @@ function welcomeSequence(source, fallbackMessages = []) {
       return legacyMessages.map((text, index) => ({
         id: `legacy-message-${index + 1}`,
         text,
-        image: null
+        image: null,
+        audio: null
       }));
     }
     return normalizedSequence;
@@ -50,7 +52,8 @@ function welcomeSequence(source, fallbackMessages = []) {
     .map((text, index) => ({
       id: `legacy-message-${index + 1}`,
       text: String(text || "").trim(),
-      image: null
+      image: null,
+      audio: null
     }))
     .filter((item) => item.text);
 }
@@ -432,6 +435,19 @@ class BotEngine {
       let sentNow = 0;
       for (let index = previousCount; index < sequence.length; index += 1) {
         const item = sequence[index];
+        if (item.audio?.path && this.sendMedia) {
+          try {
+            await this.sendMedia(chatId, item.audio.path, {
+              asVoice: true
+            });
+          } catch (error) {
+            this.store.addLog(
+              "welcome-media",
+              `No se pudo enviar el audio de bienvenida: ${error.message}`,
+              { chatId, messageId: item.id || null }
+            );
+          }
+        }
         if (item.image?.path && this.sendMedia) {
           try {
             await this.sendMedia(chatId, item.image.path, {

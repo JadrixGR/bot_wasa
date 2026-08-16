@@ -74,7 +74,8 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-        "img-src": ["'self'", "data:", "blob:"]
+        "img-src": ["'self'", "data:", "blob:"],
+        "media-src": ["'self'", "blob:"]
       }
     }
   })
@@ -152,6 +153,14 @@ function welcomeSequenceForPanel(sequence, scope, profileId) {
           ),
           url: `/api/welcome-images/${encodeURIComponent(scope)}/${encodeURIComponent(profileId || "general")}/${encodeURIComponent(message.id)}`
         }
+      : null,
+    audio: message.audio
+      ? {
+          ...Object.fromEntries(
+            Object.entries(message.audio).filter(([key]) => key !== "path")
+          ),
+          url: `/api/welcome-audios/${encodeURIComponent(scope)}/${encodeURIComponent(profileId || "general")}/${encodeURIComponent(message.id)}`
+        }
       : null
   }));
 }
@@ -180,7 +189,7 @@ function settingsForPanel(settings) {
   return panelSettings;
 }
 
-function welcomeImagePaths(settings) {
+function welcomeMediaPaths(settings) {
   const sequences = [
     settings?.greetingSequence,
     ...(settings?.countryGreetings || []).map((profile) => profile.sequence),
@@ -189,7 +198,7 @@ function welcomeImagePaths(settings) {
   return new Set(
     sequences
       .flatMap((sequence) => (Array.isArray(sequence) ? sequence : []))
-      .map((message) => message?.image?.path)
+      .flatMap((message) => [message?.image?.path, message?.audio?.path])
       .filter(Boolean)
       .map((filePath) => path.resolve(filePath))
   );
@@ -214,6 +223,29 @@ function validateQuickReplyImage(buffer, extension) {
     return (
       buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
       buffer.subarray(8, 12).toString("ascii") === "WEBP"
+    );
+  }
+  return false;
+}
+
+function validateWelcomeAudio(buffer, extension) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return false;
+  if (extension === ".ogg" || extension === ".opus") {
+    return buffer.subarray(0, 4).toString("ascii") === "OggS";
+  }
+  if (extension === ".wav") {
+    return (
+      buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+      buffer.subarray(8, 12).toString("ascii") === "WAVE"
+    );
+  }
+  if (extension === ".m4a") {
+    return buffer.subarray(4, 8).toString("ascii") === "ftyp";
+  }
+  if (extension === ".mp3") {
+    return (
+      buffer.subarray(0, 3).toString("ascii") === "ID3" ||
+      (buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0)
     );
   }
   return false;
@@ -729,9 +761,9 @@ app.put("/api/settings", requireAuth, (req, res) => {
       req.body.countryPriceBooks === undefined
         ? store.getCountryPriceBooks()
         : store.updateCountryPriceBooks(req.body.countryPriceBooks);
-    const activeWelcomeImages = welcomeImagePaths(store.getSettings());
-    for (const oldPath of welcomeImagePaths(previous.settings)) {
-      if (!activeWelcomeImages.has(oldPath)) removeStoredMedia(oldPath);
+    const activeWelcomeMedia = welcomeMediaPaths(store.getSettings());
+    for (const oldPath of welcomeMediaPaths(previous.settings)) {
+      if (!activeWelcomeMedia.has(oldPath)) removeStoredMedia(oldPath);
     }
     res.json({
       settings: settingsForPanel(settings),
@@ -861,6 +893,126 @@ app.delete(
       return res.status(400).json({ error: "Tipo de bienvenida no permitido." });
     }
     const deleted = store.deleteWelcomeMessageImage(
+      scope,
+      req.params.profileId,
+      req.params.messageId
+    );
+    removeStoredMedia(deleted.path);
+    res.json({ ok: true });
+  }
+);
+
+app.get(
+  "/api/welcome-audios/:scope/:profileId/:messageId",
+  requireAuth,
+  noStore,
+  (req, res) => {
+    const scope = validWelcomeScope(req.params.scope);
+    if (!scope) {
+      return res.status(400).json({ error: "Tipo de bienvenida no permitido." });
+    }
+    const audio = store.getWelcomeMessage(
+      scope,
+      req.params.profileId,
+      req.params.messageId
+    )?.audio;
+    if (!audio || !isStoredMediaPath(audio.path) || !fs.existsSync(audio.path)) {
+      return res.status(404).json({ error: "Audio no encontrado." });
+    }
+    res.type(audio.mimetype || path.extname(audio.path));
+    return res.sendFile(path.resolve(audio.path));
+  }
+);
+
+app.post(
+  "/api/welcome-audios/:scope/:profileId/:messageId",
+  requireAuth,
+  noStore,
+  express.raw({ type: "application/octet-stream", limit: "20mb" }),
+  (req, res) => {
+    const scope = validWelcomeScope(req.params.scope);
+    if (!scope) {
+      return res.status(400).json({ error: "Tipo de bienvenida no permitido." });
+    }
+    if (!store.getWelcomeMessage(scope, req.params.profileId, req.params.messageId)) {
+      return res.status(404).json({ error: "Mensaje de bienvenida no encontrado." });
+    }
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ error: "Selecciona un audio." });
+    }
+    if (req.body.length > 20 * 1024 * 1024) {
+      return res.status(413).json({ error: "El audio supera el límite de 20 MB." });
+    }
+
+    let originalName = "";
+    try {
+      originalName = decodeURIComponent(String(req.get("X-File-Name") || ""));
+    } catch {
+      return res.status(400).json({ error: "El nombre del audio no es válido." });
+    }
+    originalName = path.basename(originalName).slice(0, 180);
+    const extension = path.extname(originalName).toLowerCase();
+    const mimeByExtension = {
+      ".ogg": "audio/ogg; codecs=opus",
+      ".opus": "audio/ogg; codecs=opus",
+      ".mp3": "audio/mpeg",
+      ".wav": "audio/wav",
+      ".m4a": "audio/mp4"
+    };
+    if (!mimeByExtension[extension] || !validateWelcomeAudio(req.body, extension)) {
+      return res.status(400).json({
+        error: "El audio no es válido. Usa un archivo OGG, OPUS, MP3, WAV o M4A real."
+      });
+    }
+
+    const filePath = path.join(
+      mediaDir,
+      `welcome-${scope}-audio-${Date.now()}-${crypto.randomUUID().slice(0, 8)}${extension}`
+    );
+    fs.writeFileSync(filePath, req.body);
+    try {
+      const result = store.setWelcomeMessageAudio(
+        scope,
+        req.params.profileId,
+        req.params.messageId,
+        {
+          id: crypto.randomUUID(),
+          path: path.resolve(filePath),
+          originalName,
+          mimetype: mimeByExtension[extension],
+          size: req.body.length,
+          uploadedAt: new Date().toISOString()
+        }
+      );
+      if (result.previous?.path) removeStoredMedia(result.previous.path);
+      const refreshed = store.getWelcomeMessage(
+        scope,
+        req.params.profileId,
+        req.params.messageId
+      );
+      const [panelMessage] = welcomeSequenceForPanel(
+        [refreshed],
+        scope,
+        req.params.profileId
+      );
+      return res.status(201).json(panelMessage.audio);
+    } catch (error) {
+      removeStoredMedia(filePath);
+      throw error;
+    }
+  }
+);
+
+app.delete(
+  "/api/welcome-audios/:scope/:profileId/:messageId",
+  requireAuth,
+  noStore,
+  (req, res) => {
+    const scope = validWelcomeScope(req.params.scope);
+    if (!scope) {
+      return res.status(400).json({ error: "Tipo de bienvenida no permitido." });
+    }
+    const deleted = store.deleteWelcomeMessageAudio(
       scope,
       req.params.profileId,
       req.params.messageId
