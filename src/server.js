@@ -656,9 +656,9 @@ app.get("/api/clients", requireAuth, (req, res) => {
 app.get("/api/clients/broadcast/preview", requireAuth, (req, res) => {
   const product = String(req.query.product || "").trim();
   const price = String(req.query.price || "").trim();
-  if (!product || !price) {
+  if (!product) {
     return res.status(400).json({
-      error: "Selecciona el servicio y el precio para ver los destinatarios."
+      error: "Selecciona el servicio para ver los destinatarios."
     });
   }
 
@@ -695,9 +695,9 @@ app.post("/api/clients/broadcast", requireAuth, (req, res) => {
   const product = String(req.body?.product || "").trim();
   const price = String(req.body?.price || "").trim();
   const message = String(req.body?.message || "").trim();
-  if (!product || !price) {
+  if (!product) {
     return res.status(400).json({
-      error: "Selecciona el servicio y el precio de los clientes."
+      error: "Selecciona el servicio de los clientes."
     });
   }
   if (!message) {
@@ -712,7 +712,9 @@ app.post("/api/clients/broadcast", requireAuth, (req, res) => {
   const recipients = store.listClientBroadcastRecipients({ product, price });
   if (!recipients.length) {
     return res.status(404).json({
-      error: "No hay clientes activos para ese servicio y precio."
+      error: price
+        ? "No hay clientes activos para ese servicio y precio."
+        : "No hay clientes activos para ese servicio."
     });
   }
 
@@ -735,7 +737,7 @@ app.post("/api/clients/broadcast", requireAuth, (req, res) => {
   activeClientBroadcastJobId = job.id;
   store.addLog(
     "broadcast",
-    `Envío masivo iniciado para ${product} (${price}): ${job.total} destinatario(s)`,
+    `Envío masivo iniciado para ${product} (${price || "todos los precios"}): ${job.total} destinatario(s)`,
     { jobId: job.id, product, price, total: job.total }
   );
   store.save();

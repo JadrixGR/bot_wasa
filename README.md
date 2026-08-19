@@ -266,7 +266,7 @@ El programador revisa los vencimientos cada 15 minutos mientras WhatsApp está c
 
 ### Enviar un aviso por servicio
 
-El botón **Enviar aviso por servicio** permite comunicar una novedad o una nueva cuenta a un grupo específico. Primero selecciona el servicio y luego el precio exacto, por ejemplo **ChatGPT Plus** y **S/10**. El panel muestra la cantidad de destinatarios y algunos nombres antes de pedir la confirmación final.
+El botón **Enviar aviso por servicio** permite comunicar una novedad o una nueva cuenta a un grupo específico. Selecciona el servicio, por ejemplo **ChatGPT Plus**, y deja **Todos los precios** para incluir a todos sus clientes sin importar cuánto pagaron. También puedes elegir un precio específico si alguna vez necesitas un grupo más pequeño. El panel muestra la cantidad de destinatarios y algunos nombres antes de pedir la confirmación final.
 
 - Solo incluye clientes activos; omite vencidos, pausados, pendientes y archivados.
 - Si un contacto tiene el mismo servicio registrado más de una vez, recibe un solo mensaje.

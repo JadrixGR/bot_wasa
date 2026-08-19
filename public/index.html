@@ -880,7 +880,7 @@
           <button class="icon-button client-broadcast-close" type="button" aria-label="Cerrar">×</button>
         </div>
         <div class="notice">
-          El mensaje se enviará una sola vez por WhatsApp y únicamente a clientes activos que coincidan exactamente con el servicio y el precio elegidos.
+          El mensaje se enviará una sola vez por WhatsApp y únicamente a clientes activos del servicio elegido. Puedes incluir todos los precios o filtrar uno específico.
         </div>
         <div class="form-grid">
           <label>
@@ -888,8 +888,8 @@
             <select id="clientBroadcastProduct" required></select>
           </label>
           <label>
-            Precio
-            <select id="clientBroadcastPrice" required></select>
+            Precio (opcional)
+            <select id="clientBroadcastPrice"></select>
           </label>
           <label class="span-2">
             Mensaje o nueva cuenta
@@ -897,7 +897,7 @@
             <small>Puedes personalizarlo con: <code>{nombre}</code>, <code>{producto}</code>, <code>{precio}</code>, <code>{cuenta}</code> y <code>{fecha}</code>.</small>
           </label>
           <div id="clientBroadcastPreview" class="notice client-broadcast-preview span-2">
-            Selecciona un servicio y un precio para ver cuántos clientes recibirán el mensaje.
+            Selecciona un servicio para ver cuántos clientes recibirán el mensaje.
           </div>
           <div id="clientBroadcastProgress" class="client-broadcast-progress span-2 hidden" aria-live="polite">
             <div><strong id="clientBroadcastProgressTitle">Preparando envío…</strong><span id="clientBroadcastProgressCount">0 de 0</span></div>

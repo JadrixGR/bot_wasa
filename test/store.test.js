@@ -21,7 +21,7 @@ function temporaryDataDir() {
   return directory;
 }
 
-test("selecciona clientes activos por servicio y precio sin repetir WhatsApp", () => {
+test("selecciona clientes activos por servicio y precio opcional sin repetir WhatsApp", () => {
   const clients = [
     {
       id: "primero",
@@ -74,6 +74,12 @@ test("selecciona clientes activos por servicio y precio sin repetir WhatsApp", (
       price: "S/10"
     }).map((client) => client.id),
     ["primero", "usuario-unico"]
+  );
+  assert.deepEqual(
+    selectClientBroadcastRecipients(clients, {
+      product: "ChatGPT Plus"
+    }).map((client) => client.id),
+    ["primero", "usuario-unico", "otro-precio"]
   );
 });
 

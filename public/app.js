@@ -1440,24 +1440,28 @@ function populateClientBroadcastPrices(preferred = "") {
       )
       .map((client) => client.price)
   );
-  select.innerHTML = prices.length
-    ? prices.map((price) => `<option value="${escapeHtml(price)}">${escapeHtml(price)}</option>`).join("")
-    : '<option value="">No hay precios registrados</option>';
-  select.disabled = prices.length === 0;
+  select.innerHTML = [
+    '<option value="">Todos los precios</option>',
+    ...prices.map(
+      (price) => `<option value="${escapeHtml(price)}">${escapeHtml(price)}</option>`
+    )
+  ].join("");
+  select.disabled = !productKey;
   const preferredKey = normalizeClientBroadcastValue(preferred);
   const match = prices.find(
     (price) => normalizeClientBroadcastValue(price) === preferredKey
   );
-  select.value = match || prices[0] || "";
+  select.value = match || "";
 }
 
 function setClientBroadcastFormBusy(busy) {
   state.clientBroadcastSubmitting = busy;
   const hasProducts = activeClientBroadcastClients().some(
-    (client) => String(client.product || "").trim() && String(client.price || "").trim()
+    (client) => String(client.product || "").trim()
   );
   $("#clientBroadcastProduct").disabled = busy || !hasProducts;
-  $("#clientBroadcastPrice").disabled = busy || !$("#clientBroadcastPrice").options.length || !$("#clientBroadcastPrice").value;
+  $("#clientBroadcastPrice").disabled =
+    busy || !$("#clientBroadcastProduct").value;
   $("#clientBroadcastMessage").disabled = busy;
   $("#sendClientBroadcastButton").disabled = busy || !state.clientBroadcastPreview?.total;
   $("#sendClientBroadcastButton").textContent = busy ? "Enviando…" : "Revisar y enviar";
@@ -1472,10 +1476,10 @@ async function updateClientBroadcastPreview() {
   $("#sendClientBroadcastButton").disabled = true;
   preview.className = "notice client-broadcast-preview span-2";
 
-  if (!product || !price) {
+  if (!product) {
     preview.textContent = activeClientBroadcastClients().length
-      ? "Selecciona un servicio y un precio con clientes activos."
-      : "No hay clientes activos con servicio y precio registrados.";
+      ? "Selecciona un servicio con clientes activos."
+      : "No hay clientes activos con un servicio registrado.";
     return;
   }
 
@@ -1491,7 +1495,7 @@ async function updateClientBroadcastPreview() {
     preview.className = `notice client-broadcast-preview span-2 ${result.total ? "success" : "error"}`;
     preview.innerHTML = result.total
       ? `<strong>${result.total} cliente${result.total === 1 ? "" : "s"} recibirá${result.total === 1 ? "" : "n"} el mensaje.</strong><span>${escapeHtml(names.join(", "))}${remainder ? ` y ${remainder} más` : ""}.</span>`
-      : "<strong>No hay destinatarios.</strong><span>Revisa el servicio, el precio y que los clientes estén activos.</span>";
+      : "<strong>No hay destinatarios.</strong><span>Revisa el servicio y que los clientes estén activos.</span>";
     $("#sendClientBroadcastButton").disabled =
       result.total === 0 ||
       state.clientBroadcastSubmitting ||
@@ -1576,8 +1580,8 @@ async function sendClientBroadcast(event) {
   const product = $("#clientBroadcastProduct").value.trim();
   const price = $("#clientBroadcastPrice").value.trim();
   const message = $("#clientBroadcastMessage").value.trim();
-  if (!product || !price || !message) {
-    showToast("Selecciona el servicio, el precio y escribe el mensaje.", true);
+  if (!product || !message) {
+    showToast("Selecciona el servicio y escribe el mensaje.", true);
     return;
   }
 
@@ -1588,9 +1592,12 @@ async function sendClientBroadcast(event) {
     const preview = await api(
       `/api/clients/broadcast/preview?product=${encodeURIComponent(product)}&price=${encodeURIComponent(price)}`
     );
-    if (!preview.total) throw new Error("No hay clientes activos para ese servicio y precio.");
+    if (!preview.total) throw new Error("No hay clientes activos para ese servicio.");
+    const groupDescription = price
+      ? `con precio “${price}”`
+      : "sin importar el precio";
     if (!confirm(
-      `Se enviará este mensaje a ${preview.total} cliente${preview.total === 1 ? "" : "s"} de “${product}” con precio “${price}”. ¿Deseas continuar?`
+      `Se enviará este mensaje a ${preview.total} cliente${preview.total === 1 ? "" : "s"} de “${product}” ${groupDescription}. ¿Deseas continuar?`
     )) {
       setClientBroadcastFormBusy(false);
       return;
