@@ -66,6 +66,88 @@ const scheduler = new ReminderScheduler({
   timeZone: process.env.BOT_TIMEZONE || "America/Lima",
   intervalMinutes: process.env.REMINDER_CHECK_MINUTES || 15
 });
+const clientBroadcastJobs = new Map();
+let activeClientBroadcastJobId = null;
+
+function clientBroadcastJobForPanel(job) {
+  return {
+    id: job.id,
+    product: job.product,
+    price: job.price,
+    status: job.status,
+    total: job.total,
+    sent: job.sent,
+    failed: job.failed,
+    processed: job.sent + job.failed,
+    errors: job.errors.slice(0, 20),
+    createdAt: job.createdAt,
+    startedAt: job.startedAt,
+    finishedAt: job.finishedAt
+  };
+}
+
+function pruneClientBroadcastJobs() {
+  const completed = [...clientBroadcastJobs.values()]
+    .filter((job) => job.status !== "running")
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  for (const job of completed.slice(20)) clientBroadcastJobs.delete(job.id);
+}
+
+async function runClientBroadcastJob(job) {
+  job.status = "running";
+  job.startedAt = new Date().toISOString();
+  try {
+    for (const client of job.recipients) {
+      try {
+        await whatsapp.sendText(
+          clientWhatsAppTarget(client),
+          fillTemplate(job.message, client),
+          { sensitive: true }
+        );
+        job.sent += 1;
+        store.addLog("broadcast", `Aviso masivo enviado a ${client.name}`, {
+          jobId: job.id,
+          clientId: client.id,
+          product: job.product,
+          price: job.price
+        });
+        store.save();
+      } catch (error) {
+        job.failed += 1;
+        job.errors.push({
+          clientId: client.id,
+          name: client.name,
+          message: String(error?.message || "No se pudo enviar el mensaje.").slice(0, 240)
+        });
+      }
+    }
+    job.status = job.failed ? "completed-with-errors" : "completed";
+  } catch (error) {
+    job.status = "failed";
+    job.errors.push({
+      message: String(error?.message || "El envío masivo se interrumpió.").slice(0, 240)
+    });
+  } finally {
+    job.finishedAt = new Date().toISOString();
+    job.recipients = [];
+    job.message = "";
+    if (activeClientBroadcastJobId === job.id) activeClientBroadcastJobId = null;
+    store.addLog(
+      "broadcast",
+      `Envío masivo finalizado: ${job.sent} enviado(s), ${job.failed} error(es)`,
+      {
+        jobId: job.id,
+        product: job.product,
+        price: job.price,
+        total: job.total,
+        sent: job.sent,
+        failed: job.failed
+      }
+    );
+    store.save();
+    pruneClientBroadcastJobs();
+  }
+}
 
 const app = express();
 app.set("trust proxy", 1);
@@ -569,6 +651,120 @@ app.get("/api/clients", requireAuth, (req, res) => {
       .listClients({ includeArchived: req.query.archived === "1" })
       .map(clientForPanel)
   );
+});
+
+app.get("/api/clients/broadcast/preview", requireAuth, (req, res) => {
+  const product = String(req.query.product || "").trim();
+  const price = String(req.query.price || "").trim();
+  if (!product || !price) {
+    return res.status(400).json({
+      error: "Selecciona el servicio y el precio para ver los destinatarios."
+    });
+  }
+
+  const recipients = store.listClientBroadcastRecipients({ product, price });
+  return res.json({
+    product,
+    price,
+    total: recipients.length,
+    recipients: recipients.slice(0, 20).map((client) => ({
+      id: client.id,
+      name: client.name,
+      whatsapp: client.whatsapp
+    }))
+  });
+});
+
+app.post("/api/clients/broadcast", requireAuth, (req, res) => {
+  if (!whatsapp.getStatus().ready) {
+    return res.status(409).json({
+      error: "WhatsApp debe estar conectado antes de iniciar el envío."
+    });
+  }
+
+  const activeJob = activeClientBroadcastJobId
+    ? clientBroadcastJobs.get(activeClientBroadcastJobId)
+    : null;
+  if (activeJob && ["queued", "running"].includes(activeJob.status)) {
+    return res.status(409).json({
+      error: "Ya hay un envío masivo en curso. Espera a que termine para iniciar otro.",
+      job: clientBroadcastJobForPanel(activeJob)
+    });
+  }
+
+  const product = String(req.body?.product || "").trim();
+  const price = String(req.body?.price || "").trim();
+  const message = String(req.body?.message || "").trim();
+  if (!product || !price) {
+    return res.status(400).json({
+      error: "Selecciona el servicio y el precio de los clientes."
+    });
+  }
+  if (!message) {
+    return res.status(400).json({ error: "Escribe el mensaje que deseas enviar." });
+  }
+  if (message.length > 4096) {
+    return res.status(400).json({
+      error: "El mensaje no puede superar los 4096 caracteres."
+    });
+  }
+
+  const recipients = store.listClientBroadcastRecipients({ product, price });
+  if (!recipients.length) {
+    return res.status(404).json({
+      error: "No hay clientes activos para ese servicio y precio."
+    });
+  }
+
+  const job = {
+    id: crypto.randomUUID(),
+    product,
+    price,
+    message,
+    recipients,
+    status: "queued",
+    total: recipients.length,
+    sent: 0,
+    failed: 0,
+    errors: [],
+    createdAt: new Date().toISOString(),
+    startedAt: null,
+    finishedAt: null
+  };
+  clientBroadcastJobs.set(job.id, job);
+  activeClientBroadcastJobId = job.id;
+  store.addLog(
+    "broadcast",
+    `Envío masivo iniciado para ${product} (${price}): ${job.total} destinatario(s)`,
+    { jobId: job.id, product, price, total: job.total }
+  );
+  store.save();
+
+  setImmediate(() => {
+    runClientBroadcastJob(job).catch((error) => {
+      job.status = "failed";
+      job.finishedAt = new Date().toISOString();
+      job.message = "";
+      job.recipients = [];
+      if (activeClientBroadcastJobId === job.id) activeClientBroadcastJobId = null;
+      job.errors.push({
+        message: String(error?.message || "El envío masivo se interrumpió.").slice(0, 240)
+      });
+    });
+  });
+
+  return res.status(202).json({
+    ok: true,
+    job: clientBroadcastJobForPanel(job)
+  });
+});
+
+app.get("/api/clients/broadcast/status/:jobId", requireAuth, (req, res) => {
+  const job = clientBroadcastJobs.get(req.params.jobId);
+  if (!job) {
+    return res.status(404).json({ error: "Ese envío ya no está disponible." });
+  }
+  return res.json({ job: clientBroadcastJobForPanel(job) });
 });
 
 app.get("/api/clients/lookup", requireAuth, (req, res) => {

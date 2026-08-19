@@ -322,6 +322,7 @@
               <a class="button secondary" href="/api/backup/data.json">Descargar respaldo JSON</a>
               <button id="restoreBackupButton" class="button secondary" type="button">Restaurar respaldo JSON</button>
               <input id="restoreBackupInput" class="hidden" type="file" accept="application/json,.json">
+              <button id="openClientBroadcastButton" class="button primary" type="button">Enviar aviso por servicio</button>
               <button id="chargeTodayButton" class="button charge" type="button">Cobrar a los que vencen hoy</button>
               <button id="runSchedulerButton" class="button secondary" type="button">Procesar vencimientos</button>
               <button id="newClientButton" class="button primary" type="button">+ Nuevo cliente</button>
@@ -865,6 +866,48 @@
         <div class="dialog-actions">
           <button class="button secondary dialog-close" type="button">Cancelar</button>
           <button class="button primary" type="submit">Guardar cliente</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="clientBroadcastDialog" class="client-broadcast-dialog">
+      <form id="clientBroadcastForm">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">MENSAJE A CLIENTES</p>
+            <h2>Enviar aviso por servicio</h2>
+          </div>
+          <button class="icon-button client-broadcast-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="notice">
+          El mensaje se enviará una sola vez por WhatsApp y únicamente a clientes activos que coincidan exactamente con el servicio y el precio elegidos.
+        </div>
+        <div class="form-grid">
+          <label>
+            Servicio o plan
+            <select id="clientBroadcastProduct" required></select>
+          </label>
+          <label>
+            Precio
+            <select id="clientBroadcastPrice" required></select>
+          </label>
+          <label class="span-2">
+            Mensaje o nueva cuenta
+            <textarea id="clientBroadcastMessage" rows="8" maxlength="4096" placeholder="Escribe aquí el aviso que recibirán los clientes…" required></textarea>
+            <small>Puedes personalizarlo con: <code>{nombre}</code>, <code>{producto}</code>, <code>{precio}</code>, <code>{cuenta}</code> y <code>{fecha}</code>.</small>
+          </label>
+          <div id="clientBroadcastPreview" class="notice client-broadcast-preview span-2">
+            Selecciona un servicio y un precio para ver cuántos clientes recibirán el mensaje.
+          </div>
+          <div id="clientBroadcastProgress" class="client-broadcast-progress span-2 hidden" aria-live="polite">
+            <div><strong id="clientBroadcastProgressTitle">Preparando envío…</strong><span id="clientBroadcastProgressCount">0 de 0</span></div>
+            <progress id="clientBroadcastProgressBar" max="1" value="0"></progress>
+            <p id="clientBroadcastProgressDetail" class="microcopy"></p>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary client-broadcast-close" type="button">Cancelar</button>
+          <button id="sendClientBroadcastButton" class="button primary" type="submit">Revisar y enviar</button>
         </div>
       </form>
     </dialog>

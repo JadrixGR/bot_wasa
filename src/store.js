@@ -620,6 +620,43 @@ function clientWhatsAppTarget(client) {
   );
 }
 
+function normalizeBroadcastFilter(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .replace(/\s+/g, " ");
+}
+
+function selectClientBroadcastRecipients(clients, { product, price } = {}) {
+  const wantedProduct = normalizeBroadcastFilter(product);
+  const wantedPrice = normalizeBroadcastFilter(price);
+  if (!wantedProduct) return [];
+
+  const selected = [];
+  const usedIdentityKeys = new Set();
+  for (const client of Array.isArray(clients) ? clients : []) {
+    if (
+      client?.archived ||
+      client?.status !== "activo" ||
+      normalizeBroadcastFilter(client?.product) !== wantedProduct ||
+      (wantedPrice && normalizeBroadcastFilter(client?.price) !== wantedPrice)
+    ) {
+      continue;
+    }
+
+    const identityKeys = whatsappIdentityKeys(client);
+    const target = clientWhatsAppTarget(client);
+    if (!target || [...identityKeys].some((key) => usedIdentityKeys.has(key))) {
+      continue;
+    }
+    for (const key of identityKeys) usedIdentityKeys.add(key);
+    selected.push(client);
+  }
+  return selected;
+}
+
 class JsonStore {
   constructor(dataDir) {
     this.dataDir = path.resolve(dataDir);
@@ -2305,6 +2342,12 @@ class JsonStore {
     );
   }
 
+  listClientBroadcastRecipients(filter = {}) {
+    return structuredClone(
+      selectClientBroadcastRecipients(this.data.clients, filter)
+    );
+  }
+
   getClient(id) {
     return this.data.clients.find((client) => client.id === id) || null;
   }
@@ -2719,5 +2762,6 @@ module.exports = {
   normalizeWhatsAppIdentity,
   whatsappIdentityKeys,
   clientWhatsAppTarget,
+  selectClientBroadcastRecipients,
   MAX_PURCHASES_PER_PHONE
 };

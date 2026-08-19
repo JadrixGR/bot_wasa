@@ -1988,7 +1988,11 @@ class WhatsAppService {
     }
   }
 
-  async sendText(chatId, text, { typingAlreadyStarted = false } = {}) {
+  async sendText(
+    chatId,
+    text,
+    { typingAlreadyStarted = false, sensitive = false } = {}
+  ) {
     if (!this.status.ready || !this.socket) {
       throw new Error("WhatsApp todavía no está conectado.");
     }
@@ -2002,7 +2006,7 @@ class WhatsAppService {
     const result = await socket.sendMessage(target, { text: String(text) });
     this.store.addLog("outgoing", `Mensaje enviado a ${target}`, {
       chatId: target,
-      preview: String(text).slice(0, 180)
+      preview: sensitive ? "[contenido privado oculto]" : String(text).slice(0, 180)
     });
     this.store.save();
     return result;

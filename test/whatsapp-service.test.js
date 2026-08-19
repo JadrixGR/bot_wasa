@@ -1751,6 +1751,25 @@ test("envía escribiendo, pausa y luego un solo mensaje", async () => {
   assert.deepEqual(socket.calls.sent[0].content, { text: "Respuesta breve." });
 });
 
+test("oculta en el registro el contenido privado de un envío", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  const service = makeService(fake, { store });
+  await service.initialize();
+  fake.sockets[0].ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  await service.sendText(
+    "999888777",
+    "Nueva cuenta: cuenta@correo.com / clave privada",
+    { sensitive: true }
+  );
+
+  const outgoing = store.logs.find((entry) => entry.type === "outgoing");
+  assert.equal(outgoing.details.preview, "[contenido privado oculto]");
+  assert.doesNotMatch(JSON.stringify(outgoing), /cuenta@correo\.com|clave privada/);
+});
+
 test("tres respuestas consecutivas simulan escritura y se envían por separado", async () => {
   const fake = makeFakeBaileys({ registered: true });
   const service = makeService(fake, {

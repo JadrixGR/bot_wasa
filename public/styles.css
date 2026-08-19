@@ -5720,3 +5720,58 @@ html[data-theme="dark"] .welcome-audio-picker { background: rgba(13, 17, 34, 0.8
   .welcome-message-audio-preview { grid-template-columns: 1fr auto; }
   .welcome-message-audio-preview audio { grid-column: 1 / -1; }
 }
+
+/* Envíos segmentados a clientes */
+.client-broadcast-dialog {
+  width: min(44rem, calc(100vw - 2rem));
+  max-width: 44rem;
+}
+.client-broadcast-dialog form {
+  max-height: min(88vh, 54rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.client-broadcast-dialog textarea {
+  min-height: 10rem;
+  resize: vertical;
+}
+.client-broadcast-preview {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+.client-broadcast-preview span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+.client-broadcast-progress {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--line));
+  border-radius: var(--v3-radius-sm, 0.85rem);
+  background: color-mix(in srgb, var(--primary) 7%, var(--panel));
+}
+.client-broadcast-progress > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.client-broadcast-progress span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.client-broadcast-progress progress {
+  width: 100%;
+  height: 0.65rem;
+  accent-color: var(--primary);
+}
+.client-broadcast-progress .microcopy { margin: 0; }
+
+@media (max-width: 720px) {
+  .client-broadcast-dialog { width: min(96vw, 44rem); }
+  .client-broadcast-progress > div { align-items: flex-start; flex-direction: column; gap: 0.25rem; }
+}

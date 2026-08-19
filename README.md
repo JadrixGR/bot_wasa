@@ -264,6 +264,16 @@ Al registrar un cliente:
 
 El programador revisa los vencimientos cada 15 minutos mientras WhatsApp está conectado. Cada aviso se marca con la fecha de renovación para no enviarlo dos veces.
 
+### Enviar un aviso por servicio
+
+El botón **Enviar aviso por servicio** permite comunicar una novedad o una nueva cuenta a un grupo específico. Primero selecciona el servicio y luego el precio exacto, por ejemplo **ChatGPT Plus** y **S/10**. El panel muestra la cantidad de destinatarios y algunos nombres antes de pedir la confirmación final.
+
+- Solo incluye clientes activos; omite vencidos, pausados, pendientes y archivados.
+- Si un contacto tiene el mismo servicio registrado más de una vez, recibe un solo mensaje.
+- El envío continúa en segundo plano y muestra cuántos mensajes fueron enviados o fallaron.
+- Se pueden usar las variables `{nombre}`, `{producto}`, `{precio}`, `{cuenta}` y `{fecha}` para personalizar cada mensaje.
+- El contenido del aviso se oculta en los registros de actividad y se elimina de la memoria del envío al finalizar.
+
 ### Cobrar a quienes vencen hoy
 
 En **Clientes y cobros** aparece el botón **Cobrar a los que vencen hoy**. Envía el mensaje de cobranza a todos los clientes activos cuya fecha de vencimiento sea hoy y omite los que ya fueron cobrados para esa misma fecha. Tanto este botón como la cobranza automática se habilitan desde la hora configurada en **Mensajes automáticos**; el valor inicial es **09:00**, usando `America/Lima`.

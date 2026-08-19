@@ -5,7 +5,10 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const { JsonStore } = require("../src/store");
+const {
+  JsonStore,
+  selectClientBroadcastRecipients
+} = require("../src/store");
 const { createInitialData } = require("../src/defaults");
 const { addDays, todayInTimeZone } = require("../src/date-utils");
 
@@ -17,6 +20,62 @@ function temporaryDataDir() {
   fs.mkdirSync(directory, { recursive: true });
   return directory;
 }
+
+test("selecciona clientes activos por servicio y precio sin repetir WhatsApp", () => {
+  const clients = [
+    {
+      id: "primero",
+      status: "activo",
+      product: "ChatGPT Plus",
+      price: "S/10",
+      whatsapp: "999888777"
+    },
+    {
+      id: "compra-repetida",
+      status: "activo",
+      product: " chatgpt  plus ",
+      price: "s/10",
+      whatsappPhone: "51999888777"
+    },
+    {
+      id: "usuario-unico",
+      status: "activo",
+      product: "CHATGPT PLUS",
+      price: "S/10",
+      whatsapp: "@cliente_unico"
+    },
+    {
+      id: "vencido",
+      status: "vencido",
+      product: "ChatGPT Plus",
+      price: "S/10",
+      whatsapp: "977777777"
+    },
+    {
+      id: "archivado",
+      status: "activo",
+      archived: true,
+      product: "ChatGPT Plus",
+      price: "S/10",
+      whatsapp: "966666666"
+    },
+    {
+      id: "otro-precio",
+      status: "activo",
+      product: "ChatGPT Plus",
+      price: "S/15",
+      whatsapp: "955555555"
+    }
+  ];
+
+  assert.deepEqual(
+    selectClientBroadcastRecipients(clients, {
+      product: "chatgpt plus",
+      price: "S/10"
+    }).map((client) => client.id),
+    ["primero", "usuario-unico"]
+  );
+});
 
 test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
   const directory = temporaryDataDir();

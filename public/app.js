@@ -28,6 +28,10 @@ const state = {
   activeSection: "dashboard",
   loadedSections: new Set(),
   poller: null,
+  clientBroadcastJobPoller: null,
+  clientBroadcastPreviewToken: 0,
+  clientBroadcastPreview: null,
+  clientBroadcastSubmitting: false,
   authenticatorTicker: null,
   authenticatorRefreshPending: false
 };
@@ -139,6 +143,9 @@ function showLogin() {
   document.body.classList.remove("app-active", "menu-open");
   setSidebarOpen(false);
   clearInterval(state.poller);
+  clearInterval(state.clientBroadcastJobPoller);
+  state.clientBroadcastJobPoller = null;
+  state.clientBroadcastSubmitting = false;
   clearInterval(state.authenticatorTicker);
   state.loadedSections.clear();
 }
@@ -1380,6 +1387,228 @@ function renderClients() {
   $(".table-wrap").classList.toggle("hidden", clients.length === 0);
 }
 
+function normalizeClientBroadcastValue(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function activeClientBroadcastClients() {
+  return state.clients.filter(
+    (client) => !client.archived && client.status === "activo"
+  );
+}
+
+function uniqueClientBroadcastValues(values) {
+  const unique = new Map();
+  for (const value of values) {
+    const display = String(value || "").trim();
+    const key = normalizeClientBroadcastValue(display);
+    if (key && !unique.has(key)) unique.set(key, display);
+  }
+  return [...unique.values()].sort((a, b) =>
+    a.localeCompare(b, "es", { numeric: true, sensitivity: "base" })
+  );
+}
+
+function populateClientBroadcastProducts(preferred = "") {
+  const select = $("#clientBroadcastProduct");
+  const products = uniqueClientBroadcastValues(
+    activeClientBroadcastClients().map((client) => client.product)
+  );
+  select.innerHTML = products.length
+    ? products.map((product) => `<option value="${escapeHtml(product)}">${escapeHtml(product)}</option>`).join("")
+    : '<option value="">No hay servicios activos</option>';
+  select.disabled = products.length === 0;
+  const preferredKey = normalizeClientBroadcastValue(preferred);
+  const match = products.find(
+    (product) => normalizeClientBroadcastValue(product) === preferredKey
+  );
+  select.value = match || products[0] || "";
+}
+
+function populateClientBroadcastPrices(preferred = "") {
+  const productKey = normalizeClientBroadcastValue($("#clientBroadcastProduct").value);
+  const select = $("#clientBroadcastPrice");
+  const prices = uniqueClientBroadcastValues(
+    activeClientBroadcastClients()
+      .filter(
+        (client) => normalizeClientBroadcastValue(client.product) === productKey
+      )
+      .map((client) => client.price)
+  );
+  select.innerHTML = prices.length
+    ? prices.map((price) => `<option value="${escapeHtml(price)}">${escapeHtml(price)}</option>`).join("")
+    : '<option value="">No hay precios registrados</option>';
+  select.disabled = prices.length === 0;
+  const preferredKey = normalizeClientBroadcastValue(preferred);
+  const match = prices.find(
+    (price) => normalizeClientBroadcastValue(price) === preferredKey
+  );
+  select.value = match || prices[0] || "";
+}
+
+function setClientBroadcastFormBusy(busy) {
+  state.clientBroadcastSubmitting = busy;
+  const hasProducts = activeClientBroadcastClients().some(
+    (client) => String(client.product || "").trim() && String(client.price || "").trim()
+  );
+  $("#clientBroadcastProduct").disabled = busy || !hasProducts;
+  $("#clientBroadcastPrice").disabled = busy || !$("#clientBroadcastPrice").options.length || !$("#clientBroadcastPrice").value;
+  $("#clientBroadcastMessage").disabled = busy;
+  $("#sendClientBroadcastButton").disabled = busy || !state.clientBroadcastPreview?.total;
+  $("#sendClientBroadcastButton").textContent = busy ? "Enviando…" : "Revisar y enviar";
+}
+
+async function updateClientBroadcastPreview() {
+  const product = $("#clientBroadcastProduct").value.trim();
+  const price = $("#clientBroadcastPrice").value.trim();
+  const preview = $("#clientBroadcastPreview");
+  const token = ++state.clientBroadcastPreviewToken;
+  state.clientBroadcastPreview = null;
+  $("#sendClientBroadcastButton").disabled = true;
+  preview.className = "notice client-broadcast-preview span-2";
+
+  if (!product || !price) {
+    preview.textContent = activeClientBroadcastClients().length
+      ? "Selecciona un servicio y un precio con clientes activos."
+      : "No hay clientes activos con servicio y precio registrados.";
+    return;
+  }
+
+  preview.textContent = "Buscando clientes que coincidan…";
+  try {
+    const result = await api(
+      `/api/clients/broadcast/preview?product=${encodeURIComponent(product)}&price=${encodeURIComponent(price)}`
+    );
+    if (token !== state.clientBroadcastPreviewToken) return;
+    state.clientBroadcastPreview = result;
+    const names = result.recipients.slice(0, 5).map((client) => client.name).filter(Boolean);
+    const remainder = Math.max(0, result.total - names.length);
+    preview.className = `notice client-broadcast-preview span-2 ${result.total ? "success" : "error"}`;
+    preview.innerHTML = result.total
+      ? `<strong>${result.total} cliente${result.total === 1 ? "" : "s"} recibirá${result.total === 1 ? "" : "n"} el mensaje.</strong><span>${escapeHtml(names.join(", "))}${remainder ? ` y ${remainder} más` : ""}.</span>`
+      : "<strong>No hay destinatarios.</strong><span>Revisa el servicio, el precio y que los clientes estén activos.</span>";
+    $("#sendClientBroadcastButton").disabled =
+      result.total === 0 ||
+      state.clientBroadcastSubmitting ||
+      Boolean(state.clientBroadcastJobPoller);
+  } catch (error) {
+    if (token !== state.clientBroadcastPreviewToken) return;
+    preview.className = "notice client-broadcast-preview span-2 error";
+    preview.textContent = error.message;
+  }
+}
+
+function openClientBroadcastDialog() {
+  populateClientBroadcastProducts();
+  populateClientBroadcastPrices();
+  state.clientBroadcastPreview = null;
+  $("#clientBroadcastProgress").classList.toggle(
+    "hidden",
+    !state.clientBroadcastJobPoller
+  );
+  $("#clientBroadcastDialog").showModal();
+  setClientBroadcastFormBusy(Boolean(state.clientBroadcastJobPoller));
+  updateClientBroadcastPreview();
+}
+
+function renderClientBroadcastJob(job) {
+  const progress = $("#clientBroadcastProgress");
+  const processed = Number(job.processed) || 0;
+  const total = Math.max(1, Number(job.total) || 0);
+  const running = ["queued", "running"].includes(job.status);
+  progress.classList.remove("hidden");
+  $("#clientBroadcastProgressBar").max = total;
+  $("#clientBroadcastProgressBar").value = Math.min(total, processed);
+  $("#clientBroadcastProgressCount").textContent = `${processed} de ${job.total}`;
+  $("#clientBroadcastProgressTitle").textContent = running
+    ? "Enviando mensajes…"
+    : job.status === "completed"
+      ? "Envío completado"
+      : job.status === "completed-with-errors"
+        ? "Envío completado con algunos errores"
+        : "El envío se interrumpió";
+  $("#clientBroadcastProgressDetail").textContent = running
+    ? `${job.sent} enviado${job.sent === 1 ? "" : "s"}${job.failed ? ` · ${job.failed} con error` : ""}`
+    : `${job.sent} enviado${job.sent === 1 ? "" : "s"} · ${job.failed} con error${job.failed === 1 ? "" : "es"}`;
+  return running;
+}
+
+function watchClientBroadcastJob(jobId) {
+  clearInterval(state.clientBroadcastJobPoller);
+  let refreshing = false;
+  const refresh = async () => {
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      const result = await api(`/api/clients/broadcast/status/${encodeURIComponent(jobId)}`);
+      const running = renderClientBroadcastJob(result.job);
+      if (running) return;
+      clearInterval(state.clientBroadcastJobPoller);
+      state.clientBroadcastJobPoller = null;
+      setClientBroadcastFormBusy(false);
+      await loadLogs().catch(() => {});
+      showToast(
+        result.job.failed
+          ? `Envío finalizado: ${result.job.sent} enviados y ${result.job.failed} con error.`
+          : `Listo: ${result.job.sent} mensaje${result.job.sent === 1 ? "" : "s"} enviado${result.job.sent === 1 ? "" : "s"}.`,
+        result.job.failed > 0
+      );
+    } catch (error) {
+      clearInterval(state.clientBroadcastJobPoller);
+      state.clientBroadcastJobPoller = null;
+      setClientBroadcastFormBusy(false);
+      showToast(error.message, true);
+    } finally {
+      refreshing = false;
+    }
+  };
+  state.clientBroadcastJobPoller = setInterval(refresh, 1500);
+  refresh();
+}
+
+async function sendClientBroadcast(event) {
+  event.preventDefault();
+  const product = $("#clientBroadcastProduct").value.trim();
+  const price = $("#clientBroadcastPrice").value.trim();
+  const message = $("#clientBroadcastMessage").value.trim();
+  if (!product || !price || !message) {
+    showToast("Selecciona el servicio, el precio y escribe el mensaje.", true);
+    return;
+  }
+
+  const button = $("#sendClientBroadcastButton");
+  setClientBroadcastFormBusy(true);
+  button.textContent = "Verificando…";
+  try {
+    const preview = await api(
+      `/api/clients/broadcast/preview?product=${encodeURIComponent(product)}&price=${encodeURIComponent(price)}`
+    );
+    if (!preview.total) throw new Error("No hay clientes activos para ese servicio y precio.");
+    if (!confirm(
+      `Se enviará este mensaje a ${preview.total} cliente${preview.total === 1 ? "" : "s"} de “${product}” con precio “${price}”. ¿Deseas continuar?`
+    )) {
+      setClientBroadcastFormBusy(false);
+      return;
+    }
+
+    $("#clientBroadcastProgress").classList.remove("hidden");
+    const result = await api("/api/clients/broadcast", {
+      method: "POST",
+      body: { product, price, message }
+    });
+    renderClientBroadcastJob(result.job);
+    watchClientBroadcastJob(result.job.id);
+  } catch (error) {
+    setClientBroadcastFormBusy(false);
+    showToast(error.message, true);
+  }
+}
+
 function clientIdentityKey(client) {
   return (
     client?.whatsappChatId ||
@@ -2518,6 +2747,7 @@ function logLabel(type) {
     client: "Cliente",
     authenticator: "Autenticador",
     security: "Seguridad",
+    broadcast: "Aviso por servicio",
     error: "Error"
   }[type] || type;
 }
@@ -2604,6 +2834,22 @@ function bindEvents() {
     }
   });
   $("#newClientButton").addEventListener("click", () => openClientDialog());
+  $("#openClientBroadcastButton").addEventListener(
+    "click",
+    openClientBroadcastDialog
+  );
+  $("#clientBroadcastForm").addEventListener("submit", sendClientBroadcast);
+  $$(".client-broadcast-close").forEach((button) =>
+    button.addEventListener("click", () => $("#clientBroadcastDialog").close())
+  );
+  $("#clientBroadcastProduct").addEventListener("change", () => {
+    populateClientBroadcastPrices();
+    updateClientBroadcastPreview();
+  });
+  $("#clientBroadcastPrice").addEventListener(
+    "change",
+    updateClientBroadcastPreview
+  );
   $("#newAuthenticatorButton").addEventListener("click", () =>
     openAuthenticatorDialog()
   );
