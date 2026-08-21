@@ -857,16 +857,22 @@ class JsonStore {
           : {}),
         provider: parsed.aiConfig?.provider === "claude" ? "claude" : "gemini",
         enabled: Boolean(parsed.aiConfig?.enabled),
+        autoRegisterPayments: parsed.aiConfig?.autoRegisterPayments !== false,
         model: String(
-          parsed.aiConfig?.model ||
+          (parsed.aiConfig?.model === "anthropic/claude-sonnet-4.6"
+            ? "claude-sonnet-4-6"
+            : parsed.aiConfig?.model) ||
             (parsed.aiConfig?.provider === "claude"
-              ? "anthropic/claude-sonnet-4.6"
+              ? "claude-sonnet-4-6"
               : initial.aiConfig.model)
         ).slice(0, 120),
         baseUrl:
           parsed.aiConfig?.provider === "claude"
             ? String(
-                parsed.aiConfig?.baseUrl || "https://api.aicredits.in/v1"
+                !parsed.aiConfig?.baseUrl ||
+                  parsed.aiConfig.baseUrl === "https://api.aicredits.in/v1"
+                  ? "https://api.mwapi.dev/v1"
+                  : parsed.aiConfig.baseUrl
               ).slice(0, 500)
             : "",
         encryptedApiKey: String(parsed.aiConfig?.encryptedApiKey || ""),
@@ -939,7 +945,10 @@ class JsonStore {
       parsed.aiConfig &&
       typeof parsed.aiConfig === "object" &&
       !Array.isArray(parsed.aiConfig) &&
-      Object.hasOwn(parsed.aiConfig, "baseUrl")
+      Object.hasOwn(parsed.aiConfig, "baseUrl") &&
+      Object.hasOwn(parsed.aiConfig, "autoRegisterPayments") &&
+      parsed.aiConfig.baseUrl !== "https://api.aicredits.in/v1" &&
+      parsed.aiConfig.model !== "anthropic/claude-sonnet-4.6"
     );
     if (!countryGreetingsMigrated) {
       migrated.settings.countryGreetings = parsed.settings.countryGreetings
@@ -2430,7 +2439,11 @@ class JsonStore {
     item,
     days,
     command,
-    commandMessageId = ""
+    commandMessageId = "",
+    registrationSource = "whatsapp-command",
+    paymentMethod = "",
+    accountReference = "",
+    notes = ""
   }) {
     const durationDays = Number(days);
     if (!Number.isSafeInteger(durationDays) || durationDays < 1 || durationDays > 3650) {
@@ -2466,6 +2479,28 @@ class JsonStore {
       }
     }
 
+    const normalizedPaymentReference = String(accountReference || "")
+      .trim()
+      .toLowerCase();
+    if (
+      registrationSource === "whatsapp-payment-ai" &&
+      normalizedPaymentReference
+    ) {
+      const duplicatePayment = this.data.clients.find(
+        (client) =>
+          client.registrationSource === "whatsapp-payment-ai" &&
+          String(client.accountReference || "").trim().toLowerCase() ===
+            normalizedPaymentReference
+      );
+      if (duplicatePayment) {
+        return {
+          client: structuredClone(duplicatePayment),
+          created: false,
+          duplicate: true
+        };
+      }
+    }
+
     const today = todayInTimeZone(
       process.env.BOT_TIMEZONE || "America/Lima"
     );
@@ -2475,7 +2510,7 @@ class JsonStore {
       durationDays,
       termMonths: Math.max(1, Math.round(durationDays / 30)),
       status: "activo",
-      registrationSource: "whatsapp-command",
+      registrationSource: String(registrationSource || "whatsapp-command"),
       lastCommand: `${command} ${durationDays}`,
       lastCommandMessageId: String(commandMessageId || ""),
       lastCommandAt: new Date().toISOString(),
@@ -2491,19 +2526,26 @@ class JsonStore {
       whatsappPhone,
       whatsappUsername,
       whatsappChatId,
-      accountReference: "",
-      paymentMethod: "",
+      accountReference: String(accountReference || "").slice(0, 240),
+      paymentMethod: String(paymentMethod || "").slice(0, 120),
       startDate: today,
       expiryDate: addDays(today, durationDays),
       autoReminder: true,
       autoCharge: false,
-      notes: `Compra independiente registrada con ${command} ${durationDays}.`
+      notes:
+        String(notes || "").trim() ||
+        `Compra independiente registrada con ${command} ${durationDays}.`
     });
 
     this.addLog(
-      "command",
-      `Compra registrada con ${command}: ${client.whatsapp} · ${client.product} · ${durationDays} días · vence ${client.expiryDate}`,
-      { clientId: client.id, command, durationDays }
+      registrationSource === "whatsapp-payment-ai" ? "payment" : "command",
+      `${registrationSource === "whatsapp-payment-ai" ? "Pago reconocido y compra registrada" : "Compra registrada con el comando"} ${command}: ${client.whatsapp} · ${client.product} · ${durationDays} días · vence ${client.expiryDate}`,
+      {
+        clientId: client.id,
+        command,
+        durationDays,
+        registrationSource: commandFields.registrationSource
+      }
     );
     if (commandMessageId) {
       this.data.processedCommandIds.unshift(commandMessageId);

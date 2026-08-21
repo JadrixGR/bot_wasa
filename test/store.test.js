@@ -145,6 +145,7 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
     assert.deepEqual(store.data.aiConfig, {
       provider: "gemini",
       enabled: false,
+      autoRegisterPayments: true,
       model: "gemini-3.6-flash",
       baseUrl: "",
       encryptedApiKey: "",
@@ -159,6 +160,42 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
       store.getCountryPriceBooks().find((book) => book.callingCode === "+52")
         .prices["chatgpt-pro"],
       "MX$225"
+    );
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("migra la configuración anterior de Claude hacia MWAPI sin borrar la clave", () => {
+  const directory = temporaryDataDir();
+  try {
+    fs.writeFileSync(
+      path.join(directory, "jadrixservs-v4.json"),
+      JSON.stringify({
+        version: 4.92,
+        settings: {},
+        clients: [],
+        aiConfig: {
+          provider: "claude",
+          enabled: true,
+          model: "anthropic/claude-sonnet-4.6",
+          baseUrl: "https://api.aicredits.in/v1",
+          encryptedApiKey: "v1:clave-cifrada-anterior",
+          updatedAt: "2026-08-20T10:00:00.000Z"
+        }
+      }),
+      "utf8"
+    );
+
+    const store = new JsonStore(directory);
+
+    assert.equal(store.data.aiConfig.provider, "claude");
+    assert.equal(store.data.aiConfig.model, "claude-sonnet-4-6");
+    assert.equal(store.data.aiConfig.baseUrl, "https://api.mwapi.dev/v1");
+    assert.equal(store.data.aiConfig.autoRegisterPayments, true);
+    assert.equal(
+      store.data.aiConfig.encryptedApiKey,
+      "v1:clave-cifrada-anterior"
     );
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
@@ -960,6 +997,47 @@ test("cada comando nuevo crea una compra independiente aunque repita el producto
     assert.equal(secondPurchase.client.startDate, first.client.startDate);
     assert.equal(secondPurchase.client.expiryDate, first.client.expiryDate);
     assert.equal(store.listClients().length, 2);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("un pago reconocido conserva método, referencia y origen automático", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const result = store.registerClientFromCommand({
+      whatsapp: "999888777",
+      name: "Ana",
+      item: { name: "ChatGPT Plus", price: "S/10" },
+      days: 30,
+      command: "/gptplus",
+      commandMessageId: "comprobante-registrado-1",
+      registrationSource: "whatsapp-payment-ai",
+      paymentMethod: "Yape",
+      accountReference: "OP-123456",
+      notes: "Pago reconocido automáticamente."
+    });
+    const repeated = store.registerClientFromCommand({
+      whatsapp: "988777666",
+      name: "Otro cliente",
+      item: { name: "ChatGPT Plus", price: "S/10" },
+      days: 30,
+      command: "/gptplus",
+      commandMessageId: "comprobante-reutilizado-2",
+      registrationSource: "whatsapp-payment-ai",
+      paymentMethod: "Yape",
+      accountReference: "op-123456"
+    });
+
+    assert.equal(result.client.registrationSource, "whatsapp-payment-ai");
+    assert.equal(result.client.paymentMethod, "Yape");
+    assert.equal(result.client.accountReference, "OP-123456");
+    assert.equal(result.client.notes, "Pago reconocido automáticamente.");
+    assert.equal(repeated.duplicate, true);
+    assert.equal(repeated.client.id, result.client.id);
+    assert.equal(store.listClients().length, 1);
+    assert.ok(store.data.logs.some((entry) => entry.type === "payment"));
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

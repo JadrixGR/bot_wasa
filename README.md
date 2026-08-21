@@ -28,13 +28,13 @@ Las imágenes y los audios de bienvenida se guardan en `MEDIA_DIR` (`/data/media
 
 ## Respuestas con IA: Claude o Gemini
 
-El apartado **IA y entrenamiento** permite elegir entre **Claude API (AICredits)** y **Google Gemini**. Ambos reciben las mismas reglas confirmadas del negocio, catálogo, precios locales, métodos de pago y memoria entrenada.
+El apartado **IA y entrenamiento** permite elegir entre **Claude API (MWAPI)** y **Google Gemini**. Ambos reciben las mismas reglas confirmadas del negocio, catálogo, precios locales, métodos de pago y memoria entrenada. Con Claude también se pueden analizar capturas claras de comprobantes para registrar clientes automáticamente cuando el importe, la moneda y la referencia coinciden.
 
 ### Usar Claude API
 
-1. Elige **Claude API (AICredits)** como proveedor.
+1. Elige **Claude API (MWAPI)** como proveedor.
 2. Pega una clave nueva en el campo protegido.
-3. Conserva `https://api.aicredits.in/v1` como dirección y `anthropic/claude-sonnet-4.6` como modelo recomendado.
+3. Conserva `https://api.mwapi.dev/v1` como dirección y `claude-sonnet-4-6` como modelo recomendado.
 4. Pulsa **Guardar configuración** y después **Probar conexión**.
 5. Activa las respuestas con IA solamente cuando la prueba termine correctamente.
 

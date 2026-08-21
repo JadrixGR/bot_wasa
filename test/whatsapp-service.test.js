@@ -3,6 +3,7 @@
 const { EventEmitter } = require("node:events");
 const fs = require("node:fs");
 const path = require("node:path");
+const { Readable } = require("node:stream");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
@@ -22,6 +23,7 @@ const {
   parseAuthenticatorAuthorizationCommand,
   parseWhatsAppWebVersion
 } = require("../src/whatsapp-service");
+const { createInitialData } = require("../src/defaults");
 
 const testRuntimeDir = path.resolve("test-runtime");
 
@@ -45,11 +47,15 @@ async function settleMessageQueue(service, timeoutMs = 3000) {
 
 function makeStore() {
   const logs = [];
-  const conversations = {};
+  const data = createInitialData();
+  const conversations = data.conversations;
   const processedCommandIds = [];
   return {
     logs,
-    data: { conversations, processedCommandIds },
+    data: { ...data, conversations, processedCommandIds },
+    snapshot() {
+      return structuredClone(this.data);
+    },
     addLog: (type, message, details) => logs.push({ type, message, details }),
     save: () => undefined,
     getConversation: (chatId) => ({ ...(conversations[chatId] || {}) }),
@@ -173,7 +179,9 @@ function makeFakeBaileys({
         };
       },
       jidNormalizedUser: (jid) => jid.replace(/:\d+@/, "@"),
-      getContentType: (content) => Object.keys(content || {})[0]
+      getContentType: (content) => Object.keys(content || {})[0],
+      downloadContentFromMessage: async () =>
+        Readable.from([Buffer.from("imagen-recibida")])
     },
     sockets,
     state
@@ -965,6 +973,86 @@ test("una respuesta de Gemini se envía una vez y marca el mensaje como atendido
   );
   assert.equal(socket.calls.read.length, 1);
   assert.equal(socket.calls.read[0][0].id, "gemini-message-1");
+});
+
+test("descarga una captura de pago y registra al cliente después de validarla con Claude", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const store = makeStore();
+  const chatId = "51933334444@s.whatsapp.net";
+  store.data.conversations[chatId] = {
+    welcomeSequenceSentAt: new Date().toISOString(),
+    welcomeMessagesSent: 3,
+    recentUserMessages: ["Quiero ChatGPT Plus"]
+  };
+  const registrations = [];
+  store.registerClientFromCommand = (payload) => {
+    registrations.push(payload);
+    return {
+      client: {
+        id: "cliente-pago-claude",
+        product: payload.item.name,
+        expiryDate: "2026-09-20"
+      },
+      created: true,
+      duplicate: false
+    };
+  };
+  let receivedImage = "";
+  const ai = {
+    isReplyEnabled: () => true,
+    getStatus: () => ({
+      provider: "claude",
+      replyEnabled: true,
+      autoRegisterPayments: true
+    }),
+    analyzePaymentReceipt: async ({ imageDataUrl }) => {
+      receivedImage = imageDataUrl;
+      return {
+        isPaymentReceipt: true,
+        paymentConfirmed: true,
+        confidence: 0.98,
+        amount: 10,
+        currency: "PEN",
+        paymentMethod: "Yape",
+        recipientMatchesExpected: true,
+        transactionId: "OP-WA-1234"
+      };
+    },
+    answer: async () => "No debe enviarse"
+  };
+  const service = makeService(fake, {
+    store,
+    ai,
+    sessionDir: path.join(testRuntimeDir, "claude-payment-session"),
+    mediaDir: path.join(testRuntimeDir, "claude-payment-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "notify",
+    messages: [{
+      key: { id: "pago-claude-1", remoteJid: chatId, fromMe: false },
+      pushName: "Ana",
+      message: {
+        imageMessage: {
+          mimetype: "image/png",
+          mediaKey: Buffer.from("clave"),
+          directPath: "/imagen"
+        }
+      }
+    }]
+  });
+  await settleMessageQueue(service);
+
+  assert.match(receivedImage, /^data:image\/png;base64,/);
+  assert.equal(registrations.length, 1);
+  assert.equal(registrations[0].item.name, "ChatGPT Plus");
+  assert.equal(registrations[0].registrationSource, "whatsapp-payment-ai");
+  assert.match(socket.calls.sent[0].content.text, /Pago reconocido y cliente registrado/);
+  assert.equal(socket.calls.read.length, 1);
 });
 
 test("un comando enviado por el propietario registra el número alternativo sin responder al chat", async () => {

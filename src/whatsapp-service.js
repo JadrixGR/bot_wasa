@@ -1159,6 +1159,52 @@ class WhatsAppService {
     }
   }
 
+  async #downloadInboundImage(content, type, chatId) {
+    if (
+      type !== "imageMessage" ||
+      typeof this.baileys?.downloadContentFromMessage !== "function"
+    ) {
+      return null;
+    }
+    const imageMessage = content?.imageMessage;
+    const mimeType = String(imageMessage?.mimetype || "image/jpeg")
+      .toLowerCase()
+      .split(";")[0];
+    if (!new Set(["image/jpeg", "image/png", "image/webp"]).has(mimeType)) {
+      return null;
+    }
+    try {
+      const stream = await this.baileys.downloadContentFromMessage(
+        imageMessage,
+        "image"
+      );
+      const chunks = [];
+      let totalBytes = 0;
+      for await (const chunk of stream) {
+        const buffer = Buffer.from(chunk);
+        totalBytes += buffer.length;
+        if (totalBytes > 5 * 1024 * 1024) {
+          throw new Error("La imagen supera el límite de 5 MB.");
+        }
+        chunks.push(buffer);
+      }
+      if (!totalBytes) return null;
+      return {
+        mimeType,
+        size: totalBytes,
+        dataUrl: `data:${mimeType};base64,${Buffer.concat(chunks).toString("base64")}`
+      };
+    } catch (error) {
+      this.store.addLog(
+        "payment",
+        `No se pudo descargar la imagen recibida: ${error.message}`,
+        { chatId }
+      );
+      this.store.save();
+      return null;
+    }
+  }
+
   async #handleMessage(socket, message) {
     if (message.key.fromMe) {
       await this.#handleOwnerCommand(socket, message);
@@ -1197,14 +1243,20 @@ class WhatsAppService {
     this.store.save();
 
     const customerIdentity = await this.#resolveCustomerIdentity(socket, message);
+    const inboundImage = await this.#downloadInboundImage(content, type, chatId);
 
     const result = await this.engine.handleIncoming({
       chatId,
       alternateChatId: message.key.remoteJidAlt || "",
       customerPhone: customerIdentity.whatsappPhone || "",
+      whatsapp: customerIdentity.whatsapp || "",
+      whatsappPhone: customerIdentity.whatsappPhone || "",
+      whatsappUsername: customerIdentity.whatsappUsername || "",
+      whatsappChatId: customerIdentity.whatsappChatId || chatId,
       body,
       hasMedia,
       mediaType: type.replace(/Message$/, ""),
+      media: inboundImage,
       fromName,
       messageId: message.key.id || "",
       adReferral
@@ -1212,7 +1264,15 @@ class WhatsAppService {
 
     if (
       Number(result?.messages || 0) > 0 &&
-      ["welcome-sequence", "welcome-resumed", "ai-reply"].includes(
+      [
+        "welcome-sequence",
+        "welcome-resumed",
+        "ai-reply",
+        "ai-media-reply",
+        "payment-registered",
+        "payment-review",
+        "payment-needs-product"
+      ].includes(
         result?.action
       )
     ) {

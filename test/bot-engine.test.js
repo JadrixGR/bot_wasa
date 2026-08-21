@@ -21,6 +21,7 @@ function makeHarness(
   const data = createInitialData();
   const sent = [];
   const logs = [];
+  const registrations = [];
   const conversations = {
     "51900000000@s.whatsapp.net": conversation
   };
@@ -32,7 +33,20 @@ function makeHarness(
       return Object.assign(conversations[chatId], patch);
     },
     getSettings: () => structuredClone(data.settings),
+    snapshot: () => structuredClone(data),
     findClientByWhatsApp: () => registeredClient,
+    registerClientFromCommand: (payload) => {
+      registrations.push(payload);
+      return {
+        client: {
+          id: "cliente-pago",
+          product: payload.item.name,
+          expiryDate: "2026-09-20"
+        },
+        created: true,
+        duplicate: false
+      };
+    },
     addLog: (type, message, metadata) =>
       logs.push({ type, message, metadata }),
     save: () => undefined
@@ -43,7 +57,15 @@ function makeHarness(
     sendText: async (_chatId, text) => sent.push(text),
     sendMedia
   });
-  return { engine, sent, logs, conversation, conversations, data };
+  return {
+    engine,
+    sent,
+    logs,
+    registrations,
+    conversation,
+    conversations,
+    data
+  };
 }
 
 test("normaliza acentos y signos", () => {
@@ -194,7 +216,7 @@ test("después de la bienvenida no vuelve a responder mensajes entrantes", async
   assert.equal(sent.length, 3);
 });
 
-test("la IA responde desde el segundo mensaje y conserva primero la bienvenida", async () => {
+test("la IA responde desde el primer mensaje y conserva primero la bienvenida", async () => {
   const calls = [];
   const ai = {
     isReplyEnabled: () => true,
@@ -217,11 +239,13 @@ test("la IA responde desde el segundo mensaje y conserva primero la bienvenida",
     messageId: "mensaje-2"
   });
 
-  assert.equal(first.action, "welcome-sequence");
+  assert.equal(first.action, "ai-reply");
   assert.equal(second.action, "ai-reply");
-  assert.equal(sent.length, 4);
+  assert.equal(first.messages, 4);
+  assert.equal(sent.length, 5);
   assert.equal(sent.at(-1), "Claro, ChatGPT Pro está disponible.");
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0].question, "Hola");
   assert.equal(calls[0].conversation.welcomeCountry, "Perú");
   assert.equal(calls[0].conversation.welcomeCallingCode, "+51");
   assert.ok(logs.some((log) => log.type === "ai"));
@@ -250,6 +274,162 @@ test("la IA responde a un cliente registrado y detecta su país por el número",
   assert.equal(receivedConversation.welcomeCurrency, "PEN (S/)");
   assert.equal(receivedConversation.localCallingCode, "+51");
   assert.equal(receivedConversation.localCurrency, "Soles peruanos (PEN)");
+});
+
+test("un comprobante claro registra automáticamente el servicio solicitado", async () => {
+  const ai = {
+    isReplyEnabled: () => true,
+    getStatus: () => ({
+      provider: "claude",
+      replyEnabled: true,
+      autoRegisterPayments: true
+    }),
+    analyzePaymentReceipt: async () => ({
+      isPaymentReceipt: true,
+      paymentConfirmed: true,
+      confidence: 0.98,
+      amount: 10,
+      currency: "PEN",
+      paymentMethod: "Yape",
+      recipient: "Jaime Gar.",
+      recipientMatchesExpected: true,
+      transactionId: "OP-123456",
+      paidAt: "2026-08-21 11:20",
+      reason: "Operación exitosa"
+    }),
+    answer: async () => "No debe usarse"
+  };
+  const { engine, sent, registrations, logs } = makeHarness(
+    {
+      welcomeSequenceSentAt: new Date().toISOString(),
+      welcomeMessagesSent: 3,
+      recentUserMessages: ["Quiero ChatGPT Plus"]
+    },
+    null,
+    ai
+  );
+
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    customerPhone: "51900000000",
+    whatsapp: "51900000000",
+    whatsappPhone: "51900000000",
+    body: "",
+    hasMedia: true,
+    mediaType: "image",
+    media: { dataUrl: "data:image/png;base64,aW1hZ2Vu" },
+    fromName: "Ana",
+    messageId: "comprobante-1"
+  });
+
+  assert.equal(result.action, "payment-registered");
+  assert.equal(registrations.length, 1);
+  assert.equal(registrations[0].item.name, "ChatGPT Plus");
+  assert.equal(registrations[0].item.price, "S/10");
+  assert.equal(registrations[0].days, 30);
+  assert.equal(registrations[0].registrationSource, "whatsapp-payment-ai");
+  assert.equal(registrations[0].paymentMethod, "Yape");
+  assert.equal(registrations[0].accountReference, "OP-123456");
+  assert.match(sent.at(-1), /Pago reconocido y cliente registrado/);
+  assert.ok(logs.some((entry) => entry.type === "payment"));
+});
+
+test("si primero llega el comprobante, pregunta el servicio y lo registra en la respuesta", async () => {
+  const ai = {
+    isReplyEnabled: () => true,
+    getStatus: () => ({
+      provider: "claude",
+      replyEnabled: true,
+      autoRegisterPayments: true
+    }),
+    analyzePaymentReceipt: async () => ({
+      isPaymentReceipt: true,
+      paymentConfirmed: true,
+      confidence: 0.96,
+      amount: 10,
+      currency: "PEN",
+      paymentMethod: "Yape",
+      recipientMatchesExpected: true,
+      transactionId: "OP-654321"
+    }),
+    answer: async () => "No debe usarse"
+  };
+  const { engine, sent, registrations } = makeHarness(
+    { welcomeSequenceSentAt: new Date().toISOString(), welcomeMessagesSent: 3 },
+    null,
+    ai
+  );
+
+  const receipt = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    customerPhone: "51900000000",
+    whatsapp: "51900000000",
+    body: "",
+    hasMedia: true,
+    mediaType: "image",
+    media: { dataUrl: "data:image/png;base64,aW1hZ2Vu" },
+    messageId: "comprobante-sin-producto"
+  });
+  const product = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    customerPhone: "51900000000",
+    whatsapp: "51900000000",
+    body: "ChatGPT Plus",
+    messageId: "producto-del-comprobante"
+  });
+
+  assert.equal(receipt.action, "payment-needs-product");
+  assert.match(sent[0], /qué servicio pagaste/i);
+  assert.equal(product.action, "payment-registered");
+  assert.equal(registrations.length, 1);
+  assert.equal(registrations[0].item.name, "ChatGPT Plus");
+});
+
+test("un importe que no coincide queda para revisión y no registra al cliente", async () => {
+  const ai = {
+    isReplyEnabled: () => true,
+    getStatus: () => ({
+      provider: "claude",
+      replyEnabled: true,
+      autoRegisterPayments: true
+    }),
+    analyzePaymentReceipt: async () => ({
+      isPaymentReceipt: true,
+      paymentConfirmed: true,
+      confidence: 0.99,
+      amount: 25,
+      currency: "PEN",
+      paymentMethod: "Yape",
+      recipientMatchesExpected: true,
+      transactionId: "OP-999999"
+    }),
+    answer: async () => "No debe usarse"
+  };
+  const { engine, sent, registrations } = makeHarness(
+    {
+      welcomeSequenceSentAt: new Date().toISOString(),
+      welcomeMessagesSent: 3,
+      recentUserMessages: ["Quiero ChatGPT Plus"]
+    },
+    null,
+    ai
+  );
+
+  const result = await engine.handleIncoming({
+    chatId: "51900000000@s.whatsapp.net",
+    customerPhone: "51900000000",
+    whatsapp: "51900000000",
+    body: "",
+    hasMedia: true,
+    mediaType: "image",
+    media: { dataUrl: "data:image/png;base64,aW1hZ2Vu" },
+    messageId: "comprobante-monto-distinto"
+  });
+
+  assert.equal(result.action, "payment-review");
+  assert.equal(result.reason, "amount_mismatch");
+  assert.equal(registrations.length, 0);
+  assert.match(sent.at(-1), /asesor lo revise/i);
 });
 
 test("detecta la tabla de pesos mexicanos y argentinos por prefijo", () => {

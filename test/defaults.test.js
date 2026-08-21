@@ -109,6 +109,7 @@ test("la V4.7 usa el modo de bienvenida única", () => {
   assert.deepEqual(createInitialData().aiConfig, {
     provider: "gemini",
     enabled: false,
+    autoRegisterPayments: true,
     model: "gemini-3.6-flash",
     baseUrl: "",
     encryptedApiKey: "",

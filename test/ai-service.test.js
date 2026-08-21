@@ -214,15 +214,16 @@ test("guarda Claude API cifrado y nunca devuelve la clave al panel", () => {
   });
   const status = ai.configureClaude({
     apiKey: secret,
-    model: "anthropic/claude-sonnet-4.6",
-    baseUrl: "https://api.aicredits.in/v1",
+    model: "claude-sonnet-4-6",
+    baseUrl: "https://api.mwapi.dev/v1",
     enabled: true
   });
 
   assert.equal(status.provider, "claude");
   assert.equal(status.replyEnabled, true);
-  assert.equal(status.model, "anthropic/claude-sonnet-4.6");
-  assert.equal(status.baseUrl, "https://api.aicredits.in/v1");
+  assert.equal(status.model, "claude-sonnet-4-6");
+  assert.equal(status.baseUrl, "https://api.mwapi.dev/v1");
+  assert.equal(status.autoRegisterPayments, true);
   assert.equal(status.keySource, "panel_encrypted");
   assert.doesNotMatch(JSON.stringify(status), new RegExp(secret));
   assert.doesNotMatch(store.data.aiConfig.encryptedApiKey, new RegExp(secret));
@@ -245,7 +246,7 @@ test("Claude API usa chat completions y conserva el contexto entrenado", async (
         ok: true,
         status: 200,
         text: async () => JSON.stringify({
-          model: "anthropic/claude-sonnet-4.6",
+          model: "claude-sonnet-4-6",
           choices: [{
             finish_reason: "stop",
             message: { content: "Puedes pagar con Yape al número confirmado." }
@@ -263,13 +264,74 @@ test("Claude API usa chat completions y conserva el contexto entrenado", async (
   const body = JSON.parse(capturedOptions.body);
 
   assert.equal(answer, "Puedes pagar con Yape al número confirmado.");
-  assert.equal(capturedUrl, "https://api.aicredits.in/v1/chat/completions");
+  assert.equal(capturedUrl, "https://api.mwapi.dev/v1/chat/completions");
   assert.equal(capturedOptions.headers.Authorization, `Bearer ${secret}`);
   assert.doesNotMatch(capturedOptions.body, new RegExp(secret));
-  assert.equal(body.model, "anthropic/claude-sonnet-4.6");
+  assert.equal(body.model, "claude-sonnet-4-6");
   assert.equal(body.max_tokens, 1200);
   assert.match(body.messages[0].content, /PAGOS CONFIRMADOS/);
   assert.match(body.messages[1].content, /Pregunta actual: ¿Cómo puedo pagar\?/);
+});
+
+test("Claude analiza un comprobante como imagen y devuelve datos normalizados", async () => {
+  const store = makeStore();
+  let capturedOptions = null;
+  const ai = new AiService({
+    store,
+    provider: "claude",
+    encryptionKey: "clave-estable",
+    fetchFn: async (_url, options) => {
+      capturedOptions = options;
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          model: "claude-sonnet-4-6",
+          choices: [{
+            finish_reason: "stop",
+            message: {
+              content: JSON.stringify({
+                isPaymentReceipt: true,
+                paymentConfirmed: true,
+                confidence: 0.97,
+                amount: 10,
+                currency: "PEN",
+                paymentMethod: "Yape",
+                recipient: "JadrixServs",
+                recipientMatchesExpected: true,
+                transactionId: "OP-778899",
+                paidAt: "2026-08-21 10:30",
+                reason: "Operación exitosa visible"
+              })
+            }
+          }]
+        })
+      };
+    }
+  });
+  ai.configureClaude({
+    apiKey: `sk-${"c".repeat(64)}`,
+    enabled: true,
+    autoRegisterPayments: true
+  });
+
+  const result = await ai.analyzePaymentReceipt({
+    imageDataUrl: "data:image/png;base64,aW1hZ2Vu",
+    expectedPayment: {
+      product: "ChatGPT Plus",
+      currency: "PEN",
+      allowedAmounts: [10]
+    }
+  });
+  const body = JSON.parse(capturedOptions.body);
+
+  assert.equal(result.paymentConfirmed, true);
+  assert.equal(result.amount, 10);
+  assert.equal(result.transactionId, "OP-778899");
+  assert.equal(body.model, "claude-sonnet-4-6");
+  assert.equal(body.messages[1].content[1].type, "image_url");
+  assert.match(body.messages[1].content[1].image_url.url, /^data:image\/png;base64,/);
+  assert.equal(body.max_tokens, 700);
 });
 
 test("clasifica una clave inválida de Claude sin exponer el error del proveedor", () => {

@@ -549,7 +549,7 @@
               <div>
                 <span id="aiStatusPill" class="pill violet">Cargando estado</span>
                 <h3 id="aiHeroTitle">La IA responde con el contexto de JadrixServs</h3>
-                <p>La secuencia de bienvenida configurada se conserva. Desde el siguiente mensaje, la IA puede responder usando solamente la información que configures aquí.</p>
+                <p>La secuencia de bienvenida configurada se conserva y la IA puede responder desde el primer mensaje usando solamente la información que configures aquí.</p>
               </div>
             </div>
             <div class="ai-status-grid">
@@ -569,7 +569,7 @@
                 Proveedor
                 <select id="aiProviderSelect">
                   <option value="gemini">Google Gemini</option>
-                  <option value="claude">Claude API (AICredits)</option>
+                  <option value="claude">Claude API (MWAPI)</option>
                 </select>
                 <small>Claude API usa el saldo adquirido y Gemini conserva su integración actual.</small>
               </label>
@@ -588,20 +588,28 @@
                   <option value="gemini-3.6-flash">Estable recomendado</option>
                   <option value="gemini-3.5-flash">Alternativa estable</option>
                   <option value="gemini-3.5-flash-lite">Menor costo</option>
-                  <option value="anthropic/claude-sonnet-4.6">Claude recomendado</option>
-                  <option value="anthropic/claude-haiku-4.5">Claude rápido y económico</option>
-                  <option value="anthropic/claude-opus-4.6">Claude de máxima capacidad</option>
+                  <option value="claude-sonnet-4-6">Claude Sonnet recomendado</option>
+                  <option value="claude-haiku-4-5-20251001">Claude Haiku rápido</option>
+                  <option value="claude-opus-4-6">Claude Opus 4.6</option>
+                  <option value="claude-opus-4-7">Claude Opus 4.7</option>
+                  <option value="claude-opus-4-8">Claude Opus 4.8</option>
+                  <option value="claude-opus-5">Claude Opus 5</option>
+                  <option value="claude-sonnet-5">Claude Sonnet 5</option>
                 </datalist>
                 <small id="aiModelHelp">Usa un nombre de modelo disponible para el proveedor elegido.</small>
               </label>
               <label id="claudeBaseUrlRow" class="hidden">
                 Dirección de Claude API
-                <input id="claudeBaseUrl" type="url" value="https://api.aicredits.in/v1" autocomplete="off" spellcheck="false">
-                <small>Déjala así para una clave AICredits. Solo cámbiala si el vendedor te entregó otra dirección.</small>
+                <input id="claudeBaseUrl" type="url" value="https://api.mwapi.dev/v1" autocomplete="off" spellcheck="false">
+                <small>Esta es la dirección indicada en la guía de MWAPI. Solo cámbiala si el proveedor entrega una nueva.</small>
               </label>
               <label class="toggle-row ai-toggle-row">
                 <input id="aiReplyEnabled" type="checkbox">
-                <span><strong>Activar respuestas con IA</strong><small id="aiToggleHelp">La IA responderá después de la bienvenida. El modo AFK mantiene prioridad.</small></span>
+                <span><strong>Activar respuestas con IA</strong><small id="aiToggleHelp">La IA responderá desde el primer mensaje. El modo AFK mantiene prioridad.</small></span>
+              </label>
+              <label id="aiPaymentRecognitionRow" class="toggle-row ai-toggle-row">
+                <input id="aiPaymentRecognitionEnabled" type="checkbox" checked>
+                <span><strong>Reconocer pagos y registrar clientes</strong><small>La captura se enviará a MWAPI para analizarla. Solo registrará cuando el estado, destinatario, importe, moneda y referencia sean claros y coincidan con el servicio.</small></span>
               </label>
               <div id="aiConfigurationNotice" class="notice">Guarda una API key para habilitar las respuestas.</div>
               <button id="deleteAiKeyButton" class="button danger-ghost hidden" type="button">Eliminar API key guardada</button>
@@ -611,8 +619,8 @@
               <div class="panel-heading"><div><span class="eyebrow">ORDEN DE RESPUESTA</span><h3>Flujo del bot</h3></div></div>
               <ol class="ai-flow-list">
                 <li><span>1</span><div><strong>Bienvenida por país</strong><small>Un contacto nuevo recibe la secuencia configurada, incluidas sus imágenes opcionales.</small></div></li>
-                <li><span>2</span><div><strong>Pregunta del cliente</strong><small>El mensaje posterior se envía al proveedor elegido con el contexto del negocio.</small></div></li>
-                <li><span>3</span><div><strong>Respuesta entrenada</strong><small>La IA usa catálogo, moneda local, pagos y reglas confirmadas.</small></div></li>
+                <li><span>2</span><div><strong>Respuesta inmediata</strong><small>La consulta del primer contacto también se envía al proveedor elegido.</small></div></li>
+                <li><span>3</span><div><strong>Pagos y registro</strong><small>Una captura clara puede validarse contra el servicio y registrar al cliente automáticamente.</small></div></li>
               </ol>
               <div class="notice ai-safety-notice"><strong>Control humano:</strong> si la IA no está disponible, el bot no inventa una respuesta ni marca el mensaje como atendido.</div>
             </article>

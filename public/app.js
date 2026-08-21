@@ -2404,7 +2404,7 @@ function renderAiStatus(ai = {}) {
         : "Falta API key";
   $("#aiProviderText").textContent = ai.provider === "openai" ? "OpenAI" : providerName;
   $("#aiModelText").textContent = ai.model || (provider === "claude"
-    ? "anthropic/claude-sonnet-4.6"
+    ? "claude-sonnet-4-6"
     : "gemini-3.6-flash");
   $("#aiKeyText").textContent = ai.keyConfigured
     ? ai.encryptedAtRest
@@ -2413,11 +2413,12 @@ function renderAiStatus(ai = {}) {
     : "Sin configurar";
   $("#aiProviderSelect").value = provider;
   $("#aiModel").value = ai.model || (provider === "claude"
-    ? "anthropic/claude-sonnet-4.6"
+    ? "claude-sonnet-4-6"
     : "gemini-3.6-flash");
-  $("#claudeBaseUrl").value = ai.baseUrl || "https://api.aicredits.in/v1";
+  $("#claudeBaseUrl").value = ai.baseUrl || "https://api.mwapi.dev/v1";
   renderAiProviderFields(provider);
   $("#aiReplyEnabled").checked = active || Boolean(ai.requestedEnabled);
+  $("#aiPaymentRecognitionEnabled").checked = ai.autoRegisterPayments !== false;
   $("#deleteAiKeyButton").classList.toggle(
     "hidden",
     !ai.keyConfigured || ai.keySource !== "panel_encrypted"
@@ -2431,7 +2432,7 @@ function renderAiStatus(ai = {}) {
   notice.textContent = hasError
     ? ai.lastError
     : active
-      ? `${providerName} está activo y responderá después de la bienvenida inicial.`
+      ? `${providerName} está activo y responderá desde el primer mensaje.`
       : configured
         ? "La conexión está configurada. Activa el interruptor y guarda cuando quieras usarla."
         : "Guarda una API key para habilitar las respuestas con IA.";
@@ -2440,7 +2441,15 @@ function renderAiStatus(ai = {}) {
 function renderAiProviderFields(provider, { resetModel = false } = {}) {
   const selected = provider === "claude" ? "claude" : "gemini";
   const isClaude = selected === "claude";
+  if (resetModel) {
+    $("#aiModel").value = isClaude
+      ? "claude-sonnet-4-6"
+      : "gemini-3.6-flash";
+  }
   $("#claudeBaseUrlRow").classList.toggle("hidden", !isClaude);
+  $("#aiPaymentRecognitionRow").classList.toggle("hidden", !isClaude);
+  $("#aiProviderText").textContent = isClaude ? "Claude API" : "Google Gemini";
+  $("#aiModelText").textContent = $("#aiModel").value;
   $("#aiConnectionTitle").textContent = isClaude
     ? "Claude API"
     : "API de Gemini";
@@ -2449,14 +2458,9 @@ function renderAiProviderFields(provider, { resetModel = false } = {}) {
     : "API key de Gemini";
   $("#aiHeroTitle").textContent = `${isClaude ? "Claude" : "Gemini"} responde con el contexto de JadrixServs`;
   $("#aiModelHelp").textContent = isClaude
-    ? "Recomendado para atención: anthropic/claude-sonnet-4.6."
+    ? "Recomendado para atención: claude-sonnet-4-6."
     : "Usa un nombre de modelo disponible para tu proyecto de Google AI.";
-  $("#aiToggleHelp").textContent = `${isClaude ? "Claude" : "Gemini"} responderá después de la bienvenida. El modo AFK mantiene prioridad.`;
-  if (resetModel) {
-    $("#aiModel").value = isClaude
-      ? "anthropic/claude-sonnet-4.6"
-      : "gemini-3.6-flash";
-  }
+  $("#aiToggleHelp").textContent = `${isClaude ? "Claude" : "Gemini"} responderá desde el primer mensaje. El modo AFK mantiene prioridad.`;
 }
 
 function renderKnowledgeBase() {
@@ -2583,12 +2587,14 @@ async function saveAiConfiguration() {
   const body = {
     provider,
     model: $("#aiModel").value.trim() || (provider === "claude"
-      ? "anthropic/claude-sonnet-4.6"
+      ? "claude-sonnet-4-6"
       : "gemini-3.6-flash"),
-    enabled: $("#aiReplyEnabled").checked
+    enabled: $("#aiReplyEnabled").checked,
+    autoRegisterPayments:
+      provider === "claude" && $("#aiPaymentRecognitionEnabled").checked
   };
   if (provider === "claude") {
-    body.baseUrl = $("#claudeBaseUrl").value.trim() || "https://api.aicredits.in/v1";
+    body.baseUrl = $("#claudeBaseUrl").value.trim() || "https://api.mwapi.dev/v1";
   }
   if (apiKey) body.apiKey = apiKey;
   const payload = await api("/api/ai/config", { method: "PUT", body });
@@ -3110,6 +3116,7 @@ function bindEvents() {
     if (providerChanged) {
       $("#aiApiKey").value = "";
       $("#aiReplyEnabled").checked = false;
+      $("#aiPaymentRecognitionEnabled").checked = provider === "claude";
       $("#deleteAiKeyButton").classList.add("hidden");
       $("#aiKeyHelp").textContent = "Pega una clave del nuevo proveedor para guardar el cambio.";
     }

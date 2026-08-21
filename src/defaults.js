@@ -561,6 +561,7 @@ function createInitialData() {
     aiConfig: {
       provider: "gemini",
       enabled: false,
+      autoRegisterPayments: true,
       model: "gemini-3.6-flash",
       baseUrl: "",
       encryptedApiKey: "",
