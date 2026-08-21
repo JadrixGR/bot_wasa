@@ -531,7 +531,7 @@
         <section id="section-ai-training" class="page-section">
           <div class="section-intro">
             <div>
-              <p class="eyebrow">GEMINI PARA WHATSAPP</p>
+              <p class="eyebrow">IA PARA WHATSAPP</p>
               <h2>IA y entrenamiento</h2>
               <p class="muted">Configura respuestas inteligentes con tus productos, precios, formas de pago y reglas del negocio.</p>
             </div>
@@ -548,7 +548,7 @@
               </div>
               <div>
                 <span id="aiStatusPill" class="pill violet">Cargando estado</span>
-                <h3>Gemini responde con el contexto de JadrixServs</h3>
+                <h3 id="aiHeroTitle">La IA responde con el contexto de JadrixServs</h3>
                 <p>La secuencia de bienvenida configurada se conserva. Desde el siguiente mensaje, la IA puede responder usando solamente la información que configures aquí.</p>
               </div>
             </div>
@@ -562,43 +562,59 @@
           <div class="ai-layout">
             <article class="panel ai-config-panel">
               <div class="panel-heading">
-                <div><span class="eyebrow">CONEXIÓN SEGURA</span><h3>API de Gemini</h3></div>
+                <div><span class="eyebrow">CONEXIÓN SEGURA</span><h3 id="aiConnectionTitle">Proveedor de IA</h3></div>
                 <span class="pill green">Solo backend</span>
               </div>
               <label>
-                API key de Gemini
+                Proveedor
+                <select id="aiProviderSelect">
+                  <option value="gemini">Google Gemini</option>
+                  <option value="claude">Claude API (AICredits)</option>
+                </select>
+                <small>Claude API usa el saldo adquirido y Gemini conserva su integración actual.</small>
+              </label>
+              <label>
+                <span id="aiApiKeyLabel">API key</span>
                 <div class="secret-input-row">
-                  <input id="geminiApiKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="Pega una nueva clave para guardarla">
-                  <button id="toggleGeminiKeyButton" class="button secondary compact-button" type="button" aria-pressed="false">Mostrar</button>
+                  <input id="aiApiKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="Pega una nueva clave para guardarla">
+                  <button id="toggleAiKeyButton" class="button secondary compact-button" type="button" aria-pressed="false">Mostrar</button>
                 </div>
-                <small id="geminiKeyHelp">La clave se cifra antes de guardarse y nunca vuelve al navegador.</small>
+                <small id="aiKeyHelp">La clave se cifra antes de guardarse y nunca vuelve al navegador.</small>
               </label>
               <label>
                 Modelo
-                <input id="geminiModel" type="text" list="geminiModelOptions" value="gemini-3.6-flash" autocomplete="off" spellcheck="false">
-                <datalist id="geminiModelOptions">
+                <input id="aiModel" type="text" list="aiModelOptions" value="gemini-3.6-flash" autocomplete="off" spellcheck="false">
+                <datalist id="aiModelOptions">
                   <option value="gemini-3.6-flash">Estable recomendado</option>
                   <option value="gemini-3.5-flash">Alternativa estable</option>
                   <option value="gemini-3.5-flash-lite">Menor costo</option>
+                  <option value="anthropic/claude-sonnet-4.6">Claude recomendado</option>
+                  <option value="anthropic/claude-haiku-4.5">Claude rápido y económico</option>
+                  <option value="anthropic/claude-opus-4.6">Claude de máxima capacidad</option>
                 </datalist>
-                <small>Usa un nombre de modelo disponible para tu proyecto de Google AI.</small>
+                <small id="aiModelHelp">Usa un nombre de modelo disponible para el proveedor elegido.</small>
+              </label>
+              <label id="claudeBaseUrlRow" class="hidden">
+                Dirección de Claude API
+                <input id="claudeBaseUrl" type="url" value="https://api.aicredits.in/v1" autocomplete="off" spellcheck="false">
+                <small>Déjala así para una clave AICredits. Solo cámbiala si el vendedor te entregó otra dirección.</small>
               </label>
               <label class="toggle-row ai-toggle-row">
                 <input id="aiReplyEnabled" type="checkbox">
-                <span><strong>Activar respuestas con IA</strong><small>Gemini responderá después de la bienvenida. El modo AFK mantiene prioridad.</small></span>
+                <span><strong>Activar respuestas con IA</strong><small id="aiToggleHelp">La IA responderá después de la bienvenida. El modo AFK mantiene prioridad.</small></span>
               </label>
               <div id="aiConfigurationNotice" class="notice">Guarda una API key para habilitar las respuestas.</div>
-              <button id="deleteGeminiKeyButton" class="button danger-ghost hidden" type="button">Eliminar API key guardada</button>
+              <button id="deleteAiKeyButton" class="button danger-ghost hidden" type="button">Eliminar API key guardada</button>
             </article>
 
             <article class="panel ai-flow-panel">
               <div class="panel-heading"><div><span class="eyebrow">ORDEN DE RESPUESTA</span><h3>Flujo del bot</h3></div></div>
               <ol class="ai-flow-list">
                 <li><span>1</span><div><strong>Bienvenida por país</strong><small>Un contacto nuevo recibe la secuencia configurada, incluidas sus imágenes opcionales.</small></div></li>
-                <li><span>2</span><div><strong>Pregunta del cliente</strong><small>El mensaje posterior se envía a Gemini con el contexto del negocio.</small></div></li>
+                <li><span>2</span><div><strong>Pregunta del cliente</strong><small>El mensaje posterior se envía al proveedor elegido con el contexto del negocio.</small></div></li>
                 <li><span>3</span><div><strong>Respuesta entrenada</strong><small>La IA usa catálogo, moneda local, pagos y reglas confirmadas.</small></div></li>
               </ol>
-              <div class="notice ai-safety-notice"><strong>Control humano:</strong> si Gemini no está disponible, el bot no inventa una respuesta ni marca el mensaje como atendido.</div>
+              <div class="notice ai-safety-notice"><strong>Control humano:</strong> si la IA no está disponible, el bot no inventa una respuesta ni marca el mensaje como atendido.</div>
             </article>
           </div>
 
@@ -607,12 +623,12 @@
               <div>
                 <span class="eyebrow">MONEDA SEGÚN WHATSAPP</span>
                 <h3>Precios locales por país</h3>
-                <p class="muted">Gemini selecciona esta tabla mediante el prefijo real del cliente. Edita aquí el precio final que deseas ofrecer en cada moneda.</p>
+                <p class="muted">La IA selecciona esta tabla mediante el prefijo real del cliente. Edita aquí el precio final que deseas ofrecer en cada moneda.</p>
               </div>
               <span id="countryPriceBookCount" class="pill violet">3 países</span>
             </div>
             <div class="notice ai-pricing-notice">
-              <strong>Precios controlados:</strong> los importes quedan guardados en <code>data</code> y no cambian con el tipo de cambio. Gemini no convertirá ni mezclará monedas automáticamente.
+              <strong>Precios controlados:</strong> los importes quedan guardados en <code>data</code> y no cambian con el tipo de cambio. La IA no convertirá ni mezclará monedas automáticamente.
             </div>
             <div class="ai-prefix-flow" aria-label="Selección de precios por prefijo">
               <span><b>+51</b> Soles peruanos</span>
@@ -625,7 +641,7 @@
           <div class="two-column ai-business-grid">
             <article class="panel">
               <div class="panel-heading"><div><span class="eyebrow">VENTAS</span><h3>Métodos de pago</h3></div><span class="pill blue">Contexto IA</span></div>
-              <label>Pagos en Perú<textarea id="aiPeruPayment" rows="7" placeholder="Yape, Plin, transferencia y datos confirmados..."></textarea><small>Gemini usará esta información para clientes con prefijo +51.</small></label>
+              <label>Pagos en Perú<textarea id="aiPeruPayment" rows="7" placeholder="Yape, Plin, transferencia y datos confirmados..."></textarea><small>La IA usará esta información para clientes con prefijo +51.</small></label>
               <label>Pagos internacionales<textarea id="aiInternationalPayment" rows="7" placeholder="PayPal, Binance, transferencia internacional..."></textarea><small>Indica moneda, plataforma y condiciones sin guardar datos sensibles.</small></label>
             </article>
             <article class="panel">
@@ -639,7 +655,7 @@
               <div>
                 <span class="eyebrow">MEMORIA PERMANENTE EN DATA</span>
                 <h3>Enseñar cómo debe responder</h3>
-                <p class="training-copy muted">Escribe una pregunta o tema, sus frases relacionadas y una respuesta modelo completa. Se guardará en la memoria del bot y Gemini la priorizará cuando un cliente consulte algo relacionado.</p>
+                <p class="training-copy muted">Escribe una pregunta o tema, sus frases relacionadas y una respuesta modelo completa. Se guardará en la memoria del bot y la IA la priorizará cuando un cliente consulte algo relacionado.</p>
               </div>
               <div class="button-row">
                 <span id="knowledgeCount" class="pill blue">0 recuerdos</span>
@@ -650,7 +666,7 @@
             <div id="knowledgeList" class="knowledge-list"></div>
             <div id="knowledgeEmpty" class="empty-state compact hidden">
               <strong>La memoria todavía está vacía.</strong>
-              <span>Enseña la primera respuesta para que Gemini conozca tu forma de atender.</span>
+              <span>Enseña la primera respuesta para que la IA conozca tu forma de atender.</span>
             </div>
           </article>
         </section>

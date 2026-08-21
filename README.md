@@ -10,7 +10,7 @@ En **Mensajes automáticos → Bienvenidas por anuncio** puedes crear una secuen
 - La prioridad normal es: **anuncio reconocido → país del número → bienvenida general**.
 - Al desactivar **Detectar anuncio y usar su bienvenida** y guardar, todos los contactos nuevos reciben únicamente la bienvenida general, sin importar el anuncio o el país.
 - Un perfil de anuncio desactivado queda guardado, pero sus contactos pasan a la bienvenida del país o a la general.
-- La campaña elegida se conserva en la conversación. Si Gemini responde después, recibe el contenido confirmado del anuncio y respeta su precio promocional antes que el precio general.
+- La campaña elegida se conserva en la conversación. Si la IA responde después, recibe el contenido confirmado del anuncio y respeta su precio promocional antes que el precio general.
 
 La actualización incluye un perfil inicial para el anuncio **ChatGPT Personal y Plan Pro**, con las opciones `S/30 al mes` y `S/45 al mes` y un tercer mensaje que explica el proceso de activación. Revisa estos importes desde el editor antes de publicar o reutilizar la campaña.
 
@@ -26,7 +26,21 @@ No uses solamente palabras genéricas como `ChatGPT` o `oferta`, porque podrían
 
 Las imágenes y los audios de bienvenida se guardan en `MEDIA_DIR` (`/data/media` en Render) y sus referencias se conservan en `/data/jadrixservs-v4.json`. Para no perderlos al desplegar o reiniciar, conserva ambos dentro del disco persistente de Render.
 
-## Respuestas con Gemini IA
+## Respuestas con IA: Claude o Gemini
+
+El apartado **IA y entrenamiento** permite elegir entre **Claude API (AICredits)** y **Google Gemini**. Ambos reciben las mismas reglas confirmadas del negocio, catálogo, precios locales, métodos de pago y memoria entrenada.
+
+### Usar Claude API
+
+1. Elige **Claude API (AICredits)** como proveedor.
+2. Pega una clave nueva en el campo protegido.
+3. Conserva `https://api.aicredits.in/v1` como dirección y `anthropic/claude-sonnet-4.6` como modelo recomendado.
+4. Pulsa **Guardar configuración** y después **Probar conexión**.
+5. Activa las respuestas con IA solamente cuando la prueba termine correctamente.
+
+La integración usa el endpoint OpenAI-compatible `/chat/completions`. La clave se cifra antes de guardarse, nunca se devuelve al navegador y no se escribe en el repositorio. Si el proveedor entrega otra dirección o modelo, ambos pueden modificarse desde el panel.
+
+### Usar Google Gemini
 
 El apartado **IA y entrenamiento** permite conectar Google Gemini sin exponer la API key al navegador:
 

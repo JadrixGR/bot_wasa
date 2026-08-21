@@ -110,6 +110,7 @@ test("la V4.7 usa el modo de bienvenida única", () => {
     provider: "gemini",
     enabled: false,
     model: "gemini-3.6-flash",
+    baseUrl: "",
     encryptedApiKey: "",
     updatedAt: null
   });

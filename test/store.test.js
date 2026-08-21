@@ -146,6 +146,7 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
       provider: "gemini",
       enabled: false,
       model: "gemini-3.6-flash",
+      baseUrl: "",
       encryptedApiKey: "",
       updatedAt: null
     });

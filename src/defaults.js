@@ -562,6 +562,7 @@ function createInitialData() {
       provider: "gemini",
       enabled: false,
       model: "gemini-3.6-flash",
+      baseUrl: "",
       encryptedApiKey: "",
       updatedAt: null
     },

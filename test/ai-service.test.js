@@ -8,6 +8,7 @@ const {
   buildSystemInstructions,
   buildUserPrompt,
   compactAnswer,
+  classifyClaudeError,
   classifyOpenAIError,
   classifyGeminiError,
   decryptGeminiApiKey,
@@ -200,6 +201,86 @@ test("Gemini recibe la clave solo por cabecera y usa el entrenamiento del negoci
   assert.match(body.contents[0].parts[0].text, /País detectado del cliente: Perú \(\+51, PEN\)/);
   assert.equal(body.generationConfig.maxOutputTokens, 1200);
   assert.equal(body.generationConfig.temperature, undefined);
+});
+
+test("guarda Claude API cifrado y nunca devuelve la clave al panel", () => {
+  const store = makeStore();
+  const secret = `sk-${"a".repeat(64)}`;
+  const ai = new AiService({
+    store,
+    provider: "claude",
+    claudeApiKey: "",
+    encryptionKey: "clave-estable"
+  });
+  const status = ai.configureClaude({
+    apiKey: secret,
+    model: "anthropic/claude-sonnet-4.6",
+    baseUrl: "https://api.aicredits.in/v1",
+    enabled: true
+  });
+
+  assert.equal(status.provider, "claude");
+  assert.equal(status.replyEnabled, true);
+  assert.equal(status.model, "anthropic/claude-sonnet-4.6");
+  assert.equal(status.baseUrl, "https://api.aicredits.in/v1");
+  assert.equal(status.keySource, "panel_encrypted");
+  assert.doesNotMatch(JSON.stringify(status), new RegExp(secret));
+  assert.doesNotMatch(store.data.aiConfig.encryptedApiKey, new RegExp(secret));
+});
+
+test("Claude API usa chat completions y conserva el contexto entrenado", async () => {
+  const store = makeStore();
+  const secret = `sk-${"b".repeat(64)}`;
+  let capturedUrl = "";
+  let capturedOptions = null;
+  const ai = new AiService({
+    store,
+    provider: "claude",
+    claudeApiKey: "",
+    encryptionKey: "clave-estable",
+    fetchFn: async (url, options) => {
+      capturedUrl = url;
+      capturedOptions = options;
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          model: "anthropic/claude-sonnet-4.6",
+          choices: [{
+            finish_reason: "stop",
+            message: { content: "Puedes pagar con Yape al número confirmado." }
+          }]
+        })
+      };
+    }
+  });
+  ai.configureClaude({ apiKey: secret, enabled: true });
+
+  const answer = await ai.answer({
+    question: "¿Cómo puedo pagar?",
+    conversation: { localCountry: "Perú", localCallingCode: "+51" }
+  });
+  const body = JSON.parse(capturedOptions.body);
+
+  assert.equal(answer, "Puedes pagar con Yape al número confirmado.");
+  assert.equal(capturedUrl, "https://api.aicredits.in/v1/chat/completions");
+  assert.equal(capturedOptions.headers.Authorization, `Bearer ${secret}`);
+  assert.doesNotMatch(capturedOptions.body, new RegExp(secret));
+  assert.equal(body.model, "anthropic/claude-sonnet-4.6");
+  assert.equal(body.max_tokens, 1200);
+  assert.match(body.messages[0].content, /PAGOS CONFIRMADOS/);
+  assert.match(body.messages[1].content, /Pregunta actual: ¿Cómo puedo pagar\?/);
+});
+
+test("clasifica una clave inválida de Claude sin exponer el error del proveedor", () => {
+  const result = classifyClaudeError({
+    status: 401,
+    message: "Invalid token for account customer-123"
+  });
+  assert.equal(result.code, "invalid_key");
+  assert.equal(result.status, 401);
+  assert.match(result.message, /clave de Claude API no es válida/i);
+  assert.doesNotMatch(result.message, /customer-123/);
 });
 
 test("clasifica una clave inválida de Gemini sin exponer el mensaje del proveedor", () => {

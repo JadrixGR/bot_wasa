@@ -6,6 +6,8 @@ const OpenAI = OpenAIModule.default || OpenAIModule;
 
 const DEFAULT_GEMINI_MODEL = "gemini-3.6-flash";
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta";
+const DEFAULT_CLAUDE_MODEL = "anthropic/claude-sonnet-4.6";
+const DEFAULT_CLAUDE_BASE_URL = "https://api.aicredits.in/v1";
 const SECRET_VERSION = "v1";
 const SECRET_AAD = Buffer.from("jadrixservs-gemini-api-key:v1", "utf8");
 
@@ -267,10 +269,96 @@ function classifyGeminiError(error) {
   };
 }
 
+function classifyClaudeError(error) {
+  const status = Number(error?.status || error?.response?.status || 0) || 400;
+  const providerCode = String(
+    error?.code || error?.error?.code || error?.error?.type || ""
+  );
+  const normalized = `${providerCode} ${String(
+    error?.message || error || ""
+  )}`.toLowerCase();
+
+  if (
+    status === 401 ||
+    normalized.includes("invalid api key") ||
+    normalized.includes("invalid token") ||
+    normalized.includes("unauthorized")
+  ) {
+    return {
+      code: "invalid_key",
+      status: 401,
+      message:
+        "La clave de Claude API no es válida o ya venció. Genera una nueva clave en el proveedor y vuelve a guardarla."
+    };
+  }
+  if (
+    status === 402 ||
+    normalized.includes("insufficient balance") ||
+    normalized.includes("insufficient credits") ||
+    normalized.includes("quota exceeded")
+  ) {
+    return {
+      code: "quota",
+      status: status === 402 ? 402 : 429,
+      message:
+        "Claude API no tiene saldo disponible o alcanzó el límite de gasto configurado."
+    };
+  }
+  if (status === 429) {
+    return {
+      code: "rate_limit",
+      status: 429,
+      message:
+        "Claude API recibió demasiadas solicitudes. Espera un momento y vuelve a probar."
+    };
+  }
+  if (status === 403) {
+    return {
+      code: "forbidden",
+      status: 403,
+      message:
+        "La clave no tiene permiso para usar el modelo de Claude seleccionado."
+    };
+  }
+  if (
+    status === 404 ||
+    normalized.includes("model_not_found") ||
+    (normalized.includes("model") && normalized.includes("not found"))
+  ) {
+    return {
+      code: "model",
+      status: 400,
+      message:
+        "El modelo de Claude configurado no está disponible para esta clave. Revisa el nombre del modelo."
+    };
+  }
+  if (
+    error?.name === "AbortError" ||
+    normalized.includes("timeout") ||
+    normalized.includes("fetch failed") ||
+    normalized.includes("connection")
+  ) {
+    return {
+      code: "connection",
+      status: 503,
+      message:
+        "No se pudo comunicar con Claude API. El mensaje quedará pendiente para atención manual."
+    };
+  }
+  return {
+    code: "claude_error",
+    status: status >= 400 && status < 600 ? status : 400,
+    message:
+      "Claude API no pudo completar la respuesta. Revisa la clave, el saldo, la dirección y el modelo."
+  };
+}
+
 function friendlyProviderError(error, provider) {
   const info = provider === "gemini"
     ? classifyGeminiError(error)
-    : classifyOpenAIError(error);
+    : provider === "claude"
+      ? classifyClaudeError(error)
+      : classifyOpenAIError(error);
   const friendly = new Error(info.message);
   friendly.code = info.code;
   friendly.status = info.status;
@@ -306,6 +394,34 @@ function normalizeGeminiModel(value) {
   return model;
 }
 
+function normalizeAiProvider(value) {
+  return String(value || "").trim().toLowerCase() === "claude"
+    ? "claude"
+    : "gemini";
+}
+
+function normalizeClaudeModel(value) {
+  const model = String(value || DEFAULT_CLAUDE_MODEL).trim();
+  if (!/^[a-z0-9][a-z0-9._:/-]{2,119}$/i.test(model)) {
+    throw new Error("El nombre del modelo Claude no es válido.");
+  }
+  return model;
+}
+
+function normalizeClaudeBaseUrl(value) {
+  const raw = String(value || DEFAULT_CLAUDE_BASE_URL).trim().replace(/\/+$/, "");
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("La dirección de Claude API no es válida.");
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) {
+    throw new Error("La dirección de Claude API debe ser una URL HTTPS segura.");
+  }
+  return url.toString().replace(/\/+$/, "");
+}
+
 function encryptionKeyBuffer(value) {
   return crypto.createHash("sha256").update(String(value || ""), "utf8").digest();
 }
@@ -313,7 +429,7 @@ function encryptionKeyBuffer(value) {
 function encryptGeminiApiKey(apiKey, encryptionKey) {
   const normalized = String(apiKey || "").trim();
   if (normalized.length < 20 || normalized.length > 500) {
-    throw new Error("La clave de Gemini no tiene una longitud válida.");
+    throw new Error("La clave de la API no tiene una longitud válida.");
   }
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(
@@ -343,7 +459,7 @@ function decryptGeminiApiKey(payload, encryptionKey) {
     !tagText ||
     !encryptedText
   ) {
-    throw new Error("La clave cifrada de Gemini no tiene un formato válido.");
+    throw new Error("La clave cifrada de la API no tiene un formato válido.");
   }
   try {
     const decipher = crypto.createDecipheriv(
@@ -359,10 +475,13 @@ function decryptGeminiApiKey(payload, encryptionKey) {
     ]).toString("utf8");
   } catch {
     throw new Error(
-      "La clave de Gemini guardada no puede descifrarse. Conserva estable GEMINI_ENCRYPTION_KEY o COOKIE_SECRET y vuelve a ingresar la API key."
+      "La clave de IA guardada no puede descifrarse. Conserva estable GEMINI_ENCRYPTION_KEY o COOKIE_SECRET y vuelve a ingresar la API key."
     );
   }
 }
+
+const encryptAiApiKey = encryptGeminiApiKey;
+const decryptAiApiKey = decryptGeminiApiKey;
 
 function buildSystemInstructions(snapshot, conversation = {}, question = "") {
   const customInstructions = String(
@@ -537,6 +656,9 @@ class AiService {
     geminiApiKey = process.env.GEMINI_API_KEY,
     geminiModel = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
     geminiEndpoint = GEMINI_ENDPOINT,
+    claudeApiKey = process.env.CLAUDE_API_KEY,
+    claudeModel = process.env.CLAUDE_MODEL || DEFAULT_CLAUDE_MODEL,
+    claudeBaseUrl = process.env.CLAUDE_BASE_URL || DEFAULT_CLAUDE_BASE_URL,
     fetchFn = globalThis.fetch,
     encryptionKey =
       process.env.GEMINI_ENCRYPTION_KEY ||
@@ -547,8 +669,11 @@ class AiService {
     this.store = store;
     this.openaiModel = model;
     this.defaultGeminiModel = normalizeGeminiModel(geminiModel);
+    this.defaultClaudeModel = normalizeClaudeModel(claudeModel);
     this.geminiEnvironmentKey = String(geminiApiKey || "").trim();
+    this.claudeEnvironmentKey = String(claudeApiKey || "").trim();
     this.geminiEndpoint = String(geminiEndpoint || GEMINI_ENDPOINT).replace(/\/$/, "");
+    this.defaultClaudeBaseUrl = normalizeClaudeBaseUrl(claudeBaseUrl);
     this.fetchFn = fetchFn;
     this.encryptionKey = encryptionKey;
     this.timeoutMs = Math.max(5000, Number(timeoutMs) || 25000);
@@ -569,12 +694,30 @@ class AiService {
 
   getStoredConfig() {
     const config = this.store.snapshot()?.aiConfig || {};
+    const provider = normalizeAiProvider(config.provider);
+    let model;
+    let baseUrl;
+    try {
+      model = provider === "claude"
+        ? normalizeClaudeModel(config.model || this.defaultClaudeModel)
+        : normalizeGeminiModel(config.model || this.defaultGeminiModel);
+    } catch {
+      model = provider === "claude"
+        ? this.defaultClaudeModel
+        : this.defaultGeminiModel;
+    }
+    try {
+      baseUrl = provider === "claude"
+        ? normalizeClaudeBaseUrl(config.baseUrl || this.defaultClaudeBaseUrl)
+        : "";
+    } catch {
+      baseUrl = this.defaultClaudeBaseUrl;
+    }
     return {
-      provider: "gemini",
+      provider,
       enabled: Boolean(config.enabled),
-      model: normalizeGeminiModel(
-        config.model || this.defaultGeminiModel
-      ),
+      model,
+      baseUrl,
       encryptedApiKey: String(config.encryptedApiKey || ""),
       updatedAt: config.updatedAt || null
     };
@@ -582,14 +725,24 @@ class AiService {
 
   getGeminiApiKey() {
     const config = this.getStoredConfig();
-    if (config.encryptedApiKey) {
-      return decryptGeminiApiKey(config.encryptedApiKey, this.encryptionKey);
+    if (config.provider === "gemini" && config.encryptedApiKey) {
+      return decryptAiApiKey(config.encryptedApiKey, this.encryptionKey);
     }
     return this.geminiEnvironmentKey || null;
   }
 
+  getClaudeApiKey() {
+    const config = this.getStoredConfig();
+    if (config.provider === "claude" && config.encryptedApiKey) {
+      return decryptAiApiKey(config.encryptedApiKey, this.encryptionKey);
+    }
+    return this.claudeEnvironmentKey || null;
+  }
+
   getActiveProvider() {
     if (this.forcedProvider) return this.forcedProvider;
+    const config = this.getStoredConfig();
+    if (config.provider === "claude") return "claude";
     try {
       if (this.getGeminiApiKey()) return "gemini";
     } catch {
@@ -601,16 +754,22 @@ class AiService {
   getStatus() {
     const config = this.getStoredConfig();
     const provider = this.getActiveProvider();
-    let geminiKey = null;
+    let configuredApiKey = null;
     let configurationError = null;
     try {
-      geminiKey = this.getGeminiApiKey();
+      configuredApiKey = provider === "claude"
+        ? this.getClaudeApiKey()
+        : provider === "gemini"
+          ? this.getGeminiApiKey()
+          : null;
     } catch (error) {
       configurationError = error.message;
     }
     const configured = provider === "gemini"
-      ? Boolean(geminiKey)
-      : Boolean(this.openaiClient);
+      ? Boolean(configuredApiKey)
+      : provider === "claude"
+        ? Boolean(configuredApiKey)
+        : Boolean(this.openaiClient);
     const currentError = configurationError || this.lastError;
     const currentErrorType = configurationError
       ? "encryption"
@@ -621,11 +780,18 @@ class AiService {
       replyEnabled: Boolean(config.enabled && configured),
       requestedEnabled: Boolean(config.enabled),
       provider,
-      model: provider === "gemini" ? config.model : this.openaiModel,
-      keyConfigured: Boolean(geminiKey),
+      model: ["gemini", "claude"].includes(provider)
+        ? config.model
+        : this.openaiModel,
+      baseUrl: provider === "claude" ? config.baseUrl : null,
+      keyConfigured: provider === "openai"
+        ? Boolean(this.openaiClient)
+        : Boolean(configuredApiKey),
       keySource: config.encryptedApiKey
         ? "panel_encrypted"
-        : this.geminiEnvironmentKey
+        : provider === "claude" && this.claudeEnvironmentKey
+          ? "environment"
+          : provider === "gemini" && this.geminiEnvironmentKey
           ? "environment"
           : null,
       encryptedAtRest: Boolean(config.encryptedApiKey),
@@ -643,39 +809,67 @@ class AiService {
     return this.getStatus().replyEnabled;
   }
 
-  configureGemini({ apiKey, model, enabled, clearKey = false } = {}) {
+  configure({
+    provider,
+    apiKey,
+    model,
+    baseUrl,
+    enabled,
+    clearKey = false
+  } = {}) {
     const current = this.getStoredConfig();
-    let encryptedApiKey = current.encryptedApiKey;
+    const nextProvider = normalizeAiProvider(provider || current.provider);
+    const providerChanged = nextProvider !== current.provider;
+    let encryptedApiKey = providerChanged ? "" : current.encryptedApiKey;
     const normalizedApiKey = String(apiKey || "").trim();
     if (clearKey) encryptedApiKey = "";
     if (normalizedApiKey) {
-      encryptedApiKey = encryptGeminiApiKey(
+      encryptedApiKey = encryptAiApiKey(
         normalizedApiKey,
         this.encryptionKey
       );
     }
     const next = {
-      provider: "gemini",
+      provider: nextProvider,
       enabled:
         enabled === undefined ? current.enabled : Boolean(enabled),
-      model: normalizeGeminiModel(model || current.model),
+      model: nextProvider === "claude"
+        ? normalizeClaudeModel(
+            model || (providerChanged ? this.defaultClaudeModel : current.model)
+          )
+        : normalizeGeminiModel(
+            model || (providerChanged ? this.defaultGeminiModel : current.model)
+          ),
+      baseUrl: nextProvider === "claude"
+        ? normalizeClaudeBaseUrl(
+            baseUrl || (providerChanged ? this.defaultClaudeBaseUrl : current.baseUrl)
+          )
+        : "",
       encryptedApiKey,
       updatedAt: new Date().toISOString()
     };
+    const environmentKey = nextProvider === "claude"
+      ? this.claudeEnvironmentKey
+      : this.geminiEnvironmentKey;
     if (
       next.enabled &&
       !next.encryptedApiKey &&
-      !this.geminiEnvironmentKey
+      !environmentKey
     ) {
       throw new Error(
-        "Guarda una API key de Gemini antes de activar las respuestas con IA."
+        `Guarda una API key de ${nextProvider === "claude" ? "Claude" : "Gemini"} antes de activar las respuestas con IA.`
       );
     }
     this.store.data.aiConfig = next;
+    const providerLabel = nextProvider === "claude" ? "Claude API" : "Gemini";
     this.store.addLog(
       "ai",
-      `Gemini ${next.enabled ? "activado" : "desactivado"} con el modelo ${next.model}`,
-      { provider: "gemini", model: next.model, keyChanged: Boolean(normalizedApiKey || clearKey) }
+      `${providerLabel} ${next.enabled ? "activado" : "desactivado"} con el modelo ${next.model}`,
+      {
+        provider: nextProvider,
+        model: next.model,
+        keyChanged: Boolean(normalizedApiKey || clearKey || providerChanged)
+      }
     );
     this.store.save();
     this.lastError = null;
@@ -683,8 +877,20 @@ class AiService {
     return this.getStatus();
   }
 
+  configureGemini(options = {}) {
+    return this.configure({ ...options, provider: "gemini" });
+  }
+
+  configureClaude(options = {}) {
+    return this.configure({ ...options, provider: "claude" });
+  }
+
   clearGeminiApiKey() {
-    return this.configureGemini({ clearKey: true, enabled: false });
+    return this.configure({ clearKey: true, enabled: false });
+  }
+
+  clearApiKey() {
+    return this.configure({ clearKey: true, enabled: false });
   }
 
   async requestGemini({ systemInstruction, userText, maxOutputTokens }) {
@@ -769,6 +975,82 @@ class AiService {
     }
   }
 
+  async requestClaude({ systemInstruction, userText, maxOutputTokens }) {
+    const apiKey = this.getClaudeApiKey();
+    if (!apiKey) {
+      const error = new Error("Claude API key missing");
+      error.code = "invalid_api_key";
+      error.status = 401;
+      throw error;
+    }
+    if (typeof this.fetchFn !== "function") {
+      const error = new Error("fetch is not available");
+      error.status = 503;
+      throw error;
+    }
+
+    const config = this.getStoredConfig();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await this.fetchFn(
+        `${config.baseUrl}/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: config.model,
+            messages: [
+              { role: "system", content: systemInstruction },
+              { role: "user", content: userText }
+            ],
+            max_tokens: maxOutputTokens,
+            stream: false
+          }),
+          signal: controller.signal
+        }
+      );
+      const responseText = await response.text();
+      let payload = {};
+      try {
+        payload = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        payload = {};
+      }
+      if (!response.ok) {
+        const requestError = new Error(
+          payload?.error?.message || `Claude API HTTP ${response.status}`
+        );
+        requestError.status = response.status;
+        requestError.code = payload?.error?.code || payload?.error?.type || "";
+        throw requestError;
+      }
+      const choice = payload?.choices?.[0] || {};
+      const content = choice?.message?.content;
+      const answer = Array.isArray(content)
+        ? content
+            .map((part) => String(part?.text || part?.content || ""))
+            .join("")
+            .trim()
+        : String(content || "").trim();
+      if (!answer) {
+        const requestError = new Error("Claude API respondió sin texto.");
+        requestError.status = 400;
+        throw requestError;
+      }
+      return {
+        text: answer,
+        model: String(payload?.model || config.model),
+        finishReason: String(choice?.finish_reason || "")
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   async answer({ question, conversation = {} }) {
     const provider = this.getActiveProvider();
     const snapshot = this.store.snapshot();
@@ -789,6 +1071,29 @@ class AiService {
         });
         if (response.finishReason === "MAX_TOKENS") {
           response = await this.requestGemini({
+            systemInstruction: buildSystemInstructions(
+              snapshot,
+              conversation,
+              currentQuestion
+            ),
+            userText: `${prompt}\n\nIMPORTANTE: vuelve a responder desde el inicio y entrega la respuesta completa, sin cortar ninguna lista ni precio.`,
+            maxOutputTokens: 2000
+          });
+        }
+        answer = response.text;
+      } else if (provider === "claude") {
+        const prompt = buildUserPrompt(snapshot, currentQuestion, conversation);
+        let response = await this.requestClaude({
+          systemInstruction: buildSystemInstructions(
+            snapshot,
+            conversation,
+            currentQuestion
+          ),
+          userText: prompt,
+          maxOutputTokens: 1200
+        });
+        if (["length", "max_tokens"].includes(response.finishReason.toLowerCase())) {
+          response = await this.requestClaude({
             systemInstruction: buildSystemInstructions(
               snapshot,
               conversation,
@@ -859,6 +1164,21 @@ class AiService {
           maxOutputTokens: 20
         });
         model = response.model;
+      } else if (provider === "claude") {
+        if (!this.getClaudeApiKey()) {
+          const error = new Error(
+            "Guarda una API key de Claude desde el panel o configura CLAUDE_API_KEY en Render."
+          );
+          error.code = "missing_key";
+          error.status = 400;
+          throw error;
+        }
+        const response = await this.requestClaude({
+          systemInstruction: "Responde solamente con la palabra OK.",
+          userText: "Prueba de conexión.",
+          maxOutputTokens: 20
+        });
+        model = response.model;
       } else {
         if (!this.openaiClient) {
           const error = new Error(
@@ -901,6 +1221,8 @@ class AiService {
 
 module.exports = {
   AiService,
+  DEFAULT_CLAUDE_BASE_URL,
+  DEFAULT_CLAUDE_MODEL,
   DEFAULT_GEMINI_MODEL,
   buildKnowledge,
   buildSystemInstructions,
@@ -908,10 +1230,15 @@ module.exports = {
   compactAnswer,
   classifyOpenAIError,
   classifyGeminiError,
+  classifyClaudeError,
+  decryptAiApiKey,
   decryptGeminiApiKey,
+  encryptAiApiKey,
   encryptGeminiApiKey,
   friendlyOpenAIError,
   normalizeGeminiModel,
+  normalizeClaudeBaseUrl,
+  normalizeClaudeModel,
   resolveConversationAdGreeting,
   resolveConversationPriceBook,
   selectRelevantKnowledge

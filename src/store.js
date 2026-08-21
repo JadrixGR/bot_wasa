@@ -855,11 +855,20 @@ class JsonStore {
         ...(parsed.aiConfig && typeof parsed.aiConfig === "object"
           ? parsed.aiConfig
           : {}),
-        provider: "gemini",
+        provider: parsed.aiConfig?.provider === "claude" ? "claude" : "gemini",
         enabled: Boolean(parsed.aiConfig?.enabled),
         model: String(
-          parsed.aiConfig?.model || initial.aiConfig.model
-        ).slice(0, 80),
+          parsed.aiConfig?.model ||
+            (parsed.aiConfig?.provider === "claude"
+              ? "anthropic/claude-sonnet-4.6"
+              : initial.aiConfig.model)
+        ).slice(0, 120),
+        baseUrl:
+          parsed.aiConfig?.provider === "claude"
+            ? String(
+                parsed.aiConfig?.baseUrl || "https://api.aicredits.in/v1"
+              ).slice(0, 500)
+            : "",
         encryptedApiKey: String(parsed.aiConfig?.encryptedApiKey || ""),
         updatedAt: parsed.aiConfig?.updatedAt || null
       },
@@ -929,7 +938,8 @@ class JsonStore {
     const aiConfigMigrated = !(
       parsed.aiConfig &&
       typeof parsed.aiConfig === "object" &&
-      !Array.isArray(parsed.aiConfig)
+      !Array.isArray(parsed.aiConfig) &&
+      Object.hasOwn(parsed.aiConfig, "baseUrl")
     );
     if (!countryGreetingsMigrated) {
       migrated.settings.countryGreetings = parsed.settings.countryGreetings

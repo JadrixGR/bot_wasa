@@ -1229,11 +1229,11 @@ app.post(
 );
 
 app.put("/api/ai/config", requireAuth, (req, res) => {
-  res.json({ ai: ai.configureGemini(req.body) });
+  res.json({ ai: ai.configure(req.body) });
 });
 
 app.delete("/api/ai/key", requireAuth, (_req, res) => {
-  res.json({ ai: ai.clearGeminiApiKey() });
+  res.json({ ai: ai.clearApiKey() });
 });
 
 const allowedMedia = {
@@ -1409,7 +1409,7 @@ const server = app.listen(port, "0.0.0.0", () => {
   }
   if (!dedicatedGeminiEncryptionKeyConfigured) {
     console.warn(
-      "GEMINI_ENCRYPTION_KEY no está configurada; la API key de Gemini se cifrará usando AUTHENTICATOR_ENCRYPTION_KEY o COOKIE_SECRET."
+      "GEMINI_ENCRYPTION_KEY no está configurada; la API key de IA (Gemini o Claude) se cifrará usando AUTHENTICATOR_ENCRYPTION_KEY o COOKIE_SECRET."
     );
   }
   scheduler.start();

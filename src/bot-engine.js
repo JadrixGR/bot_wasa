@@ -543,7 +543,7 @@ class BotEngine {
           });
           this.store.addLog(
             "ai",
-            `Gemini respondió a ${fromName || chatId}`,
+            `La IA respondió a ${fromName || chatId}`,
             {
               chatId,
               clientId: client?.id || null,

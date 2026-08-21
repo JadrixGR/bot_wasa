@@ -2388,6 +2388,8 @@ async function deleteCountryGreeting(profile) {
 function renderAiStatus(ai = {}) {
   if (!$("#aiStatusPill")) return;
   state.aiStatus = ai;
+  const provider = ai.provider === "claude" ? "claude" : "gemini";
+  const providerName = provider === "claude" ? "Claude API" : "Google Gemini";
   const active = Boolean(ai.replyEnabled);
   const configured = Boolean(ai.configured || ai.keyConfigured);
   const hasError = Boolean(ai.lastError);
@@ -2400,22 +2402,27 @@ function renderAiStatus(ai = {}) {
       : configured
         ? "Listo para activar"
         : "Falta API key";
-  $("#aiProviderText").textContent = ai.provider === "openai" ? "OpenAI" : "Google Gemini";
-  $("#aiModelText").textContent = ai.model || "gemini-3.6-flash";
+  $("#aiProviderText").textContent = ai.provider === "openai" ? "OpenAI" : providerName;
+  $("#aiModelText").textContent = ai.model || (provider === "claude"
+    ? "anthropic/claude-sonnet-4.6"
+    : "gemini-3.6-flash");
   $("#aiKeyText").textContent = ai.keyConfigured
     ? ai.encryptedAtRest
       ? "Cifrada en el panel"
       : "Variable de entorno"
     : "Sin configurar";
-  $("#geminiModel").value = ai.provider === "gemini" && ai.model
-    ? ai.model
-    : "gemini-3.6-flash";
+  $("#aiProviderSelect").value = provider;
+  $("#aiModel").value = ai.model || (provider === "claude"
+    ? "anthropic/claude-sonnet-4.6"
+    : "gemini-3.6-flash");
+  $("#claudeBaseUrl").value = ai.baseUrl || "https://api.aicredits.in/v1";
+  renderAiProviderFields(provider);
   $("#aiReplyEnabled").checked = active || Boolean(ai.requestedEnabled);
-  $("#deleteGeminiKeyButton").classList.toggle(
+  $("#deleteAiKeyButton").classList.toggle(
     "hidden",
     !ai.keyConfigured || ai.keySource !== "panel_encrypted"
   );
-  $("#geminiKeyHelp").textContent = ai.keyConfigured
+  $("#aiKeyHelp").textContent = ai.keyConfigured
     ? "Ya existe una clave configurada. Deja este campo vacío para conservarla."
     : "La clave se cifra antes de guardarse y nunca vuelve al navegador.";
   const notice = $("#aiConfigurationNotice");
@@ -2424,10 +2431,32 @@ function renderAiStatus(ai = {}) {
   notice.textContent = hasError
     ? ai.lastError
     : active
-      ? "Gemini está activo y responderá después de la bienvenida inicial."
+      ? `${providerName} está activo y responderá después de la bienvenida inicial.`
       : configured
         ? "La conexión está configurada. Activa el interruptor y guarda cuando quieras usarla."
         : "Guarda una API key para habilitar las respuestas con IA.";
+}
+
+function renderAiProviderFields(provider, { resetModel = false } = {}) {
+  const selected = provider === "claude" ? "claude" : "gemini";
+  const isClaude = selected === "claude";
+  $("#claudeBaseUrlRow").classList.toggle("hidden", !isClaude);
+  $("#aiConnectionTitle").textContent = isClaude
+    ? "Claude API"
+    : "API de Gemini";
+  $("#aiApiKeyLabel").textContent = isClaude
+    ? "API key de Claude"
+    : "API key de Gemini";
+  $("#aiHeroTitle").textContent = `${isClaude ? "Claude" : "Gemini"} responde con el contexto de JadrixServs`;
+  $("#aiModelHelp").textContent = isClaude
+    ? "Recomendado para atención: anthropic/claude-sonnet-4.6."
+    : "Usa un nombre de modelo disponible para tu proyecto de Google AI.";
+  $("#aiToggleHelp").textContent = `${isClaude ? "Claude" : "Gemini"} responderá después de la bienvenida. El modo AFK mantiene prioridad.`;
+  if (resetModel) {
+    $("#aiModel").value = isClaude
+      ? "anthropic/claude-sonnet-4.6"
+      : "gemini-3.6-flash";
+  }
 }
 
 function renderKnowledgeBase() {
@@ -2449,7 +2478,7 @@ function renderKnowledgeBase() {
       <div class="knowledge-fields">
         <label>Pregunta o tema<input data-knowledge-title type="text" maxlength="120" value="${escapeHtml(entry.title || "")}" placeholder="Ejemplo: Precio y entrega de ChatGPT Pro"></label>
         <label>Frases parecidas del cliente<textarea data-knowledge-triggers rows="4" placeholder="cuánto cuesta, precio, cómo lo entregan">${escapeHtml((entry.triggers || []).join(", "))}</textarea><small>Sepáralas con comas o saltos de línea.</small></label>
-        <label>Respuesta modelo completa<textarea data-knowledge-answer rows="5" maxlength="3000" placeholder="Escribe exactamente cómo debe responder Gemini...">${escapeHtml(entry.answer || "")}</textarea><small>Incluye todos los detalles que no deben quedar incompletos.</small></label>
+        <label>Respuesta modelo completa<textarea data-knowledge-answer rows="5" maxlength="3000" placeholder="Escribe exactamente cómo debe responder la IA...">${escapeHtml(entry.answer || "")}</textarea><small>Incluye todos los detalles que no deben quedar incompletos.</small></label>
       </div>
     </article>
   `).join("");
@@ -2548,15 +2577,22 @@ function addKnowledgeEntry(entry = {}) {
   $("[data-knowledge-title]", lastCard)?.focus();
 }
 
-async function saveGeminiConfiguration() {
-  const apiKey = $("#geminiApiKey").value.trim();
+async function saveAiConfiguration() {
+  const provider = $("#aiProviderSelect").value === "claude" ? "claude" : "gemini";
+  const apiKey = $("#aiApiKey").value.trim();
   const body = {
-    model: $("#geminiModel").value.trim() || "gemini-3.6-flash",
+    provider,
+    model: $("#aiModel").value.trim() || (provider === "claude"
+      ? "anthropic/claude-sonnet-4.6"
+      : "gemini-3.6-flash"),
     enabled: $("#aiReplyEnabled").checked
   };
+  if (provider === "claude") {
+    body.baseUrl = $("#claudeBaseUrl").value.trim() || "https://api.aicredits.in/v1";
+  }
   if (apiKey) body.apiKey = apiKey;
   const payload = await api("/api/ai/config", { method: "PUT", body });
-  $("#geminiApiKey").value = "";
+  $("#aiApiKey").value = "";
   renderAiStatus(payload.ai);
   return payload.ai;
 }
@@ -2581,8 +2617,8 @@ async function saveAiSettings() {
     state.countryPriceBooks = settingsPayload.countryPriceBooks || [];
     renderKnowledgeBase();
     renderCountryPriceBooks();
-    await saveGeminiConfiguration();
-    showToast("Configuración y entrenamiento de Gemini guardados.");
+    const aiStatus = await saveAiConfiguration();
+    showToast(`Configuración y entrenamiento de ${aiStatus.provider === "claude" ? "Claude" : "Gemini"} guardados.`);
   } catch (error) {
     showToast(error.message, true);
   } finally {
@@ -2596,7 +2632,7 @@ async function testAiConnection() {
   button.disabled = true;
   button.textContent = "Probando…";
   try {
-    if ($("#geminiApiKey").value.trim()) await saveGeminiConfiguration();
+    await saveAiConfiguration();
     const result = await api("/api/ai/test", { method: "POST" });
     renderAiStatus({
       ...(state.aiStatus || {}),
@@ -2607,7 +2643,7 @@ async function testAiConnection() {
       lastErrorType: null,
       health: "ready"
     });
-    showToast(`Conexión correcta con ${result.model || "Gemini"}.`);
+    showToast(`Conexión correcta con ${result.model || "la IA"}.`);
   } catch (error) {
     showToast(error.message, true);
     await loadSettings().catch(() => undefined);
@@ -2617,13 +2653,13 @@ async function testAiConnection() {
   }
 }
 
-async function deleteGeminiKey() {
+async function deleteAiKey() {
   if (!confirm("¿Eliminar la API key guardada? Las respuestas con IA quedarán desactivadas.")) return;
   try {
     const payload = await api("/api/ai/key", { method: "DELETE" });
-    $("#geminiApiKey").value = "";
+    $("#aiApiKey").value = "";
     renderAiStatus(payload.ai);
-    showToast("API key de Gemini eliminada.");
+    showToast("API key de IA eliminada.");
   } catch (error) {
     showToast(error.message, true);
   }
@@ -2748,7 +2784,7 @@ function logLabel(type) {
     charge: "Cobranza",
     command: "Comando",
     "quick-reply": "Respuesta rápida",
-    ai: "Gemini IA",
+    ai: "IA",
     training: "Entrenamiento IA",
     pricing: "Precios por país",
     client: "Cliente",
@@ -3066,10 +3102,21 @@ function bindEvents() {
   $("#saveSettingsButton").addEventListener("click", saveSettings);
   $("#saveAiButton").addEventListener("click", saveAiSettings);
   $("#testAiButton").addEventListener("click", testAiConnection);
-  $("#deleteGeminiKeyButton").addEventListener("click", deleteGeminiKey);
-  $("#toggleGeminiKeyButton").addEventListener("click", () => {
-    const field = $("#geminiApiKey");
-    const button = $("#toggleGeminiKeyButton");
+  $("#deleteAiKeyButton").addEventListener("click", deleteAiKey);
+  $("#aiProviderSelect").addEventListener("change", () => {
+    const provider = $("#aiProviderSelect").value === "claude" ? "claude" : "gemini";
+    const providerChanged = provider !== state.aiStatus?.provider;
+    renderAiProviderFields(provider, { resetModel: providerChanged });
+    if (providerChanged) {
+      $("#aiApiKey").value = "";
+      $("#aiReplyEnabled").checked = false;
+      $("#deleteAiKeyButton").classList.add("hidden");
+      $("#aiKeyHelp").textContent = "Pega una clave del nuevo proveedor para guardar el cambio.";
+    }
+  });
+  $("#toggleAiKeyButton").addEventListener("click", () => {
+    const field = $("#aiApiKey");
+    const button = $("#toggleAiKeyButton");
     const visible = field.type === "password";
     field.type = visible ? "text" : "password";
     button.textContent = visible ? "Ocultar" : "Mostrar";
