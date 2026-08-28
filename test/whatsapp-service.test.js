@@ -96,11 +96,32 @@ function makeFakeBaileys({
   logoutNeverResolves = false,
   freshAuthAfterFirstLoad = false,
   latestWaVersion = null,
-  latestWaVersionError = null
+  latestWaVersionError = null,
+  usyncResult = { list: [] }
 } = {}) {
   const sockets = [];
   const state = { creds: { registered }, keys: {} };
   let authLoads = 0;
+
+  class FakeUSyncUser {
+    withId(id) { this.id = id; return this; }
+    withLid(lid) { this.lid = lid; return this; }
+    withPhone(phone) { this.phone = phone; return this; }
+    withUsername(username) { this.username = username; return this; }
+  }
+
+  class FakeUSyncQuery {
+    constructor() {
+      this.context = "interactive";
+      this.protocols = [];
+      this.users = [];
+    }
+    withContext(context) { this.context = context; return this; }
+    withContactProtocol() { this.protocols.push("contact"); return this; }
+    withLIDProtocol() { this.protocols.push("lid"); return this; }
+    withUsernameProtocol() { this.protocols.push("username"); return this; }
+    withUser(user) { this.users.push(user); return this; }
+  }
 
   function makeWASocket(config = {}) {
     const ev = new EventEmitter();
@@ -109,6 +130,7 @@ function makeFakeBaileys({
       presence: [],
       sent: [],
       read: [],
+      usync: [],
       ended: 0,
       loggedOut: 0
     };
@@ -129,6 +151,12 @@ function makeFakeBaileys({
         return { key: { id: "sent-1" } };
       },
       readMessages: async (keys) => calls.read.push(keys),
+      executeUSyncQuery: async (query) => {
+        calls.usync.push(query);
+        return typeof usyncResult === "function"
+          ? usyncResult(query)
+          : usyncResult;
+      },
       end: async () => {
         calls.ended += 1;
       },
@@ -162,6 +190,8 @@ function makeFakeBaileys({
         unavailableService: 503,
         restartRequired: 515
       },
+      USyncQuery: FakeUSyncQuery,
+      USyncUser: FakeUSyncUser,
       fetchLatestWaWebVersion: latestWaVersion || latestWaVersionError
         ? async () => {
             if (latestWaVersionError) throw latestWaVersionError;
@@ -1820,6 +1850,54 @@ test("usa el @usuario recibido por sincronización de contactos para registrar e
 
   assert.equal(registration.whatsapp, "@cliente_nuevo");
   assert.equal(registration.whatsappChatId, "600000000000@lid");
+});
+
+test("consulta y guarda el @usuario de un cliente antiguo registrado solo por número", async () => {
+  const fake = makeFakeBaileys({
+    registered: true,
+    usyncResult: {
+      list: [
+        {
+          id: "51987654321@s.whatsapp.net",
+          lid: "700000000000@lid",
+          username: "cliente_antiguo"
+        }
+      ]
+    }
+  });
+  const store = makeStore();
+  let enrichedIdentity = null;
+  store.enrichClientsWithWhatsAppIdentity = (identity) => {
+    enrichedIdentity = identity;
+    return 1;
+  };
+  const service = makeService(fake, {
+    store,
+    sessionDir: path.join(testRuntimeDir, "phone-username-session"),
+    mediaDir: path.join(testRuntimeDir, "phone-username-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  const result = await service.refreshWhatsAppIdentity({
+    whatsapp: "51987654321",
+    whatsappPhone: "51987654321"
+  });
+
+  assert.equal(result.foundUsername, true);
+  assert.equal(result.source, "whatsapp");
+  assert.equal(result.identity.whatsappUsername, "@cliente_antiguo");
+  assert.equal(result.identity.whatsappChatId, "700000000000@lid");
+  assert.equal(enrichedIdentity.whatsappUsername, "@cliente_antiguo");
+  assert.equal(socket.calls.usync.length, 1);
+  assert.equal(socket.calls.usync[0].users[0].phone, "+51987654321");
+  assert.deepEqual(socket.calls.usync[0].protocols, [
+    "contact",
+    "lid",
+    "username"
+  ]);
 });
 
 test("envía escribiendo, pausa y luego un solo mensaje", async () => {

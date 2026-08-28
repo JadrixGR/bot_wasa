@@ -5775,3 +5775,91 @@ html[data-theme="dark"] .welcome-audio-picker { background: rgba(13, 17, 34, 0.8
   .client-broadcast-dialog { width: min(96vw, 44rem); }
   .client-broadcast-progress > div { align-items: flex-start; flex-direction: column; gap: 0.25rem; }
 }
+
+/* Selector de número o @usuario al copiar un contacto de WhatsApp. */
+.whatsapp-copy-dialog {
+  width: min(34rem, calc(100vw - 2rem));
+  max-width: 34rem;
+}
+.whatsapp-copy-dialog .dialog-heading { margin-bottom: 1rem; }
+.whatsapp-copy-dialog .dialog-heading .muted {
+  margin: 0.35rem 0 0;
+  font-size: 0.78rem;
+}
+.whatsapp-copy-options {
+  display: grid;
+  gap: 0.7rem;
+  margin-bottom: 0.9rem;
+}
+.whatsapp-copy-option {
+  display: grid;
+  grid-template-columns: 2.6rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.8rem;
+  width: 100%;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: var(--v3-radius-sm, 0.85rem);
+  color: var(--ink);
+  background: var(--panel);
+  text-align: left;
+}
+.whatsapp-copy-option:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, var(--panel));
+  transform: translateY(-1px);
+}
+.whatsapp-copy-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+.whatsapp-copy-option > span:not(.whatsapp-copy-icon) {
+  min-width: 0;
+}
+.whatsapp-copy-option small,
+.whatsapp-copy-option strong {
+  display: block;
+}
+.whatsapp-copy-option small {
+  margin-bottom: 0.18rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+.whatsapp-copy-option strong {
+  overflow: hidden;
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.whatsapp-copy-option b {
+  color: var(--primary);
+  font-size: 0.72rem;
+}
+.whatsapp-copy-icon {
+  display: grid;
+  width: 2.6rem;
+  height: 2.6rem;
+  place-items: center;
+  border-radius: 0.75rem;
+  color: #0a6d3f;
+  background: rgba(37, 211, 102, 0.16);
+  font-size: 1.15rem;
+  font-weight: 900;
+}
+.whatsapp-copy-icon.username {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+}
+.whatsapp-copy-dialog .notice {
+  margin: 0;
+  line-height: 1.5;
+}
+
+@media (max-width: 520px) {
+  .whatsapp-copy-option {
+    grid-template-columns: 2.35rem minmax(0, 1fr);
+  }
+  .whatsapp-copy-option b { display: none; }
+  .whatsapp-copy-icon { width: 2.35rem; height: 2.35rem; }
+}

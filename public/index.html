@@ -894,6 +894,42 @@
       </form>
     </dialog>
 
+    <dialog id="copyWhatsappDialog" class="whatsapp-copy-dialog">
+      <form method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">CONTACTO DE WHATSAPP</p>
+            <h2>¿Qué deseas copiar?</h2>
+            <p id="copyWhatsappClientLabel" class="muted"></p>
+          </div>
+          <button class="icon-button whatsapp-copy-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="whatsapp-copy-options">
+          <button id="copyWhatsappPhoneButton" class="whatsapp-copy-option" type="button">
+            <span class="whatsapp-copy-icon" aria-hidden="true">☎</span>
+            <span>
+              <small>Número de WhatsApp</small>
+              <strong id="copyWhatsappPhoneValue">No disponible</strong>
+            </span>
+            <b>Copiar</b>
+          </button>
+          <button id="copyWhatsappUsernameButton" class="whatsapp-copy-option" type="button">
+            <span class="whatsapp-copy-icon username" aria-hidden="true">@</span>
+            <span>
+              <small>Nombre de usuario</small>
+              <strong id="copyWhatsappUsernameValue">Buscando…</strong>
+            </span>
+            <b>Copiar</b>
+          </button>
+        </div>
+        <div id="copyWhatsappIdentityNotice" class="notice" aria-live="polite"></div>
+        <div class="dialog-actions">
+          <button id="refreshWhatsappUsernameButton" class="button secondary" type="button">Actualizar @usuario</button>
+          <button class="button primary whatsapp-copy-close" type="button">Listo</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="clientBroadcastDialog" class="client-broadcast-dialog">
       <form id="clientBroadcastForm">
         <div class="dialog-heading">

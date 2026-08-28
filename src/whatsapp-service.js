@@ -2004,6 +2004,109 @@ class WhatsAppService {
     );
   }
 
+  async refreshWhatsAppIdentity(value) {
+    const identity = normalizeWhatsAppIdentity(value);
+    if (!identity.whatsapp) {
+      throw new Error("El cliente no tiene una identidad de WhatsApp válida.");
+    }
+
+    const cached = this.#findCachedContact(value, identity);
+    if (cached?.whatsappUsername) {
+      const remembered = this.#rememberContact({
+        ...cached,
+        phoneNumber:
+          cached.phoneNumber ||
+          (identity.whatsappPhone
+            ? `${identity.whatsappPhone}@s.whatsapp.net`
+            : undefined),
+        username: cached.whatsappUsername.slice(1)
+      });
+      return {
+        identity: normalizeWhatsAppIdentity({ ...identity, ...remembered }),
+        foundUsername: true,
+        source: "cache"
+      };
+    }
+
+    if (identity.whatsappUsername) {
+      return {
+        identity,
+        foundUsername: true,
+        source: "stored"
+      };
+    }
+
+    if (!this.status.ready || !this.socket) {
+      const error = new Error(
+        "Conecta WhatsApp para buscar el @usuario de este cliente."
+      );
+      error.code = "WHATSAPP_NOT_READY";
+      throw error;
+    }
+
+    const { USyncQuery, USyncUser } = this.baileys || {};
+    if (!USyncQuery || !USyncUser || !this.socket.executeUSyncQuery) {
+      const error = new Error(
+        "La sesión actual de WhatsApp no permite consultar nombres de usuario."
+      );
+      error.code = "WHATSAPP_USERNAME_UNAVAILABLE";
+      throw error;
+    }
+
+    const query = new USyncQuery()
+      .withContext("interactive")
+      .withContactProtocol()
+      .withLIDProtocol()
+      .withUsernameProtocol();
+    if (identity.whatsappPhone) {
+      query.withUser(new USyncUser().withPhone(`+${identity.whatsappPhone}`));
+    } else if (identity.whatsappChatId) {
+      const user = new USyncUser().withId(identity.whatsappChatId);
+      if (/@(?:hosted\.)?lid$/i.test(identity.whatsappChatId)) {
+        user.withLid(identity.whatsappChatId);
+      }
+      query.withUser(user);
+    } else {
+      return { identity, foundUsername: false, source: "unavailable" };
+    }
+
+    const result = await withTimeout(
+      this.socket.executeUSyncQuery(query),
+      10000,
+      "WhatsApp tardó demasiado en buscar el @usuario del cliente."
+    );
+    for (const item of result?.list || []) {
+      const whatsappUsername = normalizeWhatsAppUsername(item?.username, {
+        allowBare: true
+      });
+      if (!whatsappUsername) continue;
+      const itemChatId = normalizeWhatsAppChatId(item?.id);
+      const itemLid = normalizeWhatsAppChatId(item?.lid);
+      const remembered = this.#rememberContact({
+        id: itemChatId || identity.whatsappChatId,
+        lid:
+          itemLid ||
+          (/@(?:hosted\.)?lid$/i.test(identity.whatsappChatId)
+            ? identity.whatsappChatId
+            : undefined),
+        phoneNumber:
+          /@(s\.whatsapp\.net|c\.us)$/i.test(itemChatId)
+            ? itemChatId
+            : identity.whatsappPhone
+              ? `${identity.whatsappPhone}@s.whatsapp.net`
+              : undefined,
+        username: whatsappUsername.slice(1)
+      });
+      return {
+        identity: normalizeWhatsAppIdentity({ ...identity, ...remembered }),
+        foundUsername: true,
+        source: "whatsapp"
+      };
+    }
+
+    return { identity, foundUsername: false, source: "whatsapp" };
+  }
+
   async #resolveOutgoingTarget(value) {
     const direct = normalizeWhatsAppChatId(value);
     if (direct) return direct;

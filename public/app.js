@@ -33,7 +33,9 @@ const state = {
   clientBroadcastPreview: null,
   clientBroadcastSubmitting: false,
   authenticatorTicker: null,
-  authenticatorRefreshPending: false
+  authenticatorRefreshPending: false,
+  copyWhatsappClientId: null,
+  copyWhatsappRefreshToken: 0
 };
 
 const $ = (selector, root = document) => root.querySelector(selector);
@@ -334,11 +336,24 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function whatsappIdentityLabel(entry) {
-  if (entry?.whatsappUsername) return entry.whatsappUsername;
+function whatsappPhoneLabel(entry) {
   const phone = String(entry?.whatsappPhone || entry?.whatsapp || "").trim();
   if (/^\d{10,15}$/.test(phone)) return `+${phone}`;
-  return phone || entry?.whatsappChatId || "Identidad no disponible";
+  return /^\+\d{10,15}$/.test(phone) ? phone : "";
+}
+
+function whatsappIdentityLabel(entry) {
+  if (entry?.whatsappUsername) return entry.whatsappUsername;
+  return whatsappPhoneLabel(entry) || entry?.whatsappChatId || "Identidad no disponible";
+}
+
+function whatsappIdentityDetail(entry) {
+  const phone = whatsappPhoneLabel(entry);
+  const username = String(entry?.whatsappUsername || "").trim();
+  if (phone && username) return `${phone} · Elige qué copiar`;
+  if (username) return "Haz clic para copiar el @usuario";
+  if (phone) return "Buscar @usuario o copiar número";
+  return "Haz clic para revisar la identidad";
 }
 
 function addMonths(value, months) {
@@ -473,6 +488,86 @@ async function copyPhoneToClipboard(phone) {
   const value = String(phone || "").trim();
   if (!value) throw new Error("No hay una identidad de WhatsApp para copiar.");
   await copyTextToClipboard(value);
+}
+
+function renderCopyWhatsappDialog(client, { loading = false, message = "", error = false } = {}) {
+  if (!client) return;
+  const phone = whatsappPhoneLabel(client);
+  const username = String(client.whatsappUsername || "").trim();
+  const phoneButton = $("#copyWhatsappPhoneButton");
+  const usernameButton = $("#copyWhatsappUsernameButton");
+  const refreshButton = $("#refreshWhatsappUsernameButton");
+  const notice = $("#copyWhatsappIdentityNotice");
+
+  $("#copyWhatsappClientLabel").textContent = [client.name, client.product]
+    .filter(Boolean)
+    .join(" · ");
+  $("#copyWhatsappPhoneValue").textContent = phone || "No disponible";
+  $("#copyWhatsappUsernameValue").textContent = username || (loading ? "Buscando…" : "No encontrado");
+  phoneButton.dataset.copyValue = phone;
+  usernameButton.dataset.copyValue = username;
+  phoneButton.disabled = !phone;
+  usernameButton.disabled = !username;
+  refreshButton.disabled = loading;
+  refreshButton.textContent = loading ? "Buscando @usuario…" : "Actualizar @usuario";
+
+  notice.className = `notice${error ? " error" : username && !loading ? " success" : ""}`;
+  notice.textContent = loading
+    ? "🔎 Estoy consultando WhatsApp para encontrar y guardar el @usuario de este cliente…"
+    : message || (username
+      ? `✅ ${username} está guardado. Ahora puedes elegir qué dato copiar.`
+      : "Aún no tenemos el @usuario. Puedes copiar el número o volver a buscarlo en WhatsApp.");
+}
+
+async function refreshCopyWhatsappIdentity(clientId, { automatic = false } = {}) {
+  const client = state.clients.find((item) => item.id === clientId);
+  if (!client) return;
+  const token = ++state.copyWhatsappRefreshToken;
+  renderCopyWhatsappDialog(client, { loading: true });
+  try {
+    const result = await api(`/api/clients/${encodeURIComponent(clientId)}/whatsapp-identity/refresh`, {
+      method: "POST"
+    });
+    const updatedClient = result.client || client;
+    state.clients = state.clients.map((item) => {
+      const sameContact =
+        item.id === clientId ||
+        (updatedClient.whatsappPhone && item.whatsappPhone === updatedClient.whatsappPhone) ||
+        (updatedClient.whatsappChatId && item.whatsappChatId === updatedClient.whatsappChatId);
+      return sameContact
+        ? {
+            ...item,
+            whatsappPhone: updatedClient.whatsappPhone || item.whatsappPhone,
+            whatsappUsername: updatedClient.whatsappUsername || item.whatsappUsername,
+            whatsappChatId: updatedClient.whatsappChatId || item.whatsappChatId,
+            ...(item.id === clientId ? updatedClient : {})
+          }
+        : item;
+    });
+    renderClients();
+    if (token !== state.copyWhatsappRefreshToken) return;
+    if (state.copyWhatsappClientId === clientId && $("#copyWhatsappDialog").open) {
+      renderCopyWhatsappDialog(updatedClient, { message: result.message || "" });
+    }
+    if (!automatic && result.foundUsername) {
+      showToast(`${updatedClient.whatsappUsername} encontrado y guardado.`);
+    }
+  } catch (error) {
+    if (token !== state.copyWhatsappRefreshToken) return;
+    if (state.copyWhatsappClientId === clientId && $("#copyWhatsappDialog").open) {
+      renderCopyWhatsappDialog(client, { message: error.message, error: true });
+    }
+    if (!automatic) showToast(error.message, true);
+  }
+}
+
+function openCopyWhatsappDialog(client) {
+  state.copyWhatsappClientId = client.id;
+  renderCopyWhatsappDialog(client);
+  $("#copyWhatsappDialog").showModal();
+  if (!client.whatsappUsername) {
+    void refreshCopyWhatsappIdentity(client.id, { automatic: true });
+  }
 }
 
 function formatAuthenticatorCode(code) {
@@ -1363,8 +1458,8 @@ function renderClients() {
     <tr class="client-row tone-${remaining.tone}" style="--row-index:${index}">
       <td>
         <button class="phone-copy" data-action="copy-phone" data-id="${client.id}" type="button" title="Copiar identidad de WhatsApp al portapapeles">
-          ${escapeHtml(client.whatsapp)}
-          <span>Haz clic para copiar</span>
+          ${escapeHtml(whatsappIdentityLabel(client))}
+          <span>${escapeHtml(whatsappIdentityDetail(client))}</span>
         </button>
       </td>
       <td><strong>${escapeHtml(client.product)}</strong><span>${escapeHtml(client.price || "Sin precio")}${client.durationDays ? ` · ${escapeHtml(client.durationDays)} días` : ""}</span></td>
@@ -3019,6 +3114,32 @@ function bindEvents() {
   $("#renewForm").addEventListener("submit", saveRenewal);
   $$(".dialog-close").forEach((button) => button.addEventListener("click", () => $("#clientDialog").close()));
   $$(".renew-close").forEach((button) => button.addEventListener("click", () => $("#renewDialog").close()));
+  $$(".whatsapp-copy-close").forEach((button) =>
+    button.addEventListener("click", () => $("#copyWhatsappDialog").close())
+  );
+  $("#copyWhatsappPhoneButton").addEventListener("click", async (event) => {
+    const value = event.currentTarget.dataset.copyValue;
+    try {
+      await copyPhoneToClipboard(value);
+      showToast(`Número ${value} copiado.`);
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
+  $("#copyWhatsappUsernameButton").addEventListener("click", async (event) => {
+    const value = event.currentTarget.dataset.copyValue;
+    try {
+      await copyTextToClipboard(value);
+      showToast(`${value} copiado.`);
+    } catch (error) {
+      showToast(error.message, true);
+    }
+  });
+  $("#refreshWhatsappUsernameButton").addEventListener("click", () => {
+    if (state.copyWhatsappClientId) {
+      void refreshCopyWhatsappIdentity(state.copyWhatsappClientId);
+    }
+  });
   $("#clientSearch").addEventListener("input", renderClients);
   $("#clientStatusFilter").addEventListener("change", renderClients);
   $("#clientStartDate").addEventListener("change", () => {
@@ -3033,12 +3154,7 @@ function bindEvents() {
     const client = state.clients.find((item) => item.id === button.dataset.id);
     if (!client) return;
     if (button.dataset.action === "copy-phone") {
-      try {
-        await copyPhoneToClipboard(client.whatsapp);
-        showToast(`WhatsApp ${client.whatsapp} copiado.`);
-      } catch (error) {
-        showToast(error.message, true);
-      }
+      openCopyWhatsappDialog(client);
       return;
     }
     if (button.dataset.action === "edit") openClientDialog(client);

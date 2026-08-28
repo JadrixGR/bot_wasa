@@ -785,6 +785,38 @@ app.get("/api/clients/lookup", requireAuth, (req, res) => {
 });
 
 app.post(
+  "/api/clients/:id/whatsapp-identity/refresh",
+  requireAuth,
+  asyncRoute(async (req, res) => {
+    const client = store.getClient(req.params.id);
+    if (!client || client.archived) {
+      return res.status(404).json({ error: "Cliente no encontrado." });
+    }
+    if (!client.whatsappUsername && !whatsapp.getStatus().ready) {
+      return res.status(409).json({
+        error: "Conecta WhatsApp para buscar el @usuario de este cliente.",
+        code: "WHATSAPP_NOT_READY"
+      });
+    }
+
+    const previousUsername = client.whatsappUsername || "";
+    const result = await whatsapp.refreshWhatsAppIdentity(client);
+    const updatedClient = store.getClient(req.params.id) || client;
+    const username = updatedClient.whatsappUsername || result.identity?.whatsappUsername || "";
+    return res.json({
+      client: clientForPanel(updatedClient),
+      foundUsername: Boolean(username),
+      changed: Boolean(username && username !== previousUsername),
+      message: username
+        ? previousUsername
+          ? `${username} ya estaba guardado para este cliente.`
+          : `Encontramos y guardamos ${username} para este cliente.`
+        : "WhatsApp no mostró un @usuario para este cliente. Pídele que escriba primero al bot y vuelve a intentarlo."
+    });
+  })
+);
+
+app.post(
   "/api/clients",
   requireAuth,
   asyncRoute(async (req, res) => {

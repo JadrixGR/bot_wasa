@@ -228,6 +228,37 @@ test("mantiene una copia automática de la base principal", () => {
   }
 });
 
+test("completa el @usuario en todas las compras antiguas del mismo número", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const base = {
+      name: "Cliente anterior",
+      whatsapp: "987 654 321",
+      startDate: "2026-08-01",
+      expiryDate: "2026-09-01",
+      status: "activo"
+    };
+    store.createClient({ ...base, product: "ChatGPT Plus" });
+    store.createClient({ ...base, product: "Claude Pro" });
+
+    const changed = store.enrichClientsWithWhatsAppIdentity({
+      whatsappPhone: "51987654321",
+      whatsappUsername: "@cliente_anterior",
+      whatsappChatId: "700000000000@lid"
+    });
+    const clients = store.listClients();
+
+    assert.equal(changed, 2);
+    assert.equal(clients.length, 2);
+    assert.ok(clients.every((client) => client.whatsappPhone === "51987654321"));
+    assert.ok(clients.every((client) => client.whatsappUsername === "@cliente_anterior"));
+    assert.ok(clients.every((client) => client.whatsappChatId === "700000000000@lid"));
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("recupera los clientes desde la copia automática si la base se daña", () => {
   const directory = temporaryDataDir();
   try {
