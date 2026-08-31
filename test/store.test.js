@@ -1184,7 +1184,7 @@ test("restaura un respaldo JSON y conserva la versión de datos actual", () => {
 });
 
 
-test("limita a dos compras nuevas por número sin borrar las existentes", () => {
+test("permite registrar varias compras para el mismo número sin sobrescribirlas", () => {
   const directory = temporaryDataDir();
   try {
     const store = new JsonStore(directory);
@@ -1195,14 +1195,26 @@ test("limita a dos compras nuevas por número sin borrar las existentes", () => 
       expiryDate: "2026-08-27",
       status: "activo"
     };
-    store.createClient({ ...base, product: "ChatGPT Plus" });
-    store.createClient({ ...base, product: "Netflix" });
-    assert.equal(store.findClientsByWhatsApp("51999888777").length, 2);
-    assert.throws(
-      () => store.createClient({ ...base, product: "HBO" }),
-      /2 compras registradas/
+    const products = [
+      "ChatGPT Plus",
+      "Netflix",
+      "HBO Max",
+      "Claude Pro",
+      "Gemini Pro",
+      "Canva Pro"
+    ];
+    const created = products.map((product) =>
+      store.createClient({ ...base, product })
     );
-    assert.equal(store.findClientsByWhatsApp("999888777").length, 2);
+    const purchases = store.findClientsByWhatsApp("51999888777");
+
+    assert.equal(created.length, 6);
+    assert.equal(purchases.length, 6);
+    assert.deepEqual(
+      purchases.map((client) => client.product).sort(),
+      [...products].sort()
+    );
+    assert.equal(new Set(purchases.map((client) => client.id)).size, 6);
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }

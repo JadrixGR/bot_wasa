@@ -22,7 +22,6 @@ const {
   todayInTimeZone
 } = require("./date-utils");
 
-const MAX_PURCHASES_PER_PHONE = 2;
 const CATALOG_VERSION = 4.92;
 const MAX_QUICK_REPLIES = 50;
 const MAX_QUICK_REPLY_IMAGES = 6;
@@ -2558,18 +2557,6 @@ class JsonStore {
   }
 
   createClient(input) {
-    const identity = normalizeWhatsAppIdentity(input);
-    const purchases = this.data.clients.filter(
-      (client) =>
-        !client.archived &&
-        identitiesOverlap(client, identity)
-    );
-    if (identity.whatsapp && purchases.length >= MAX_PURCHASES_PER_PHONE) {
-      throw new Error(
-        `Este número ya tiene ${MAX_PURCHASES_PER_PHONE} compras registradas. Elimina un registro o renueva uno de los servicios existentes.`
-      );
-    }
-
     const now = new Date().toISOString();
     const client = this.#normalizeClient({
       id: crypto.randomUUID(),
@@ -2611,23 +2598,6 @@ class JsonStore {
             input.whatsappUsername || current.whatsappUsername || "",
           whatsappChatId: input.whatsappChatId || current.whatsappChatId || ""
         };
-    const currentIdentity = whatsappIdentityKeys(current);
-    const targetIdentity = whatsappIdentityKeys(identityInput);
-    const sameIdentity = [...targetIdentity].some((key) => currentIdentity.has(key));
-    if (targetIdentity.size && !sameIdentity) {
-      const targetPurchases = this.data.clients.filter(
-        (client) =>
-          client.id !== id &&
-          !client.archived &&
-          identitiesOverlap(client, identityInput)
-      );
-      if (targetPurchases.length >= MAX_PURCHASES_PER_PHONE) {
-        throw new Error(
-          `Ese número ya tiene ${MAX_PURCHASES_PER_PHONE} compras registradas.`
-        );
-      }
-    }
-
     const updated = this.#normalizeClient({
       ...current,
       ...identityInput,
@@ -2814,6 +2784,5 @@ module.exports = {
   normalizeWhatsAppIdentity,
   whatsappIdentityKeys,
   clientWhatsAppTarget,
-  selectClientBroadcastRecipients,
-  MAX_PURCHASES_PER_PHONE
+  selectClientBroadcastRecipients
 };

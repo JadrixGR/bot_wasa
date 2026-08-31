@@ -22,9 +22,9 @@ IMPORTANTE
 - El recordatorio automático queda activado para 2 días antes.
 - La cobranza del día de vencimiento queda apagada hasta que la actives en el panel.
 - Cada comando nuevo crea una compra independiente desde el día en que se envía.
-- El segundo registro se conserva por separado aunque repita el mismo servicio.
+- Cada registro adicional se conserva por separado aunque repita el mismo servicio.
 - Cada compra mantiene su propia fecha de activación, vencimiento y cobranza.
-- Un mismo número puede tener hasta 2 compras o servicios registrados.
+- Un mismo número puede tener varias compras o servicios registrados, sin un límite fijo.
 - Si usas una duración o un precio especial, revisa y edita el precio desde el panel.
 
 AUTORIZACIÓN DE CÓDIGOS 2FA
