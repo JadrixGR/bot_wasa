@@ -6,6 +6,7 @@ const crypto = require("node:crypto");
 const express = require("express");
 const helmet = require("helmet");
 const cookieSession = require("cookie-session");
+const { Accounts } = require("./accounts");
 const { version: appVersion } = require("../package.json");
 const {
   JsonStore,
@@ -25,11 +26,8 @@ const {
 } = require("./date-utils");
 
 const rootDir = path.resolve(__dirname, "..");
-const dataDir = path.resolve(process.env.DATA_DIR || path.join(rootDir, "data"));
-const mediaDir = path.resolve(process.env.MEDIA_DIR || path.join(dataDir, "media"));
-const sessionDir = path.join(dataDir, "whatsapp-session");
+const rootDataDir = path.resolve(process.env.DATA_DIR || path.join(rootDir, "data"));
 const port = Number(process.env.PORT) || 3000;
-const adminPassword = process.env.ADMIN_PASSWORD || "Jadrix2026!";
 const cookieSecret = process.env.COOKIE_SECRET || "cambia-este-secreto-jadrixservs-v4";
 const dedicatedAuthenticatorKeyConfigured = Boolean(
   process.env.AUTHENTICATOR_ENCRYPTION_KEY
@@ -42,16 +40,39 @@ const dedicatedGeminiEncryptionKeyConfigured = Boolean(
 const geminiEncryptionKey =
   process.env.GEMINI_ENCRYPTION_KEY || authenticatorEncryptionKey;
 const persistentDiskConfigured =
-  dataDir === "/data" || dataDir.startsWith(`/data${path.sep}`);
+  rootDataDir === "/data" || rootDataDir.startsWith(`/data${path.sep}`);
+
+const accounts = new Accounts(rootDataDir);
+const tenants = new Map();
+
+function requireAuth(req, res, next) {
+  const user = accounts.session(req.session?.token);
+  if (!user) return res.status(401).json({ error: "Inicia sesión para continuar." });
+  req.user = user;
+  next();
+}
+
+function createTenant(user) {
+const app = express.Router();
+const dataDir = accounts.directory(user);
+const mediaDir = user.id === "owner"
+  ? path.resolve(process.env.MEDIA_DIR || path.join(dataDir, "media"))
+  : path.join(dataDir, "media");
+const sessionDir = path.join(dataDir, "whatsapp-session");
+const tenantKey = (key) => user.id === "owner" ? key
+  : crypto.createHmac("sha256", key).update(`tenant:${user.id}`).digest("hex");
 
 fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(mediaDir, { recursive: true });
 
 const store = new JsonStore(dataDir);
-const ai = new AiService({ store, encryptionKey: geminiEncryptionKey });
+const ai = new AiService({
+  store, encryptionKey: tenantKey(geminiEncryptionKey),
+  ...(user.id === "owner" ? {} : { apiKey: "", geminiApiKey: "", claudeApiKey: "" })
+});
 const authenticator = new AuthenticatorService({
   store,
-  encryptionKey: authenticatorEncryptionKey
+  encryptionKey: tenantKey(authenticatorEncryptionKey)
 });
 const whatsapp = new WhatsAppService({
   store,
@@ -68,6 +89,20 @@ const scheduler = new ReminderScheduler({
 });
 const clientBroadcastJobs = new Map();
 let activeClientBroadcastJobId = null;
+
+// Backups/settings must not import references to another account's files.
+app.use((req, res, next) => {
+  function validatePaths(value) {
+    if (!value || typeof value !== "object" || Buffer.isBuffer(value)) return;
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "path" && typeof child === "string" && child && !isStoredMediaPath(child)) {
+        throw new Error("El respaldo o archivo pertenece a otro espacio de usuario.");
+      }
+      validatePaths(child);
+    }
+  }
+  try { validatePaths(req.body); next(); } catch (error) { res.status(400).json({ error: error.message }); }
+});
 
 function clientBroadcastJobForPanel(job) {
   return {
@@ -147,37 +182,6 @@ async function runClientBroadcastJob(job) {
     store.save();
     pruneClientBroadcastJobs();
   }
-}
-
-const app = express();
-app.set("trust proxy", 1);
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-        "img-src": ["'self'", "data:", "blob:"],
-        "media-src": ["'self'", "blob:"]
-      }
-    }
-  })
-);
-app.use(express.json({ limit: "5mb" }));
-app.use(express.urlencoded({ extended: false }));
-app.use(
-  cookieSession({
-    name: "jadrix_v4_session",
-    keys: [cookieSecret],
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    httpOnly: true
-  })
-);
-
-function requireAuth(req, res, next) {
-  if (req.session?.authenticated) return next();
-  return res.status(401).json({ error: "Inicia sesión para continuar." });
 }
 
 function asyncRoute(handler) {
@@ -332,44 +336,6 @@ function validateWelcomeAudio(buffer, extension) {
   }
   return false;
 }
-
-app.get("/health", (_req, res) => {
-  res.json({
-    ok: true,
-    version: appVersion,
-    whatsapp: whatsapp.getStatus().state,
-    ai: whatsapp.getAiStatus(),
-    authenticator: {
-      encryptedAtRest: true,
-      dedicatedKeyConfigured: dedicatedAuthenticatorKeyConfigured
-    },
-    storage: {
-      persistentDiskConfigured,
-      automaticBackup: true
-    },
-    time: new Date().toISOString()
-  });
-});
-
-app.get("/api/auth/session", (req, res) => {
-  res.json({
-    authenticated: Boolean(req.session?.authenticated),
-    usingDefaultPassword: !process.env.ADMIN_PASSWORD
-  });
-});
-
-app.post("/api/auth/login", (req, res) => {
-  if (String(req.body.password || "") !== adminPassword) {
-    return res.status(401).json({ error: "Contraseña incorrecta." });
-  }
-  req.session.authenticated = true;
-  return res.json({ ok: true });
-});
-
-app.post("/api/auth/logout", requireAuth, (req, res) => {
-  req.session = null;
-  res.json({ ok: true });
-});
 
 app.get("/api/authenticator", requireAuth, noStore, (_req, res) => {
   res.json({
@@ -1316,9 +1282,7 @@ app.post(
       uploadedAt: new Date().toISOString()
     };
     store.setMedia(req.params.kind, metadata);
-    if (previous?.path && path.resolve(previous.path).startsWith(mediaDir) && fs.existsSync(previous.path)) {
-      fs.rmSync(previous.path, { force: true });
-    }
+    removeStoredMedia(previous?.path);
     return res.status(201).json(metadata);
   }
 );
@@ -1412,8 +1376,6 @@ app.post("/api/backup/restore", requireAuth, (req, res) => {
   res.json({ ok: true, ...result });
 });
 
-app.use(express.static(path.join(rootDir, "public"), { index: "index.html" }));
-
 app.use((error, _req, res, _next) => {
   const status = error.status || (error.message?.includes("no encontrado") ? 404 : 400);
   store.addLog("error", error.message || "Error desconocido");
@@ -1424,11 +1386,100 @@ app.use((error, _req, res, _next) => {
   });
 });
 
+return { router: app, store, whatsapp, scheduler, authenticator, ai };
+}
+
+function getTenant(user) {
+  if (!tenants.has(user.id)) {
+    const tenant = createTenant(user);
+    tenants.set(user.id, tenant);
+    tenant.scheduler.start();
+    tenant.whatsapp.initialize().catch(error => {
+      tenant.store.addLog("error", `WhatsApp no pudo iniciar: ${error.message}`);
+      tenant.store.save();
+    });
+  }
+  return tenants.get(user.id);
+}
+
+const app = express();
+app.set("trust proxy", 1);
+app.use(helmet({ contentSecurityPolicy: { directives: {
+  ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+  "img-src": ["'self'", "data:", "blob:"],
+  "media-src": ["'self'", "blob:"]
+} } }));
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieSession({
+  name: "jadrix_accounts_session", keys: [cookieSecret], maxAge: 7 * 86400000,
+  sameSite: "lax", secure: process.env.NODE_ENV === "production", httpOnly: true
+}));
+app.use("/api", (req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  const origin = req.get("origin");
+  if (!["GET", "HEAD", "OPTIONS"].includes(req.method) && origin && origin !== `${req.protocol}://${req.get("host")}`) {
+    return res.status(403).json({ error: "Origen de solicitud no permitido." });
+  }
+  next();
+});
+app.get("/health", (_req, res) => res.json({ ok: true, version: appVersion, time: new Date().toISOString() }));
+app.get("/api/auth/session", (req, res) => {
+  const user = accounts.session(req.session?.token);
+  res.json({ authenticated: Boolean(user), user, usingDefaultPassword: false });
+});
+const loginAttempts = new Map();
+app.post("/api/auth/login", async (req, res, next) => {
+  try {
+    const now = Date.now();
+    for (const [key, value] of loginAttempts) if (value.until <= now) loginAttempts.delete(key);
+    const key = req.ip;
+    const attempt = loginAttempts.get(key) || { count: 0, until: now + 15 * 60000 };
+    if (attempt.count >= 10) return res.status(429).json({ error: "Demasiados intentos. Vuelve a intentarlo en 15 minutos." });
+    attempt.count++;
+    loginAttempts.set(key, attempt);
+    const result = await accounts.login(req.body.username, req.body.password);
+    if (!result) return res.status(401).json({ error: "Usuario o contraseña incorrectos." });
+    accounts.logout(req.session?.token);
+    req.session = { token: result.token };
+    loginAttempts.delete(key);
+    res.json({ ok: true, user: result.user });
+  } catch (error) { next(error); }
+});
+app.post("/api/auth/logout", (req, res) => {
+  accounts.logout(req.session?.token);
+  req.session = null;
+  res.json({ ok: true });
+});
+app.use("/api/admin", requireAuth, (req, res, next) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Solo el administrador puede gestionar usuarios." });
+  next();
+});
+app.get("/api/admin/users", (_req, res) => res.json(accounts.list()));
+app.post("/api/admin/users", async (req, res, next) => {
+  try { res.status(201).json(await accounts.create(req.body)); } catch (error) { next(error); }
+});
+// The authenticated session chooses the workspace; never accept a tenant from the request.
+app.use((req, res, next) => {
+  if (!req.path.startsWith("/api/")) return next();
+  requireAuth(req, res, () => {
+    try { getTenant(req.user).router(req, res, next); } catch (error) { next(error); }
+  });
+});
+app.use("/api", (_req, res) => res.status(404).json({ error: "Ruta no encontrada." }));
+app.use(express.static(path.join(rootDir, "public"), { index: "index.html" }));
+app.use((error, _req, res, _next) => res.status(error.status || 400).json({ error: error.message || "No se pudo completar la operación." }));
+
+async function shutdownTenants() {
+  await Promise.all([...tenants.values()].map(async tenant => {
+    tenant.scheduler.stop();
+    await tenant.whatsapp.shutdown();
+  }));
+}
+
+if (require.main === module) {
 const server = app.listen(port, "0.0.0.0", () => {
   console.log(`JadrixServs V${appVersion} disponible en el puerto ${port}`);
-  if (!process.env.ADMIN_PASSWORD) {
-    console.warn("ADMIN_PASSWORD no está configurada. Se está usando la clave local predeterminada.");
-  }
   if (process.env.NODE_ENV === "production" && !persistentDiskConfigured) {
     console.warn(
       "DATA_DIR no apunta a /data. La sesión de WhatsApp y los clientes podrían perderse al reiniciar Render."
@@ -1444,10 +1495,9 @@ const server = app.listen(port, "0.0.0.0", () => {
       "GEMINI_ENCRYPTION_KEY no está configurada; la API key de IA (Gemini o Claude) se cifrará usando AUTHENTICATOR_ENCRYPTION_KEY o COOKIE_SECRET."
     );
   }
-  scheduler.start();
-  whatsapp.initialize().catch((error) => {
-    console.error("WhatsApp no pudo iniciar:", error.message);
-  });
+  for (const user of accounts.list()) {
+    if (user.id === "owner" || fs.existsSync(path.join(accounts.directory(user), "whatsapp-session", "creds.json"))) getTenant(user);
+  }
 });
 
 let shuttingDown = false;
@@ -1455,10 +1505,9 @@ let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
-  scheduler.stop();
   const forcedExit = setTimeout(() => process.exit(1), 8000);
   forcedExit.unref();
-  await whatsapp.shutdown().catch(() => undefined);
+  await shutdownTenants().catch(() => undefined);
   server.close(() => {
     clearTimeout(forcedExit);
     process.exit(0);
@@ -1467,5 +1516,6 @@ async function shutdown() {
 
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+}
 
-module.exports = { app, store, whatsapp, scheduler, authenticator, ai };
+module.exports = { app, accounts, getTenant, shutdownTenants };

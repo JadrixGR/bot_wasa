@@ -6,7 +6,6 @@ const crypto = require("node:crypto");
 const { createInitialData, defaultSettings } = require("./defaults");
 const {
   commandForItem,
-  configureCatalogSource,
   deriveRegistrationCommand,
   normalizeRegistrationCommand,
   reservedRegistrationCommands
@@ -43,8 +42,8 @@ function uniqueAuthenticatorCommand(baseCommand, usedCommands) {
   throw new Error("No se pudo crear un comando 2FA único.");
 }
 
-function migrateAuthenticatorCommands(accounts) {
-  const usedCommands = reservedRegistrationCommands();
+function migrateAuthenticatorCommands(accounts, catalog) {
+  const usedCommands = reservedRegistrationCommands(catalog);
   let changed = false;
   const migratedAccounts = accounts.map((account, index) => {
     let desiredCommand;
@@ -670,10 +669,6 @@ class JsonStore {
     );
     fs.mkdirSync(this.dataDir, { recursive: true });
     this.#createPreUpdateBackup();
-    configureCatalogSource(() => ({
-      products: this.data?.products,
-      plans: this.data?.plans
-    }));
     this.data = this.#load();
   }
 
@@ -763,10 +758,10 @@ class JsonStore {
             period: Number(account.period) || 30
           }))
       : [];
-    const authenticatorMigration = migrateAuthenticatorCommands(
-      normalizedAuthenticatorAccounts
-    );
     const catalogMigration = migrateCatalog(parsed, initial);
+    const authenticatorMigration = migrateAuthenticatorCommands(
+      normalizedAuthenticatorAccounts, catalogMigration
+    );
     const countryPriceBooksMigrated = !Array.isArray(parsed.countryPriceBooks);
     const adGreetingsMigrated = !Array.isArray(parsed.settings?.adGreetings);
     const welcomeSequencesMigrated =
@@ -1496,7 +1491,7 @@ class JsonStore {
   }
 
   #assertAuthenticatorCommandAvailable(command, exceptId = null) {
-    if (reservedRegistrationCommands().has(command)) {
+    if (reservedRegistrationCommands(this.data).has(command)) {
       throw new Error(
         `El comando ${command} ya está reservado para registrar clientes. Elige otro, por ejemplo ${command}01.`
       );

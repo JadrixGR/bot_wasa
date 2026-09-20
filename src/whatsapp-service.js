@@ -1711,7 +1711,7 @@ class WhatsAppService {
       return;
     }
 
-    const parsed = parseRegistrationCommand(body);
+    const parsed = parseRegistrationCommand(body, this.store.snapshot());
     if (!parsed.isCommand) return;
 
     if (!parsed.ok) {
@@ -2180,6 +2180,10 @@ class WhatsAppService {
       throw new Error("WhatsApp todavía no está conectado.");
     }
     const resolved = path.resolve(filePath);
+    const relative = path.relative(this.mediaDir, resolved);
+    if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error("El archivo no pertenece a este usuario.");
+    }
     if (!fs.existsSync(resolved)) throw new Error("El archivo solicitado no existe.");
 
     const socket = this.socket;

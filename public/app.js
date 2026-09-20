@@ -3,6 +3,7 @@
 const THEME_STORAGE_KEY = "jadrixservs-theme";
 
 const state = {
+  user: null,
   clients: [],
   settings: null,
   products: [],
@@ -140,6 +141,8 @@ async function api(url, options = {}) {
 }
 
 function showLogin() {
+  state.user = null;
+  document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close());
   $("#loginView").classList.remove("hidden");
   $("#appView").classList.add("hidden");
   document.body.classList.remove("app-active", "menu-open");
@@ -152,7 +155,14 @@ function showLogin() {
   state.loadedSections.clear();
 }
 
-async function showApp() {
+async function showApp(user) {
+  state.user = user;
+  $("#sessionUsername").textContent = user.username;
+  $("#sidebarUsername").textContent = user.username;
+  $("#sessionRole").textContent = user.role === "admin" ? "Administrador" : "Mi espacio";
+  $("#sessionAvatar").textContent = user.username.slice(0, 1).toUpperCase();
+  $("#usersNavButton").classList.toggle("hidden", user.role !== "admin");
+  updateActiveSection("dashboard");
   $("#loginView").classList.add("hidden");
   $("#appView").classList.remove("hidden");
   document.body.classList.add("app-active");
@@ -192,13 +202,15 @@ function updateActiveSection(section) {
     afk: "Modo AFK",
     catalog: "Catálogo y comandos",
     authenticator: "Autenticador",
-    activity: "Actividad"
+    activity: "Actividad",
+    users: "Usuarios"
   };
   $("#pageTitle").textContent = titles[section] || "JadrixServs";
 }
 
 function loadSectionData(section) {
   const reportError = (error) => showToast(error.message, true);
+  if (section === "users" && state.user?.role === "admin") loadUsers().catch(reportError);
   if (section === "clients" && !state.loadedSections.has("clients")) {
     loadClients().catch(reportError);
   }
@@ -231,6 +243,7 @@ function loadSectionData(section) {
 }
 
 function navigate(section) {
+  if (section === "users" && state.user?.role !== "admin") return;
   const currentSection = state.activeSection;
   const target = $(`#section-${section}`);
   if (!target) return;
@@ -2921,21 +2934,46 @@ async function refreshDashboardOnly() {
   renderWhatsApp(dashboard.whatsapp);
 }
 
+async function loadUsers() {
+  const users = await api("/api/admin/users");
+  $("#usersList").innerHTML = users.map(user => `
+    <div class="user-account-row">
+      <div><strong>${escapeHtml(user.username)}</strong><small>Creado: ${escapeHtml(formatDateTime(user.createdAt))}</small></div>
+      <span class="pill ${user.role === "admin" ? "blue" : "green"}">${user.role === "admin" ? "Administrador" : "Usuario"}</span>
+    </div>`).join("");
+}
+
 function bindEvents() {
   $$(`[data-theme-toggle]`).forEach((button) => button.addEventListener("click", toggleTheme));
   $("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     try {
-      await api("/api/auth/login", { method: "POST", body: { password: $("#loginPassword").value } });
-      $("#loginPassword").value = "";
-      await showApp();
+      await api("/api/auth/login", { method: "POST", body: {
+        username: $("#loginUsername").value, password: $("#loginPassword").value
+      } });
+      // A full reload clears all previous account data and pending requests.
+      window.location.reload();
     } catch (error) {
       showToast(error.message, true);
     }
   });
   $("#logoutButton").addEventListener("click", async () => {
     await api("/api/auth/logout", { method: "POST" });
-    showLogin();
+    window.location.reload();
+  });
+  $("#createUserForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = $("#createUserButton");
+    button.disabled = true;
+    try {
+      const user = await api("/api/admin/users", { method: "POST", body: {
+        username: $("#newUsername").value, password: $("#newUserPassword").value
+      } });
+      $("#createUserForm").reset();
+      await loadUsers();
+      showToast(`Usuario ${user.username} creado. Ya puede iniciar sesión y conectar su WhatsApp.`);
+    } catch (error) { showToast(error.message, true); }
+    finally { button.disabled = false; }
   });
   $$(".nav-button").forEach((button) => button.addEventListener("click", () => navigate(button.dataset.section)));
   $$("[data-go]").forEach((button) => button.addEventListener("click", () => navigate(button.dataset.go)));
@@ -3633,8 +3671,7 @@ async function init() {
   $("#clockText").textContent = date.charAt(0).toUpperCase() + date.slice(1);
   try {
     const session = await api("/api/auth/session");
-    $("#loginWarning").classList.toggle("hidden", !session.usingDefaultPassword);
-    if (session.authenticated) await showApp();
+    if (session.authenticated) await showApp(session.user);
     else showLogin();
   } catch (error) {
     showToast(error.message, true);

@@ -62,10 +62,10 @@ function commandForItem(item, itemType) {
   return deriveRegistrationCommand(item?.id || item?.name || itemType);
 }
 
-function readSourceCatalog() {
-  let source = null;
+function readSourceCatalog(catalog) {
+  let source = catalog;
   try {
-    source = catalogProvider ? catalogProvider() : null;
+    if (source === undefined) source = catalogProvider ? catalogProvider() : null;
   } catch {
     source = null;
   }
@@ -83,10 +83,10 @@ function readSourceCatalog() {
   ];
 }
 
-function resolveCatalog({ includeDisabled = false } = {}) {
+function resolveCatalog({ includeDisabled = false, catalog } = {}) {
   const seen = new Set();
   const entries = [];
-  for (const { item, itemType } of readSourceCatalog()) {
+  for (const { item, itemType } of readSourceCatalog(catalog)) {
     if (!item || typeof item !== "object") continue;
     const command = commandForItem(item, itemType);
     if (!command || seen.has(command)) continue;
@@ -104,9 +104,9 @@ function resolveCatalog({ includeDisabled = false } = {}) {
   return entries;
 }
 
-function reservedRegistrationCommands() {
+function reservedRegistrationCommands(catalog) {
   return new Set(
-    resolveCatalog({ includeDisabled: true }).map((entry) => entry.command)
+    resolveCatalog({ includeDisabled: true, catalog }).map((entry) => entry.command)
   );
 }
 
@@ -141,7 +141,7 @@ function getCommandCatalog() {
   }));
 }
 
-function parseRegistrationCommand(text) {
+function parseRegistrationCommand(text, catalog) {
   const raw = String(text || "").trim();
   if (!raw.startsWith("/")) return { isCommand: false, ok: false };
 
@@ -155,7 +155,7 @@ function parseRegistrationCommand(text) {
   }
 
   const command = `/${match[1].toLowerCase()}`;
-  const definition = resolveCatalog().find(
+  const definition = resolveCatalog({ catalog }).find(
     (entry) => entry.command === command
   );
   if (!definition) {

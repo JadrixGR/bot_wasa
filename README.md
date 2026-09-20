@@ -1,5 +1,22 @@
 # JadrixServs Bot V4.9.3 Profesional
 
+## Usuarios con espacios independientes
+
+El panel solicita **usuario y contraseña**. La cuenta administradora inicial es **JadrixGR**, con la contraseña acordada para esta instalación. Desde **Usuarios → Crear usuario**, el administrador puede dar acceso a otra persona. Cada cuenta nueva empieza sin clientes ni WhatsApp conectado; debe entrar con sus propias credenciales y vincular su teléfono desde **WhatsApp**.
+
+Cada usuario tiene sus propios clientes, compras, catálogo, mensajes, archivos, conversaciones, IA, autenticador, reportes y tareas automáticas. Cerrar la sesión del panel no desconecta su WhatsApp ni detiene sus recordatorios. Las claves de IA configuradas en variables de entorno solo se aplican al propietario; los demás usuarios deben configurar las suyas.
+
+### Actualizar sin perder los datos actuales
+
+- **JadrixGR conserva los datos existentes en su ubicación original**: `DATA_DIR/jadrixservs-v4.json`, `DATA_DIR/whatsapp-session` y `MEDIA_DIR`. No se trasladan ni vacían los clientes ni la conexión actual.
+- En el primer inicio se crea una copia `.pre-multiuser` de los archivos JSON existentes antes de cargar el espacio del propietario.
+- Los usuarios y contraseñas con hash y sal se guardan en `DATA_DIR/accounts.json`; cada espacio adicional se guarda en `DATA_DIR/tenants/<id>/`.
+- Conserva el disco persistente, `DATA_DIR`, `MEDIA_DIR`, `COOKIE_SECRET`, `AUTHENTICATOR_ENCRYPTION_KEY` y `GEMINI_ENCRYPTION_KEY` existentes. No borres `accounts.json` ni las carpetas de usuarios al desplegar.
+- Las sesiones del panel anteriores dejan de ser válidas. Después de un reinicio será necesario volver a ingresar; las credenciales de WhatsApp siguen guardadas.
+- `ADMIN_PASSWORD` ya no controla el acceso: cada usuario tiene su propia contraseña.
+
+El respaldo JSON descargado desde el panel corresponde únicamente al usuario conectado. Para respaldar toda la instalación también hay que conservar `accounts.json`, todas las carpetas del disco persistente y las claves de cifrado, fuera del repositorio.
+
 ## Bienvenidas distintas por anuncio
 
 En **Mensajes automáticos → Bienvenidas por anuncio** puedes crear una secuencia de 1 a 20 mensajes para cada campaña de Meta o Instagram. Cada mensaje puede incluir una imagen y un audio opcionales; el audio se envía como nota de voz antes del texto.
@@ -366,7 +383,6 @@ En **Render → tu servicio → Environment** revisa:
 
 | Variable | Valor recomendado |
 | --- | --- |
-| `ADMIN_PASSWORD` | Contraseña segura para el panel |
 | `COOKIE_SECRET` | Texto largo y secreto |
 | `AUTHENTICATOR_ENCRYPTION_KEY` | Clave larga, aleatoria y estable para cifrar las cuentas 2FA |
 | `GEMINI_ENCRYPTION_KEY` | Clave larga, aleatoria y estable para cifrar la API key guardada desde el panel |

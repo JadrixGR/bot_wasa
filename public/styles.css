@@ -5776,6 +5776,12 @@ html[data-theme="dark"] .welcome-audio-picker { background: rgba(13, 17, 34, 0.8
   .client-broadcast-progress > div { align-items: flex-start; flex-direction: column; gap: 0.25rem; }
 }
 
+.users-list { display: grid; gap: 0.75rem; }
+.user-account-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: 0.8rem; }
+.user-account-row strong, .user-account-row small { display: block; overflow-wrap: anywhere; }
+.user-account-row small { margin-top: 0.3rem; color: var(--muted); }
+#section-users .panel + .panel { margin-top: 1rem; }
+
 /* Selector de número o @usuario al copiar un contacto de WhatsApp. */
 .whatsapp-copy-dialog {
   width: min(34rem, calc(100vw - 2rem));
