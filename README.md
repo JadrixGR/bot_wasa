@@ -1,5 +1,15 @@
 # JadrixServs Bot V4.9.3 Profesional
 
+## Ventas, gastos y estado por fechas
+
+En **Ventas y finanzas**, selecciona **Desde** y **Hasta** (ambas fechas incluidas) y pulsa **Consultar periodo**. El panel muestra cantidad de ventas, ingresos, gastos y resultado por moneda. Puedes descargar el estado en CSV o usar **Imprimir / Guardar PDF**. El resultado es ingresos menos gastos registrados; incluye los costos de productos como gastos para reflejarlos. No convierte monedas ni calcula un balance de activos y deudas.
+
+- Cada compra nueva no pendiente y cada renovación genera un movimiento independiente. Las renovaciones usan la fecha de pago, aunque el servicio empiece después. Al activar un cliente pendiente se registra una sola venta.
+- En **Gastos → Registrar gasto** guarda fecha, concepto, importe, moneda y categoría: publicidad, costo de productos, comisiones, envíos, servicios u otros.
+- Puedes registrar ventas faltantes, corregir movimientos y anularlos o restaurarlos. Editar, archivar o eliminar clientes no modifica el historial financiero. Para corregir una venta usa su fila en **Ventas y finanzas**.
+- Al actualizar se recupera únicamente la última compra disponible de cada registro anterior no pendiente. Se marca como **Recuperado**; las renovaciones anteriores que fueron reemplazadas no pueden reconstruirse. Los importes sin moneda explícita o ambiguos quedan por completar y no se suman. Los registros sin fecha se muestran aparte para corregirlos.
+- Los movimientos se guardan dentro del JSON persistente de cada usuario, incluidos en sus respaldos. La sesión de WhatsApp, los clientes y las claves existentes conservan su ubicación. No se necesitan variables nuevas en Render.
+
 ## Usuarios con espacios independientes
 
 El panel solicita **usuario y contraseña**. La cuenta administradora inicial es **JadrixGR**, con la contraseña acordada para esta instalación. Desde **Usuarios → Crear usuario**, el administrador puede dar acceso a otra persona. Cada cuenta nueva empieza sin clientes ni WhatsApp conectado; debe entrar con sus propias credenciales y vincular su teléfono desde **WhatsApp**.
