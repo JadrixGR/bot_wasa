@@ -141,6 +141,7 @@ async function api(url, options = {}) {
 }
 
 function showLogin() {
+  resetFinance();
   state.user = null;
   document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close());
   $("#loginView").classList.remove("hidden");
@@ -195,6 +196,7 @@ function updateActiveSection(section) {
     dashboard: "Resumen",
     whatsapp: "WhatsApp",
     clients: "Clientes y cobros",
+    finance: "Ventas y finanzas",
     lookup: "Buscar celular",
     messages: "Mensajes automáticos",
     "ai-training": "IA y entrenamiento",
@@ -210,6 +212,7 @@ function updateActiveSection(section) {
 
 function loadSectionData(section) {
   const reportError = (error) => showToast(error.message, true);
+  if (section === "finance") loadFinance().catch(reportError);
   if (section === "users" && state.user?.role === "admin") loadUsers().catch(reportError);
   if (section === "clients" && !state.loadedSections.has("clients")) {
     loadClients().catch(reportError);
