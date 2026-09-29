@@ -11,6 +11,8 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
+    <script src="/finance.js" defer></script>
+    <link rel="stylesheet" href="/finance.css">
   </head>
   <body>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
@@ -125,6 +127,9 @@
             <span class="nav-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M16 20v-1.5c0-2-1.8-3.5-4-3.5H7c-2.2 0-4 1.5-4 3.5V20"/><circle cx="9.5" cy="8" r="3.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 15c1.8.3 3 1.6 3 3.3V20"/></svg>
             </span><span>Clientes y cobros</span>
+          </button>
+          <button class="nav-button" data-section="finance" type="button">
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h16M6 16V9m6 7V4m6 12v-5"/></svg></span><span>Ventas y finanzas</span>
           </button>
           <button class="nav-button" data-section="lookup" type="button">
             <span class="nav-icon" aria-hidden="true">
@@ -313,6 +318,48 @@
             Verificando que la sesión y la base de clientes estén protegidas por el disco persistente de Render…
           </div>
         </section>
+
+        <section id="section-finance" class="page-section">
+          <div class="section-intro"><div><p class="eyebrow">CONTROL DEL NEGOCIO</p><h2>Ventas y finanzas</h2><p class="muted">Consulta tus ventas, registra gastos y obtén el resultado del periodo.</p></div></div>
+          <article class="panel finance-controls">
+            <form id="financeFilter" class="finance-filter">
+              <label>Desde<input id="financeFrom" type="date" required></label>
+              <label>Hasta<input id="financeTo" type="date" required></label>
+              <button class="button primary" type="submit">Consultar periodo</button>
+              <button id="financeMonth" class="button secondary" type="button">Este mes</button>
+            </form>
+            <p class="microcopy">Ambas fechas están incluidas. <span id="financeTimezone"></span></p>
+            <div class="finance-actions"><a id="financeExport" class="button secondary hidden">Descargar estado CSV</a><button id="financePrint" class="button secondary" type="button" disabled>Imprimir / Guardar PDF</button></div>
+          </article>
+          <p id="financeMessage" role="status" aria-live="polite"></p>
+          <div id="financeReport" class="hidden">
+            <div class="finance-report-heading"><h3>Estado de ingresos y gastos</h3><p id="financePeriod"></p></div>
+            <div class="finance-stats">
+              <article class="panel"><span>Ventas realizadas</span><strong id="financeSalesCount">0</strong><small>Compras y renovaciones registradas</small></article>
+              <article class="panel"><span>Gastos registrados</span><strong id="financeExpenseCount">0</strong><small>En el periodo seleccionado</small></article>
+            </div>
+            <article class="panel"><h3>Resultado por moneda</h3><div class="table-wrap"><table><thead><tr><th>Moneda</th><th>Ingresos por ventas</th><th>Gastos</th><th>Resultado</th></tr></thead><tbody id="financeTotals"></tbody></table></div><p class="microcopy">Resultado = ingresos menos gastos registrados. Registra también el costo de los productos para reflejarlo en el resultado. Cada moneda se calcula por separado.</p></article>
+            <p id="financeWarnings" class="notice"></p>
+            <article class="panel finance-ledger"><div class="panel-heading"><h3>Ventas</h3><button id="financeAddSale" class="button secondary" type="button">+ Registrar venta</button></div><p class="microcopy">Las compras y renovaciones nuevas se registran automáticamente. Los clientes pendientes no cuentan hasta activarlos. Editar o eliminar un cliente no modifica su historial financiero; corrige o anula el movimiento aquí.</p><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Importe</th><th>Origen / estado</th><th class="finance-action-column">Acciones</th></tr></thead><tbody id="financeSales"></tbody></table></div></article>
+            <article class="panel finance-ledger"><div class="panel-heading"><h3>Gastos</h3><button id="financeAddExpense" class="button primary" type="button">+ Registrar gasto</button></div><p id="financeCategories" class="microcopy"></p><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto / categoría</th><th>Importe</th><th>Estado</th><th class="finance-action-column">Acciones</th></tr></thead><tbody id="financeExpenses"></tbody></table></div></article>
+            <article id="financeUndatedPanel" class="panel finance-ledger hidden"><h3>Registros sin fecha · fuera del reporte</h3><p class="microcopy">Completa estos movimientos para incluirlos en el periodo correspondiente.</p><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Importe</th><th>Estado</th><th class="finance-action-column">Acciones</th></tr></thead><tbody id="financeUndated"></tbody></table></div></article>
+            <p class="microcopy">El historial anterior contiene solo la última compra disponible de cada registro; no reconstruye renovaciones que el sistema ya había reemplazado. Los movimientos anulados se conservan y no se suman.</p>
+          </div>
+        </section>
+
+        <dialog id="financeDialog" class="finance-dialog">
+          <form id="financeEntryForm" class="stack">
+            <h2 id="financeDialogTitle">Registrar gasto</h2>
+            <input id="financeEntryId" type="hidden"><input id="financeEntryType" type="hidden">
+            <label>Fecha<input id="financeEntryDate" type="date" required></label>
+            <label>Concepto<input id="financeEntryDescription" maxlength="200" placeholder="Ej.: publicidad en Meta" required></label>
+            <div class="finance-form-row"><label>Importe<input id="financeEntryAmount" type="number" min="0.01" max="999999999.99" step="0.01" required></label><label>Moneda<select id="financeEntryCurrency" required><option value="">Seleccionar</option><option>PEN</option><option>USD</option><option>MXN</option><option>ARS</option><option>EUR</option><option>COP</option><option>CLP</option><option>BOB</option><option>BRL</option></select></label></div>
+            <label id="financeCategoryLabel">Categoría<select id="financeEntryCategory"><option>Publicidad</option><option>Costo de productos</option><option>Comisiones</option><option>Envíos</option><option>Servicios</option><option>Otros</option></select></label>
+            <label>Notas (opcional)<textarea id="financeEntryNotes" maxlength="1000" rows="3"></textarea></label>
+            <p id="financeEntryError" role="alert"></p>
+            <div class="finance-actions"><button id="financeSave" class="button primary" type="submit">Guardar movimiento</button><button id="financeCancel" class="button secondary" type="button">Cancelar</button></div>
+          </form>
+        </dialog>
 
         <section id="section-clients" class="page-section">
           <div class="section-intro">
