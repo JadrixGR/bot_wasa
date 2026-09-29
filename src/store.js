@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { initialFinance, saleFromClient, normalizeEntry, financialReport } = require("./finance");
 const { createInitialData, defaultSettings } = require("./defaults");
 const {
   commandForItem,
@@ -670,6 +671,7 @@ class JsonStore {
     fs.mkdirSync(this.dataDir, { recursive: true });
     this.#createPreUpdateBackup();
     this.data = this.#load();
+    if (!this.data.finance) { this.data.finance = initialFinance(this.data); this.save(); }
   }
 
 
@@ -894,6 +896,7 @@ class JsonStore {
       authenticatorAccess: normalizedAuthenticatorAccess,
       authenticatorUsage: normalizedAuthenticatorUsage,
       quickReplies: normalizedQuickReplies,
+      finance: initialFinance(parsed),
       products: catalogMigration.products,
       plans: catalogMigration.plans,
       catalogVersion: CATALOG_VERSION,
@@ -1025,6 +1028,7 @@ class JsonStore {
     return {
       data: migrated,
       isUpgrade:
+        !parsed.finance ||
         isVersionUpgrade ||
         authenticatorMigration.changed ||
         countryGreetingsMigrated ||
@@ -1060,6 +1064,31 @@ class JsonStore {
 
   snapshot() {
     return structuredClone(this.data);
+  }
+
+  financialReport(filters) {
+    return structuredClone(financialReport(this.data.finance, filters));
+  }
+
+  saveFinancialEntry(input, id = null) {
+    const entries = this.data.finance.entries;
+    const previous = id ? entries.find(entry => entry.id === id) : null;
+    if (id && !previous) throw new Error("Movimiento no encontrado.");
+    const entry = normalizeEntry(input, previous);
+    if (previous) entries[entries.indexOf(previous)] = entry;
+    else entries.push(entry);
+    this.save();
+    return structuredClone(entry);
+  }
+
+  setFinancialEntryVoided(id, voided) {
+    if (typeof voided !== "boolean") throw new Error("Estado del movimiento inválido.");
+    const entry = this.data.finance.entries.find(item => item.id === id);
+    if (!entry) throw new Error("Movimiento no encontrado.");
+    entry.voided = voided;
+    entry.updatedAt = new Date().toISOString();
+    this.save();
+    return structuredClone(entry);
   }
 
   restoreSnapshot(snapshot) {
@@ -2565,12 +2594,13 @@ class JsonStore {
       autoCharge: input.autoCharge === undefined ? false : input.autoCharge
     });
     this.data.clients.push(client);
+    if (client.status !== "pendiente") this.data.finance.entries.push(saleFromClient(client));
     this.addLog("client", `Cliente registrado: ${client.name}`, { clientId: client.id });
     this.save();
     return structuredClone(client);
   }
 
-  updateClient(id, input) {
+  updateClient(id, input, { renewalDate } = {}) {
     const index = this.data.clients.findIndex((client) => client.id === id);
     if (index === -1) throw new Error("Cliente no encontrado.");
 
@@ -2600,6 +2630,12 @@ class JsonStore {
       updatedAt: new Date().toISOString()
     });
     this.data.clients[index] = updated;
+    if (renewalDate) {
+      this.data.finance.entries.push(saleFromClient(updated, { source: "renovacion", date: renewalDate }));
+    } else if (current.status === "pendiente" && updated.status === "activo" &&
+      !this.data.finance.entries.some(entry => entry.clientId === id && entry.type === "sale")) {
+      this.data.finance.entries.push(saleFromClient(updated, { date: updated.lastPaymentDate || todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima") }));
+    }
     this.addLog("client", `Cliente actualizado: ${updated.name}`, { clientId: id });
     this.save();
     return structuredClone(updated);
@@ -2665,7 +2701,7 @@ class JsonStore {
       lastReminderKey: null,
       lastChargeKey: null,
       durationDays: null
-    });
+    }, { renewalDate: paidOn });
   }
 
   #normalizeClient(input) {

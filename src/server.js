@@ -8,6 +8,7 @@ const helmet = require("helmet");
 const cookieSession = require("cookie-session");
 const { Accounts } = require("./accounts");
 const { version: appVersion } = require("../package.json");
+const { reportCsv } = require("./finance");
 const {
   JsonStore,
   clientWhatsAppTarget,
@@ -1358,6 +1359,31 @@ app.get("/api/export/clients.csv", requireAuth, (_req, res) => {
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", 'attachment; filename="clientes-jadrixservs.csv"');
   res.send(`\uFEFF${csv}`);
+});
+
+app.get("/api/finance", requireAuth, (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(store.financialReport(req.query));
+});
+
+app.get("/api/finance/export.csv", requireAuth, (req, res) => {
+  const report = store.financialReport(req.query);
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Content-Disposition", `attachment; filename="estado-financiero-${report.from}-${report.to}.csv"`);
+  res.send(reportCsv(report));
+});
+
+app.post("/api/finance/entries", requireAuth, (req, res) => {
+  res.status(201).json(store.saveFinancialEntry(req.body));
+});
+
+app.put("/api/finance/entries/:id", requireAuth, (req, res) => {
+  res.json(store.saveFinancialEntry(req.body, req.params.id));
+});
+
+app.patch("/api/finance/entries/:id/void", requireAuth, (req, res) => {
+  res.json(store.setFinancialEntryVoided(req.params.id, req.body.voided));
 });
 
 app.get("/api/backup/data.json", requireAuth, (_req, res) => {
