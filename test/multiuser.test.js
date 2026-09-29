@@ -75,6 +75,22 @@ test("usuarios independientes conservan la base anterior y aíslan todos los acc
     });
     const ownerTenant = getTenant(owner.payload.user);
     const otherTenant = getTenant(other.payload.user);
+    await t.test("finanzas requieren sesión y aíslan reportes, ediciones y exportaciones", async () => {
+      assert.equal((await request("/api/finance")).status, 401);
+      assert.equal((await request("/api/finance/export.csv")).status, 401);
+      const expense = await request("/api/finance/entries", { cookie: a, method: "POST", body: { type: "expense", date: "2026-09-20", amount: "12.50", currency: "PEN", category: "Publicidad", description: "Campaña privada A" } });
+      assert.equal(expense.status, 201);
+      const query = "?from=2026-09-01&to=2026-09-30";
+      assert.equal((await request(`/api/finance${query}`, { cookie: a })).payload.expenseCount, 1);
+      assert.equal((await request(`/api/finance${query}&tenantId=owner`, { cookie: b })).payload.expenseCount, 0);
+      assert.equal((await request(`/api/finance/entries/${expense.payload.id}`, { cookie: b, method: "PUT", body: {} })).status, 404);
+      assert.equal((await request(`/api/finance/entries/${expense.payload.id}/void`, { cookie: b, method: "PATCH", body: { voided: true } })).status, 404);
+      assert.equal((await request("/api/finance?from=2026-02-30&to=2026-09-30", { cookie: a })).status, 400);
+      assert.match((await request(`/api/finance/export.csv${query}`, { cookie: a })).payload, /Campaña privada A/);
+      assert.doesNotMatch((await request(`/api/finance/export.csv${query}`, { cookie: b })).payload, /Campaña privada A/);
+      const invalid = await request("/api/finance/entries", { cookie: a, method: "POST", body: { type: "expense", date: "2026-09-20", amount: "-10", currency: "PEN", description: "Inválido" } });
+      assert.equal(invalid.status, 400);
+    });
     await t.test("clientes, WhatsApp, claves e instancias son propios de cada cuenta", async () => {
       assert.equal((await request("/api/clients", { cookie: a })).payload[0].id, ownerClient.id);
       assert.deepEqual((await request("/api/clients?tenantId=owner", { cookie: b })).payload, []);
