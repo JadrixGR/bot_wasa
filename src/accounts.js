@@ -45,6 +45,19 @@ class Accounts {
 
   list() { return this.users.map(publicUser); }
 
+  ensureDicloak(passwordHash) {
+    const existing = this.users.find(user => user.username.toLowerCase() === "dicloak");
+    if (existing) {
+      if (existing.role !== "dicloak") throw new Error("Ya existe otro usuario llamado Dicloak; revisa su cuenta antes de configurarlo.");
+      return publicUser(existing);
+    }
+    if (!/^[a-f0-9]{32}:[a-f0-9]{128}$/.test(passwordHash || "")) throw new Error("Configura un hash scrypt válido para crear la cuenta Dicloak.");
+    const user = { id: crypto.randomUUID(), username: "Dicloak", role: "dicloak", passwordHash, createdAt: new Date().toISOString() };
+    this.users.push(user);
+    try { this.save(); } catch (error) { this.users.pop(); throw error; }
+    return publicUser(user);
+  }
+
   directory(user) {
     if (user.id === "owner") return this.dataDir;
     if (!/^[a-f0-9-]{36}$/.test(user.id)) throw new Error("Identificador de usuario inválido.");

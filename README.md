@@ -1,5 +1,23 @@
 # JadrixServs Bot V4.9.3 Profesional
 
+## Pago a Dicloak
+
+El apartado **Pago a Dicloak** registra un aporte fijo en soles por cada venta y renovación de los productos configurados. La venta conserva el importe cobrado y genera un gasto vinculado **Pago a Dicloak**. El panel muestra la ganancia después del aporte y el resultado después de todos los gastos, sin descontar Dicloak dos veces.
+
+| Producto | Precio | Aporte a Dicloak | Ganancia |
+| --- | ---: | ---: | ---: |
+| ChatGPT Pro | S/45 | S/20 | S/25 |
+| Plan Pro | S/50 | S/20 | S/30 |
+| Plan Max | S/60 | S/30 | S/30 |
+
+El administrador puede agregar productos, editar precios y aportes o desactivarlos. Los precios se sincronizan con el catálogo y la tabla de Perú de todos los vendedores; los precios de otras monedas y los importes ya cobrados se conservan. Las ventas manuales reconocen el nombre del producto y sus nombres alternativos. Los clientes pendientes generan su aporte al activarse. Anular o restaurar una venta actualiza también el gasto y el ingreso de Dicloak. Los gastos automáticos se corrigen desde su venta.
+
+El administrador y la cuenta con rol `dicloak` consultan el resumen por usuario y fechas de todos los vendedores. Los vendedores normales ven sus propios aportes. Dicloak solo puede leer este resumen: no tiene bot, clientes, autenticador, claves, respaldos ni permisos de edición. El resumen no incluye nombres o teléfonos de clientes.
+
+La función comienza con nuevas ventas; no cobra aportes retroactivos. Cambiar una tarifa no recalcula el historial. Se conservan los importes en céntimos, en el JSON de cada vendedor; `DATA_DIR/dicloak.json` guarda las tarifas comunes. Incluye ese archivo y `accounts.json` al respaldar toda la instalación. No se transfieren fondos ni se marca una liquidación bancaria.
+
+Para crear la cuenta Dicloak en una instalación existente, configura `DICLOAK_PASSWORD_HASH` en Render con un hash scrypt de la contraseña elegida, en formato `sal_hex_de_16_bytes:hash_hex_de_64_bytes`. El primer arranque crea la cuenta en el disco persistente. Los arranques posteriores no reemplazan su contraseña; la variable puede retirarse tras crearla. No incluyas la contraseña ni su hash real en el repositorio. Conserva el disco `/data` y las claves existentes.
+
 ## Ventas, gastos y estado por fechas
 
 En **Ventas y finanzas**, selecciona **Desde** y **Hasta** (ambas fechas incluidas) y pulsa **Consultar periodo**. El panel muestra cantidad de ventas, ingresos, gastos y resultado por moneda. Puedes descargar el estado en CSV o usar **Imprimir / Guardar PDF**. El resultado es ingresos menos gastos registrados; incluye los costos de productos como gastos para reflejarlos. No convierte monedas ni calcula un balance de activos y deudas.

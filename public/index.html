@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="/styles.css">
     <script src="/app.js" defer></script>
     <script src="/finance.js" defer></script>
+    <script src="/dicloak.js" defer></script>
     <link rel="stylesheet" href="/finance.css">
   </head>
   <body>
@@ -130,6 +131,9 @@
           </button>
           <button class="nav-button" data-section="finance" type="button">
             <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h16M6 16V9m6 7V4m6 12v-5"/></svg></span><span>Ventas y finanzas</span>
+          </button>
+          <button class="nav-button" data-section="dicloak" type="button">
+            <span class="nav-icon" aria-hidden="true">S/</span><span>Pago a Dicloak</span>
           </button>
           <button class="nav-button" data-section="lookup" type="button">
             <span class="nav-icon" aria-hidden="true">
@@ -319,6 +323,43 @@
           </div>
         </section>
 
+        <section id="section-dicloak" class="page-section">
+          <div class="section-heading"><div><h2>Ingresos de Dicloak</h2><p id="dicloakScope" class="muted">Aportes por venta de los usuarios vinculados.</p></div></div>
+          <article class="panel">
+            <form id="dicloakFilter" class="finance-filter">
+              <label>Desde<input id="dicloakFrom" type="date" required></label>
+              <label>Hasta<input id="dicloakTo" type="date" required></label>
+              <button class="button primary" type="submit">Consultar</button>
+              <button id="dicloakMonth" class="button secondary" type="button">Este mes</button>
+            </form>
+            <p class="microcopy">Aportes fijos en soles por cada venta o renovación. Se registran como gasto automático del vendedor. Este registro no realiza transferencias de dinero.</p>
+          </article>
+          <p id="dicloakMessage" role="status" aria-live="polite"></p>
+          <div id="dicloakReport" class="hidden">
+            <div class="finance-stats">
+              <article class="panel"><span>Ingresos de Dicloak</span><strong id="dicloakTotal">S/0.00</strong><small id="dicloakPeriod"></small></article>
+              <article class="panel"><span>Ventas con aporte</span><strong id="dicloakCount">0</strong><small>Las ventas anuladas quedan excluidas</small></article>
+            </div>
+            <article class="panel"><h3>Aportes por usuario</h3><div class="table-wrap"><table><thead><tr><th>Usuario</th><th>Ventas</th><th>Ingreso de Dicloak</th></tr></thead><tbody id="dicloakUsers"></tbody></table></div></article>
+            <article class="panel"><h3>Detalle de ingresos</h3><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Producto</th><th>Aporte</th></tr></thead><tbody id="dicloakEntries"></tbody></table></div><p class="microcopy">Solo se incluyen aportes registrados desde la activación de esta función. No se aplican cargos a ventas anteriores.</p></article>
+            <article class="panel"><div class="panel-heading"><h3>Productos y aportes</h3><button id="dicloakAdd" class="button primary hidden" type="button">+ Agregar producto</button></div><p class="microcopy">Los precios y aportes se comparten entre los vendedores. Los cambios se aplican a ventas futuras; cada venta conserva el aporte con el que fue registrada.</p><div class="table-wrap"><table><thead><tr><th>Producto</th><th>Precio</th><th>Para Dicloak</th><th>Ganancia por venta</th><th>Estado / acciones</th></tr></thead><tbody id="dicloakRules"></tbody></table></div></article>
+          </div>
+        </section>
+        <dialog id="dicloakDialog" class="finance-dialog">
+          <form id="dicloakRuleForm" class="stack">
+            <h2 id="dicloakDialogTitle">Producto y aporte</h2>
+            <input id="dicloakRuleId" type="hidden">
+            <label>Nombre del producto<input id="dicloakName" maxlength="100" required></label>
+            <label>Otros nombres del mismo producto (separados por comas)<input id="dicloakAliases" maxlength="1500" placeholder="Ej.: Chat GPT Pro, GPT Pro"></label>
+            <label>Tipo<select id="dicloakItemType"><option value="product">Producto</option><option value="plan">Plan</option></select></label>
+            <div class="finance-form-row"><label>Precio de venta (S/)<input id="dicloakPrice" type="number" min="0.01" max="999999999.99" step="0.01" required></label><label>Pago a Dicloak (S/)<input id="dicloakContribution" type="number" min="0.01" max="999999999.99" step="0.01" required></label></div>
+            <p id="dicloakProfit" aria-live="polite"></p>
+            <label class="check-row"><input id="dicloakEnabled" type="checkbox" checked> Aplicar aporte a las nuevas ventas</label>
+            <p id="dicloakError" role="alert"></p>
+            <div class="finance-actions"><button id="dicloakSave" class="button primary" type="submit">Guardar</button><button id="dicloakCancel" class="button secondary" type="button">Cancelar</button></div>
+          </form>
+        </dialog>
+
         <section id="section-finance" class="page-section">
           <div class="section-intro"><div><p class="eyebrow">CONTROL DEL NEGOCIO</p><h2>Ventas y finanzas</h2><p class="muted">Consulta tus ventas, registra gastos y obtén el resultado del periodo.</p></div></div>
           <article class="panel finance-controls">
@@ -338,7 +379,7 @@
               <article class="panel"><span>Ventas realizadas</span><strong id="financeSalesCount">0</strong><small>Compras y renovaciones registradas</small></article>
               <article class="panel"><span>Gastos registrados</span><strong id="financeExpenseCount">0</strong><small>En el periodo seleccionado</small></article>
             </div>
-            <article class="panel"><h3>Resultado por moneda</h3><div class="table-wrap"><table><thead><tr><th>Moneda</th><th>Ingresos por ventas</th><th>Gastos</th><th>Resultado</th></tr></thead><tbody id="financeTotals"></tbody></table></div><p class="microcopy">Resultado = ingresos menos gastos registrados. Registra también el costo de los productos para reflejarlo en el resultado. Cada moneda se calcula por separado.</p></article>
+            <article class="panel"><h3>Resultado por moneda</h3><div class="table-wrap"><table><thead><tr><th>Moneda</th><th>Cobrado por ventas</th><th>Pago a Dicloak</th><th>Ganancia tras Dicloak</th><th>Gastos totales</th><th>Resultado final</th></tr></thead><tbody id="financeTotals"></tbody></table></div><p class="microcopy">Ganancia tras Dicloak = cobrado menos aportes. Resultado final = cobrado menos todos los gastos, incluyendo Dicloak una sola vez. Cada moneda se calcula por separado.</p></article>
             <p id="financeWarnings" class="notice"></p>
             <article class="panel finance-ledger"><div class="panel-heading"><h3>Ventas</h3><button id="financeAddSale" class="button secondary" type="button">+ Registrar venta</button></div><p class="microcopy">Las compras y renovaciones nuevas se registran automáticamente. Los clientes pendientes no cuentan hasta activarlos. Editar o eliminar un cliente no modifica su historial financiero; corrige o anula el movimiento aquí.</p><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Importe</th><th>Origen / estado</th><th class="finance-action-column">Acciones</th></tr></thead><tbody id="financeSales"></tbody></table></div></article>
             <article class="panel finance-ledger"><div class="panel-heading"><h3>Gastos</h3><button id="financeAddExpense" class="button primary" type="button">+ Registrar gasto</button></div><p id="financeCategories" class="microcopy"></p><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto / categoría</th><th>Importe</th><th>Estado</th><th class="finance-action-column">Acciones</th></tr></thead><tbody id="financeExpenses"></tbody></table></div></article>
@@ -352,7 +393,7 @@
             <h2 id="financeDialogTitle">Registrar gasto</h2>
             <input id="financeEntryId" type="hidden"><input id="financeEntryType" type="hidden">
             <label>Fecha<input id="financeEntryDate" type="date" required></label>
-            <label>Concepto<input id="financeEntryDescription" maxlength="200" placeholder="Ej.: publicidad en Meta" required></label>
+            <datalist id="financeProducts"></datalist><label>Concepto / producto<input id="financeEntryDescription" maxlength="200" placeholder="Ej.: publicidad en Meta" required></label>
             <div class="finance-form-row"><label>Importe<input id="financeEntryAmount" type="number" min="0.01" max="999999999.99" step="0.01" required></label><label>Moneda<select id="financeEntryCurrency" required><option value="">Seleccionar</option><option>PEN</option><option>USD</option><option>MXN</option><option>ARS</option><option>EUR</option><option>COP</option><option>CLP</option><option>BOB</option><option>BRL</option></select></label></div>
             <label id="financeCategoryLabel">Categoría<select id="financeEntryCategory"><option>Publicidad</option><option>Costo de productos</option><option>Comisiones</option><option>Envíos</option><option>Servicios</option><option>Otros</option></select></label>
             <label>Notas (opcional)<textarea id="financeEntryNotes" maxlength="1000" rows="3"></textarea></label>

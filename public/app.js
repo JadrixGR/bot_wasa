@@ -8,6 +8,7 @@ const state = {
   settings: null,
   products: [],
   plans: [],
+  dicloakRules: [],
   lookupClients: [],
   authenticatorAccounts: [],
   catalog: [],
@@ -142,6 +143,7 @@ async function api(url, options = {}) {
 
 function showLogin() {
   resetFinance();
+  resetDicloak();
   state.user = null;
   document.querySelectorAll("dialog[open]").forEach(dialog => dialog.close());
   $("#loginView").classList.remove("hidden");
@@ -160,13 +162,21 @@ async function showApp(user) {
   state.user = user;
   $("#sessionUsername").textContent = user.username;
   $("#sidebarUsername").textContent = user.username;
-  $("#sessionRole").textContent = user.role === "admin" ? "Administrador" : "Mi espacio";
+  $("#sessionRole").textContent = user.role === "admin" ? "Administrador" : user.role === "dicloak" ? "Ingresos de Dicloak" : "Mi espacio";
   $("#sessionAvatar").textContent = user.username.slice(0, 1).toUpperCase();
   $("#usersNavButton").classList.toggle("hidden", user.role !== "admin");
-  updateActiveSection("dashboard");
+  $$(".nav-button").forEach(button => button.classList.toggle("hidden", user.role === "dicloak" ? button.dataset.section !== "dicloak" : button.dataset.section === "users" && user.role !== "admin"));
+  $$(".nav-caption").forEach(label => label.classList.toggle("hidden", user.role === "dicloak"));
+  updateActiveSection(user.role === "dicloak" ? "dicloak" : "dashboard");
   $("#loginView").classList.add("hidden");
   $("#appView").classList.remove("hidden");
   document.body.classList.add("app-active");
+  clearInterval(state.poller);
+  if (user.role === "dicloak") {
+    $("#sidebarStatusText").textContent = "Ingresos compartidos";
+    await loadDicloak();
+    return;
+  }
   await refreshAll();
   clearInterval(state.poller);
   state.poller = setInterval(refreshWhatsAppStatus, 4000);
@@ -197,6 +207,7 @@ function updateActiveSection(section) {
     whatsapp: "WhatsApp",
     clients: "Clientes y cobros",
     finance: "Ventas y finanzas",
+    dicloak: "Pago a Dicloak",
     lookup: "Buscar celular",
     messages: "Mensajes automáticos",
     "ai-training": "IA y entrenamiento",
@@ -213,6 +224,7 @@ function updateActiveSection(section) {
 function loadSectionData(section) {
   const reportError = (error) => showToast(error.message, true);
   if (section === "finance") loadFinance().catch(reportError);
+  if (section === "dicloak") loadDicloak().catch(reportError);
   if (section === "users" && state.user?.role === "admin") loadUsers().catch(reportError);
   if (section === "clients" && !state.loadedSections.has("clients")) {
     loadClients().catch(reportError);
@@ -246,6 +258,7 @@ function loadSectionData(section) {
 }
 
 function navigate(section) {
+  if (state.user?.role === "dicloak" && section !== "dicloak") return;
   if (section === "users" && state.user?.role !== "admin") return;
   const currentSection = state.activeSection;
   const target = $(`#section-${section}`);
@@ -1790,7 +1803,9 @@ function openRenewDialog(client) {
   $("#renewClientId").value = client.id;
   $("#renewPaymentDate").value = today();
   $("#renewTermMonths").value = String(client.termMonths || 1);
-  $("#renewPrice").value = client.price || "";
+  const key = value => String(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const rule = state.dicloakRules.find(r => [r.name, ...r.aliases].some(name => key(name) === key(client.product)));
+  $("#renewPrice").value = rule && (!client.price || /^(S\/\.?|PEN)\s*\d/i.test(client.price)) ? `S/${(rule.priceMinor / 100).toFixed(2)}` : client.price || "";
   $("#renewPaymentMethod").value = client.paymentMethod || "";
   $("#renewAccountReference").value = client.accountReference || "";
   $("#renewDialog").showModal();
@@ -2787,6 +2802,7 @@ async function loadSettings() {
   state.settings = payload.settings;
   state.products = payload.products;
   state.plans = payload.plans;
+  state.dicloakRules = payload.dicloakRules || [];
   state.knowledgeBase = payload.knowledgeBase || [];
   state.countryPriceBooks = payload.countryPriceBooks || [];
   state.aiStatus = payload.ai || null;
@@ -2942,7 +2958,7 @@ async function loadUsers() {
   $("#usersList").innerHTML = users.map(user => `
     <div class="user-account-row">
       <div><strong>${escapeHtml(user.username)}</strong><small>Creado: ${escapeHtml(formatDateTime(user.createdAt))}</small></div>
-      <span class="pill ${user.role === "admin" ? "blue" : "green"}">${user.role === "admin" ? "Administrador" : "Usuario"}</span>
+      <span class="pill ${user.role === "admin" ? "blue" : "green"}">${user.role === "admin" ? "Administrador" : user.role === "dicloak" ? "Ingresos de Dicloak" : "Usuario"}</span>
     </div>`).join("");
 }
 

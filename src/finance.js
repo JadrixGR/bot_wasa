@@ -77,10 +77,12 @@ function financialReport(finance, { from, to } = {}) {
   const totals = new Map();
   for (const entry of active) {
     if (!CURRENCIES.includes(entry.currency) || !Number.isSafeInteger(entry.amountMinor) || entry.amountMinor <= 0) continue;
-    if (!totals.has(entry.currency)) totals.set(entry.currency, { currency: entry.currency, salesCount: 0, incomeMinor: 0, expenseMinor: 0, balanceMinor: 0, categories: {} });
+    if (!totals.has(entry.currency)) totals.set(entry.currency, { currency: entry.currency, salesCount: 0, incomeMinor: 0, expenseMinor: 0, dicloakMinor: 0, netSalesMinor: 0, balanceMinor: 0, categories: {} });
     const total = totals.get(entry.currency);
     if (entry.type === "sale") { total.incomeMinor += entry.amountMinor; total.salesCount++; }
     else { total.expenseMinor += entry.amountMinor; total.categories[entry.category] = (total.categories[entry.category] || 0) + entry.amountMinor; }
+    if (entry.source === "dicloak") total.dicloakMinor += entry.amountMinor;
+    total.netSalesMinor = total.incomeMinor - total.dicloakMinor;
     total.balanceMinor = total.incomeMinor - total.expenseMinor;
   }
   const needsReview = e => !e.voided && (!validDate(e.date) || !CURRENCIES.includes(e.currency) || !Number.isSafeInteger(e.amountMinor) || e.amountMinor <= 0);
@@ -105,8 +107,8 @@ function reportCsv(report) {
     ["Registros recuperados", report.recoveredCount],
     ["Importes por revisar (excluidos de totales)", report.reviewCount],
     ["Sin fecha (fuera del periodo)", report.undatedEntries.length],
-    ["Moneda", "Ventas", "Ingresos", "Gastos", "Resultado"],
-    ...report.totals.map(t => [t.currency, t.salesCount, (t.incomeMinor / 100).toFixed(2), (t.expenseMinor / 100).toFixed(2), (t.balanceMinor / 100).toFixed(2)]),
+    ["Moneda", "Ventas", "Ingresos cobrados", "Pago a Dicloak", "Ganancia tras Dicloak", "Gastos totales", "Resultado"],
+    ...report.totals.map(t => [t.currency, t.salesCount, (t.incomeMinor / 100).toFixed(2), (t.dicloakMinor / 100).toFixed(2), (t.netSalesMinor / 100).toFixed(2), (t.expenseMinor / 100).toFixed(2), (t.balanceMinor / 100).toFixed(2)]),
     [], ["Fecha", "Tipo", "Concepto", "Categoría", "Moneda", "Importe", "Estado", "Origen", "Notas"],
     ...report.entries.map(e => [e.date, e.type === "sale" ? "Venta" : "Gasto", e.description, e.category, e.currency, e.amountMinor === null ? "" : (e.amountMinor / 100).toFixed(2), e.voided ? "Anulado" : e.amountMinor === null || !e.currency ? "Revisar" : "Registrado", e.source, e.notes]),
     [], ["Resultado = ingresos menos gastos registrados. Incluye solo los datos disponibles; no reconstruye renovaciones anteriores ni convierte monedas."]
