@@ -21,7 +21,11 @@ function financeMoney(minor, currency) {
 function financeRows(entries) {
   if (!entries.length) return '<tr><td colspan="5">No hay movimientos en este periodo.</td></tr>';
   const origins = { recuperado: "Recuperado", renovacion: "Renovación", registro: "Compra", manual: "Manual" };
-  return entries.map(e => `<tr class="${e.voided ? "finance-voided" : ""}"><td>${escapeHtml(e.date || "Sin fecha")}</td><td>${escapeHtml(e.description)}${e.type === "expense" ? `<small>${escapeHtml(e.category)}</small>` : ""}</td><td>${e.amountMinor === null || !e.currency ? "Por completar" : escapeHtml(financeMoney(e.amountMinor, e.currency))}</td><td>${escapeHtml(origins[e.source] || e.source)} · ${e.voided ? "Anulado" : e.amountMinor === null || !e.currency || !e.date ? "Revisar" : "Registrado"}</td><td class="finance-action-column"><button class="button secondary small" type="button" data-finance-edit="${escapeHtml(e.id)}">Editar</button> <button class="button secondary small" type="button" data-finance-void="${escapeHtml(e.id)}">${e.voided ? "Restaurar" : "Anular"}</button></td></tr>`).join("");
+  return entries.map(e => {
+    const split = e.type === "sale" && e.dicloak ? `<small>Pago a Dicloak: ${escapeHtml(financeMoney(e.dicloak.amountMinor, e.currency))}</small><small><strong>Ganancia: ${escapeHtml(financeMoney(e.amountMinor - e.dicloak.amountMinor, e.currency))}</strong></small>` : "";
+    const actions = e.source === "dicloak" ? "Se modifica desde la venta" : `<button class="button secondary small" type="button" data-finance-edit="${escapeHtml(e.id)}">Editar</button> <button class="button secondary small" type="button" data-finance-void="${escapeHtml(e.id)}">${e.voided ? "Restaurar" : "Anular"}</button>`;
+    return `<tr class="${e.voided ? "finance-voided" : ""}"><td>${escapeHtml(e.date || "Sin fecha")}</td><td>${escapeHtml(e.description)}${e.type === "expense" ? `<small>${escapeHtml(e.category)}</small>` : ""}</td><td>${e.amountMinor === null || !e.currency ? "Por completar" : escapeHtml(financeMoney(e.amountMinor, e.currency))}${split}</td><td>${escapeHtml(e.source === "dicloak" ? "Automático" : origins[e.source] || e.source)} · ${e.voided ? "Anulado" : e.amountMinor === null || !e.currency || !e.date ? "Revisar" : "Registrado"}</td><td class="finance-action-column">${actions}</td></tr>`;
+  }).join("");
 }
 
 async function loadFinance({ defaults = false } = {}) {
@@ -45,7 +49,8 @@ async function loadFinance({ defaults = false } = {}) {
     $("#financePeriod").textContent = `Del ${report.from} al ${report.to} · ${state.user.username}`;
     $("#financeSalesCount").textContent = report.salesCount;
     $("#financeExpenseCount").textContent = report.expenseCount;
-    $("#financeTotals").innerHTML = report.totals.length ? report.totals.map(t => `<tr><td>${escapeHtml(t.currency)}</td><td>${escapeHtml(financeMoney(t.incomeMinor, t.currency))}</td><td>${escapeHtml(financeMoney(t.expenseMinor, t.currency))}</td><td><strong>${escapeHtml(financeMoney(t.balanceMinor, t.currency))}</strong></td></tr>`).join("") : '<tr><td colspan="4">Sin importes confirmados para este periodo.</td></tr>';
+    $("#financeTotals").innerHTML = report.totals.length ? report.totals.map(t => `<tr><td>${escapeHtml(t.currency)}</td><td>${escapeHtml(financeMoney(t.incomeMinor, t.currency))}</td><td>${escapeHtml(financeMoney(t.dicloakMinor, t.currency))}</td><td><strong>${escapeHtml(financeMoney(t.netSalesMinor, t.currency))}</strong></td><td>${escapeHtml(financeMoney(t.expenseMinor, t.currency))}</td><td><strong>${escapeHtml(financeMoney(t.balanceMinor, t.currency))}</strong></td></tr>`).join("") : '<tr><td colspan="6">Sin importes confirmados para este periodo.</td></tr>';
+    $("#financeProducts").innerHTML = (report.dicloakRules || []).filter(r => r.enabled).map(r => `<option value="${escapeHtml(r.name)}"></option>`).join("");
     $("#financeWarnings").textContent = `${report.recoveredCount} venta(s) recuperada(s) del historial anterior. ${report.reviewCount} movimiento(s) con importe o moneda por completar: cuentan como registros, pero no se suman. ${report.undatedEntries.length} registro(s) sin fecha, fuera del periodo.`;
     $("#financeSales").innerHTML = financeRows(report.entries.filter(e => e.type === "sale"));
     $("#financeExpenses").innerHTML = financeRows(report.entries.filter(e => e.type === "expense"));
@@ -70,6 +75,7 @@ function openFinanceEntry(type, entry = null) {
   $("#financeDialogTitle").textContent = `${entry ? "Editar" : "Registrar"} ${type === "sale" ? "venta" : "gasto"}`;
   $("#financeEntryDate").value = entry?.date || financeReport?.today || "";
   $("#financeEntryDescription").value = entry?.description || "";
+  $("#financeEntryDescription").setAttribute("list", type === "sale" ? "financeProducts" : "");
   $("#financeEntryAmount").value = entry?.amountMinor ? (entry.amountMinor / 100).toFixed(2) : "";
   $("#financeEntryCurrency").value = entry ? entry.currency : "PEN";
   $("#financeEntryCategory").value = entry?.category || "Publicidad";
@@ -80,6 +86,12 @@ function openFinanceEntry(type, entry = null) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  $("#financeEntryDescription").addEventListener("change", () => {
+    if ($("#financeEntryId").value || $("#financeEntryType").value !== "sale") return;
+    const key = value => String(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+    const rule = financeReport?.dicloakRules?.find(r => r.enabled && [r.name, ...r.aliases].some(n => key(n) === key($("#financeEntryDescription").value)));
+    if (rule) { $("#financeEntryAmount").value = (rule.priceMinor / 100).toFixed(2); $("#financeEntryCurrency").value = "PEN"; }
+  });
   $("#financeFilter").addEventListener("submit", event => { event.preventDefault(); loadFinance().catch(error => showToast(error.message, true)); });
   $("#financeMonth").addEventListener("click", () => loadFinance({ defaults: true }).catch(error => showToast(error.message, true)));
   $("#financePrint").addEventListener("click", () => { if (financeReport) window.print(); });
