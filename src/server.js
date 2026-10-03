@@ -9,6 +9,7 @@ const cookieSession = require("cookie-session");
 const { Accounts } = require("./accounts");
 const { version: appVersion } = require("../package.json");
 const { reportCsv } = require("./finance");
+const { Dicloak } = require("./dicloak");
 const {
   JsonStore,
   clientWhatsAppTarget,
@@ -44,7 +45,16 @@ const persistentDiskConfigured =
   rootDataDir === "/data" || rootDataDir.startsWith(`/data${path.sep}`);
 
 const accounts = new Accounts(rootDataDir);
+if (process.env.DICLOAK_PASSWORD_HASH) accounts.ensureDicloak(process.env.DICLOAK_PASSWORD_HASH);
+const dicloak = new Dicloak(rootDataDir);
+const stores = new Map();
 const tenants = new Map();
+
+function getStore(user) {
+  if (user.role === "dicloak") throw new Error("La cuenta Dicloak solo accede a sus ingresos.");
+  if (!stores.has(user.id)) stores.set(user.id, new JsonStore(accounts.directory(user), { dicloakRules: () => dicloak.rules() }));
+  return stores.get(user.id);
+}
 
 function requireAuth(req, res, next) {
   const user = accounts.session(req.session?.token);
@@ -66,7 +76,7 @@ const tenantKey = (key) => user.id === "owner" ? key
 fs.mkdirSync(dataDir, { recursive: true });
 fs.mkdirSync(mediaDir, { recursive: true });
 
-const store = new JsonStore(dataDir);
+const store = getStore(user);
 const ai = new AiService({
   store, encryptionKey: tenantKey(geminiEncryptionKey),
   ...(user.id === "owner" ? {} : { apiKey: "", geminiApiKey: "", claudeApiKey: "" })
@@ -939,6 +949,7 @@ app.get("/api/settings", requireAuth, (_req, res) => {
     settings: settingsForPanel(store.getSettings()),
     products: store.snapshot().products,
     plans: store.snapshot().plans,
+    dicloakRules: dicloak.rules(),
     countryPriceBooks: store.getCountryPriceBooks(),
     knowledgeBase: store.getKnowledgeBase(),
     media: store.snapshot().media,
@@ -1416,6 +1427,7 @@ return { router: app, store, whatsapp, scheduler, authenticator, ai };
 }
 
 function getTenant(user) {
+  if (user.role === "dicloak") throw new Error("La cuenta Dicloak no tiene un bot de WhatsApp.");
   if (!tenants.has(user.id)) {
     const tenant = createTenant(user);
     tenants.set(user.id, tenant);
@@ -1485,10 +1497,26 @@ app.get("/api/admin/users", (_req, res) => res.json(accounts.list()));
 app.post("/api/admin/users", async (req, res, next) => {
   try { res.status(201).json(await accounts.create(req.body)); } catch (error) { next(error); }
 });
+app.use("/api/dicloak", requireAuth);
+app.get("/api/dicloak", (req, res) => {
+  const global = ["admin", "dicloak"].includes(req.user.role);
+  const users = accounts.list().filter(user => user.role !== "dicloak" && (global || user.id === req.user.id));
+  res.json({ ...dicloak.report(users, getStore, req.query), scope: global ? "all" : "own",
+    canEdit: req.user.role === "admin", rules: dicloak.rules() });
+});
+function saveDicloakRule(req, res) {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Solo el administrador puede configurar los aportes a Dicloak." });
+  const rule = dicloak.saveRule(req.body, req.params.id);
+  for (const user of accounts.list().filter(user => user.role !== "dicloak")) getStore(user).syncDicloakCatalog();
+  res.status(req.params.id ? 200 : 201).json(rule);
+}
+app.post("/api/dicloak/rules", saveDicloakRule);
+app.put("/api/dicloak/rules/:id", saveDicloakRule);
 // The authenticated session chooses the workspace; never accept a tenant from the request.
 app.use((req, res, next) => {
   if (!req.path.startsWith("/api/")) return next();
   requireAuth(req, res, () => {
+    if (req.user.role === "dicloak") return res.status(403).json({ error: "Esta cuenta solo tiene acceso a los ingresos de Dicloak." });
     try { getTenant(req.user).router(req, res, next); } catch (error) { next(error); }
   });
 });
@@ -1522,7 +1550,7 @@ const server = app.listen(port, "0.0.0.0", () => {
     );
   }
   for (const user of accounts.list()) {
-    if (user.id === "owner" || fs.existsSync(path.join(accounts.directory(user), "whatsapp-session", "creds.json"))) getTenant(user);
+    if (user.role !== "dicloak" && (user.id === "owner" || fs.existsSync(path.join(accounts.directory(user), "whatsapp-session", "creds.json")))) getTenant(user);
   }
 });
 

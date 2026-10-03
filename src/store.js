@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { initialFinance, saleFromClient, normalizeEntry, financialReport } = require("./finance");
+const { matchingRule, allocateSale, syncContribution } = require("./dicloak");
 const { createInitialData, defaultSettings } = require("./defaults");
 const {
   commandForItem,
@@ -657,7 +658,8 @@ function selectClientBroadcastRecipients(clients, { product, price } = {}) {
 }
 
 class JsonStore {
-  constructor(dataDir) {
+  constructor(dataDir, { dicloakRules = () => [] } = {}) {
+    this.dicloakRules = dicloakRules;
     this.dataDir = path.resolve(dataDir);
     this.filePath = path.join(this.dataDir, "jadrixservs-v4.json");
     this.backupFilePath = path.join(
@@ -672,6 +674,40 @@ class JsonStore {
     this.#createPreUpdateBackup();
     this.data = this.#load();
     if (!this.data.finance) { this.data.finance = initialFinance(this.data); this.save(); }
+    this.syncDicloakCatalog();
+  }
+
+  syncDicloakCatalog() {
+    let changed = false;
+    for (const rule of this.dicloakRules()) {
+      let item = [...this.data.products, ...this.data.plans].find(item => matchingRule([rule], item.name));
+      if (!item && !rule.enabled) continue;
+      const price = `S/${(rule.priceMinor / 100).toFixed(2)}`;
+      if (!item) {
+        const bucket = rule.itemType === "plan" ? this.data.plans : this.data.products;
+        item = { id: `dicloak-${rule.id}`, name: rule.name, price, period: "1 mes", aliases: rule.aliases, command: rule.command, commandEnabled: true };
+        // Never reuse an existing WhatsApp or authenticator command.
+        try { this.#assertCatalogCommandAvailable(item.command); } catch { item.commandEnabled = false; }
+        bucket.push(item);
+        changed = true;
+      }
+      if (item.price !== price) { item.price = price; changed = true; }
+      // Only the default PEN price changes; other countries keep their currency.
+      for (const book of this.data.countryPriceBooks || []) {
+        if (book.callingCode === "+51" && book.prices?.[item.id] !== price) {
+          book.prices ||= {};
+          book.prices[item.id] = price;
+          changed = true;
+        }
+      }
+    }
+    if (changed) this.save();
+  }
+
+  recordSale(client, options) {
+    const sale = allocateSale(saleFromClient(client, options), this.dicloakRules());
+    this.data.finance.entries.push(sale);
+    syncContribution(this.data.finance.entries, sale);
   }
 
 
@@ -1067,16 +1103,19 @@ class JsonStore {
   }
 
   financialReport(filters) {
-    return structuredClone(financialReport(this.data.finance, filters));
+    return { ...structuredClone(financialReport(this.data.finance, filters)), dicloakRules: this.dicloakRules() };
   }
 
   saveFinancialEntry(input, id = null) {
     const entries = this.data.finance.entries;
     const previous = id ? entries.find(entry => entry.id === id) : null;
     if (id && !previous) throw new Error("Movimiento no encontrado.");
-    const entry = normalizeEntry(input, previous);
+    if (previous?.source === "dicloak") throw new Error("Edita la venta vinculada para corregir este pago a Dicloak.");
+    let entry = normalizeEntry(input, previous);
+    if (entry.type === "sale") entry = allocateSale(entry, this.dicloakRules(), previous);
     if (previous) entries[entries.indexOf(previous)] = entry;
     else entries.push(entry);
+    if (entry.type === "sale") syncContribution(entries, entry);
     this.save();
     return structuredClone(entry);
   }
@@ -1085,8 +1124,10 @@ class JsonStore {
     if (typeof voided !== "boolean") throw new Error("Estado del movimiento inválido.");
     const entry = this.data.finance.entries.find(item => item.id === id);
     if (!entry) throw new Error("Movimiento no encontrado.");
+    if (entry.source === "dicloak") throw new Error("Anula o restaura la venta vinculada para cambiar este pago a Dicloak.");
     entry.voided = voided;
     entry.updatedAt = new Date().toISOString();
+    if (entry.type === "sale") syncContribution(this.data.finance.entries, entry);
     this.save();
     return structuredClone(entry);
   }
@@ -1133,6 +1174,7 @@ class JsonStore {
       data.logs = data.logs.slice(0, 1000);
       this.#write(data);
       this.data = data;
+      this.syncDicloakCatalog();
       return {
         clients: data.clients.length,
         conversations: Object.keys(data.conversations || {}).length,
@@ -2594,7 +2636,7 @@ class JsonStore {
       autoCharge: input.autoCharge === undefined ? false : input.autoCharge
     });
     this.data.clients.push(client);
-    if (client.status !== "pendiente") this.data.finance.entries.push(saleFromClient(client));
+    if (client.status !== "pendiente") this.recordSale(client);
     this.addLog("client", `Cliente registrado: ${client.name}`, { clientId: client.id });
     this.save();
     return structuredClone(client);
@@ -2631,10 +2673,10 @@ class JsonStore {
     });
     this.data.clients[index] = updated;
     if (renewalDate) {
-      this.data.finance.entries.push(saleFromClient(updated, { source: "renovacion", date: renewalDate }));
+      this.recordSale(updated, { source: "renovacion", date: renewalDate });
     } else if (current.status === "pendiente" && updated.status === "activo" &&
       !this.data.finance.entries.some(entry => entry.clientId === id && entry.type === "sale")) {
-      this.data.finance.entries.push(saleFromClient(updated, { date: updated.lastPaymentDate || todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima") }));
+      this.recordSale(updated, { date: updated.lastPaymentDate || todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima") });
     }
     this.addLog("client", `Cliente actualizado: ${updated.name}`, { clientId: id });
     this.save();
@@ -2688,11 +2730,13 @@ class JsonStore {
     if (!client) throw new Error("Cliente no encontrado.");
     const paidOn = paymentDate || todayInTimeZone(process.env.BOT_TIMEZONE || "America/Lima");
     const period = calculateRenewal(client.expiryDate, paidOn, termMonths);
+    const rule = matchingRule(this.dicloakRules(), client.product);
+    const defaultPrice = rule && (!client.price || /^(S\/\.?|PEN)\s*\d/i.test(client.price)) ? `S/${(rule.priceMinor / 100).toFixed(2)}` : client.price;
     return this.updateClient(id, {
       startDate: period.startDate,
       expiryDate: period.expiryDate,
       termMonths: Math.max(1, Number(termMonths) || 1),
-      price: price ?? client.price,
+      price: price ?? defaultPrice,
       paymentMethod: paymentMethod ?? client.paymentMethod,
       accountReference: accountReference ?? client.accountReference,
       notes: notes ?? client.notes,
@@ -2717,12 +2761,14 @@ class JsonStore {
       throw new Error("Ingresa la fecha de activación y de vencimiento.");
     }
 
+    const rule = matchingRule(this.dicloakRules(), product);
+
     return {
       id: input.id,
       name,
       ...identity,
       product,
-      price: String(input.price || "").trim(),
+      price: String(input.price || (rule ? `S/${(rule.priceMinor / 100).toFixed(2)}` : "")).trim(),
       paymentMethod: String(input.paymentMethod || "").trim(),
       accountReference: String(input.accountReference || "").trim().slice(0, 240),
       startDate: String(input.startDate),
