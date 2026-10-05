@@ -19,6 +19,7 @@ html[data-theme="light"] .finance-dialog { background:#fff; color:#182035; }
 #dicloakReport > .panel { margin:18px 0; }
 #dicloakReport table { width:100%; }
 #dicloakReport th,#dicloakReport td { padding:14px 12px; text-align:left; }
+#dicloakEntries td small { display:block; opacity:.7; margin-top:5px; }
 #dicloakReport .table-wrap { overflow-x:auto; }
 #dicloakError { color:#e45b63; }
 #dicloakProfit { font-weight:700; }
