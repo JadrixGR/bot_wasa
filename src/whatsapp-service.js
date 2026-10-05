@@ -30,7 +30,7 @@ const AUTHENTICATOR_SEND_WINDOW = Object.freeze({
 const AUTHENTICATOR_EMAIL_REQUEST_TTL_MS = 30 * 60 * 1000;
 const AUTHENTICATOR_URGENT_PROMPT =
   [
-    "👋 ¡Hola! Soy el bot de Jadrix Servis.",
+    "👋 ¡Hola!",
     "",
     "🔐 Si necesitas el código con urgencia, envíame el correo de la cuenta y te ayudaré a obtenerlo de inmediato. ⚡"
   ].join("\n");
