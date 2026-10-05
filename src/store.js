@@ -1106,6 +1106,25 @@ class JsonStore {
     return { ...structuredClone(financialReport(this.data.finance, filters)), dicloakRules: this.dicloakRules() };
   }
 
+  financialClients() {
+    const clients = new Map();
+    const remember = (id, input) => {
+      if (!id || clients.has(id)) return;
+      const identity = normalizeWhatsAppIdentity(input);
+      clients.set(id, { name: String(input.name || ""), whatsappPhone: identity.whatsappPhone,
+        whatsappUsername: identity.whatsappUsername });
+    };
+    for (const client of this.data.clients) remember(client.id, client);
+    // Deleted clients may still be identified by their exact ID in the activity history.
+    for (const log of this.data.logs) {
+      if (log.type !== "client-delete" || !log.metadata?.whatsapp) continue;
+      for (const id of [log.metadata.clientId, ...(log.metadata.clientIds || [])]) {
+        remember(id, { whatsapp: log.metadata.whatsapp });
+      }
+    }
+    return clients;
+  }
+
   saveFinancialEntry(input, id = null) {
     const entries = this.data.finance.entries;
     const previous = id ? entries.find(entry => entry.id === id) : null;
