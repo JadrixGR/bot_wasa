@@ -94,7 +94,38 @@ test("productos agregados y ventas manuales guardan importes exactos y validan r
   assert.throws(() => rules.saveRule({ name: "Otro", price: "5", contribution: "-1" }));
 });
 
-test("cuenta y resumen comparten solo aportes: tres vendedores, permisos HTTP y persistencia", async t => {
+test("el historial identifica al cliente vinculado sin modificar ventas ni aportes", t => {
+  const { dir, store, rules } = fixture(t);
+  const phone = store.createClient({ ...client, name: "Cliente con teléfono" });
+  const username = store.createClient({ ...client, name: "Cliente con usuario", whatsapp: "@cliente.prueba" });
+  store.renewClient(phone.id, { paymentDate: "2026-10-04", price: "S/45" });
+  store.archiveClient(phone.id);
+  store.saveFinancialEntry({ type: "sale", description: "ChatGPT Pro", amount: "45", currency: "PEN", date: "2026-10-05" });
+  const deleted = store.createClient({ ...client, name: "Cliente eliminado", whatsapp: "@cliente.eliminado" });
+  store.deleteClient(deleted.id);
+  store.createClient({ ...client, whatsapp: "@cliente.eliminado.grupo" });
+  store.deleteClientsByWhatsApp("@cliente.eliminado.grupo");
+  const persisted = fs.readFileSync(store.filePath, "utf8");
+  const reload = new JsonStore(dir, { dicloakRules: () => rules.rules() });
+  const before = JSON.stringify(reload.data.finance);
+  const report = rules.report([{ id: "seller", username: "Vendedor" }], () => reload, range);
+  assert.equal(report.salesCount, 6);
+  assert.equal(report.totalMinor, 12000);
+  assert.equal(report.entries.filter(e => e.client?.whatsappPhone === "51999888777").length, 2);
+  assert.deepEqual(report.entries.find(e => e.client?.whatsappUsername === "@cliente.prueba").client,
+    { name: username.name, whatsappPhone: "", whatsappUsername: "@cliente.prueba" });
+  for (const whatsappUsername of ["@cliente.eliminado", "@cliente.eliminado.grupo"]) {
+    assert.deepEqual(report.entries.find(e => e.client?.whatsappUsername === whatsappUsername).client,
+      { name: "", whatsappPhone: "", whatsappUsername });
+  }
+  assert.equal(report.entries.filter(e => e.client === null).length, 1);
+  assert.equal(JSON.stringify(reload.data.finance), before);
+  assert.equal(fs.readFileSync(store.filePath, "utf8"), persisted);
+  reload.data.logs = [];
+  assert.equal(rules.report([{ id: "seller", username: "Vendedor" }], () => reload, range).entries.filter(e => e.client === null).length, 3);
+});
+
+test("cuenta y resumen comparten aportes e identidad del cliente: tres vendedores, permisos HTTP y persistencia", async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dicloak-http-"));
   const originalEnv = { ...process.env };
   Object.assign(process.env, { DATA_DIR: dir, MEDIA_DIR: path.join(dir, "media"), DISABLE_WHATSAPP: "1", NODE_ENV: "test",
@@ -114,16 +145,24 @@ test("cuenta y resumen comparten solo aportes: tres vendedores, permisos HTTP y 
   try {
     const owner = await login("JadrixGR", "owner-fixture"), seller = await login("Vendedor dos", "seller-fixture"), reader = await login("Dicloak", "dicloak-fixture");
     assert.ok(reader);
-    for (const user of accounts.list().filter(u => u.role !== "dicloak")) getTenant(user).store.createClient({ ...client, price: "S/45" });
+    for (const user of accounts.list().filter(u => u.role !== "dicloak")) getTenant(user).store.createClient({ ...client,
+      id: "same-id-in-each-workspace", name: `Cliente de ${user.username}`, price: "S/45", notes: "NOTA PRIVADA",
+      accountReference: "CUENTA PRIVADA" });
     const query = "?from=2026-10-01&to=2026-10-31";
     assert.equal((await request(`/api/dicloak${query}`)).status, 401);
     const global = await request(`/api/dicloak${query}`, reader);
     assert.equal(global.body.totalMinor, 6000);
     assert.equal(global.body.byUser.length, 3);
     assert.equal(global.body.canEdit, false);
-    assert.equal(JSON.stringify(global.body).includes("Cliente privado"), false);
-    assert.equal(JSON.stringify(global.body).includes("999888777"), false);
-    assert.equal((await request(`/api/dicloak${query}&tenantId=owner`, seller)).body.totalMinor, 2000);
+    for (const entry of global.body.entries) assert.deepEqual(entry.client, {
+      name: `Cliente de ${entry.username}`, whatsappPhone: "51999888777", whatsappUsername: ""
+    });
+    assert.equal(JSON.stringify(global.body).includes("NOTA PRIVADA"), false);
+    assert.equal(JSON.stringify(global.body).includes("CUENTA PRIVADA"), false);
+    const own = (await request(`/api/dicloak${query}&tenantId=owner`, seller)).body;
+    assert.equal(own.totalMinor, 2000);
+    assert.equal(own.entries.length, 1);
+    assert.equal(own.entries[0].client.name, "Cliente de Vendedor dos");
     assert.equal((await request(`/api/dicloak${query}`, owner)).body.totalMinor, 6000);
     for (const url of ["/api/clients", "/api/settings", "/api/whatsapp/status", "/api/finance", "/api/authenticator", "/api/backup/data.json", "/api/admin/users"]) assert.equal((await request(url, reader)).status, 403, url);
     for (const cookie of [seller, reader]) assert.equal((await request("/api/dicloak/rules", cookie, "POST", { name: "Intruso", price: "10", contribution: "2" })).status, 403);

@@ -4,6 +4,13 @@ let dicloakReport = null;
 let dicloakRequest = 0;
 const dicloakMoney = minor => financeMoney(minor, "S/");
 
+function dicloakClientCell(client) {
+  if (!client) return "Sin cliente registrado";
+  const identity = client.whatsappUsername || whatsappPhoneLabel(client);
+  const name = String(client.name || "").trim();
+  return `${escapeHtml(identity || name || "Identidad no disponible")}${identity && name && name !== identity ? `<small>${escapeHtml(name)}</small>` : ""}`;
+}
+
 function resetDicloak() {
   dicloakRequest++;
   dicloakReport = null;
@@ -30,7 +37,7 @@ async function loadDicloak({ defaults = false } = {}) {
     $("#dicloakCount").textContent = report.salesCount;
     $("#dicloakPeriod").textContent = `${report.from} al ${report.to} · ${report.timeZone}`;
     $("#dicloakUsers").innerHTML = report.byUser.map(u => `<tr><td>${escapeHtml(u.username)}</td><td>${u.salesCount}</td><td><strong>${dicloakMoney(u.amountMinor)}</strong></td></tr>`).join("");
-    $("#dicloakEntries").innerHTML = report.entries.map(e => `<tr><td>${escapeHtml(e.date)}</td><td>${escapeHtml(e.username)}</td><td>${escapeHtml(e.product)}</td><td>${dicloakMoney(e.amountMinor)}</td></tr>`).join("") || '<tr><td colspan="4">No hay aportes en este periodo.</td></tr>';
+    $("#dicloakEntries").innerHTML = report.entries.map(e => `<tr><td>${escapeHtml(e.date)}</td><td>${escapeHtml(e.username)}</td><td>${dicloakClientCell(e.client)}</td><td>${escapeHtml(e.product)}</td><td>${dicloakMoney(e.amountMinor)}</td></tr>`).join("") || '<tr><td colspan="5">No hay aportes en este periodo.</td></tr>';
     $("#dicloakAdd").classList.toggle("hidden", !report.canEdit);
     $("#dicloakRules").innerHTML = report.rules.map(r => `<tr><td>${escapeHtml(r.name)}</td><td>${dicloakMoney(r.priceMinor)}</td><td>${dicloakMoney(r.contributionMinor)}</td><td>${dicloakMoney(r.priceMinor - (r.enabled ? r.contributionMinor : 0))}</td><td>${r.enabled ? "Activo" : "Sin aporte"}${report.canEdit ? ` <button class="button secondary small" type="button" data-dicloak-edit="${escapeHtml(r.id)}">Editar</button>` : ""}</td></tr>`).join("");
     $("#dicloakReport").classList.remove("hidden");

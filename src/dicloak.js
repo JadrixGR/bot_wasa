@@ -90,11 +90,16 @@ class Dicloak {
     const entries = [], byUser = [];
     for (const user of users) {
       const store = getStore(user);
+      const clients = store.financialClients();
       const sales = store.data.finance.entries.filter(e => e.type === "sale" && !e.voided && e.dicloak?.amountMinor && e.currency === "PEN" && e.date >= period.from && e.date <= period.to);
       const total = sales.reduce((sum, e) => sum + e.dicloak.amountMinor, 0);
       byUser.push({ userId: user.id, username: user.username, salesCount: sales.length, amountMinor: total });
-      for (const sale of sales) entries.push({ id: `${user.id}:${sale.id}`, date: sale.date, username: user.username,
-        product: sale.dicloak.product, amountMinor: sale.dicloak.amountMinor });
+      for (const sale of sales) {
+        const client = clients.get(sale.clientId);
+        entries.push({ id: `${user.id}:${sale.id}`, date: sale.date, username: user.username,
+          client: client || null,
+          product: sale.dicloak.product, amountMinor: sale.dicloak.amountMinor });
+      }
     }
     entries.sort((a, b) => b.date.localeCompare(a.date) || a.username.localeCompare(b.username));
     return { from: period.from, to: period.to, today: period.today, timeZone: period.timeZone,
