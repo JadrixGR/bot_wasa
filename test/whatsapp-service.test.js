@@ -1487,8 +1487,7 @@ test("el bot atiende una urgencia por correo y entrega el comando autorizado", a
   assert.equal(urgentAuthorization.input.urgentAllowance, 1);
   assert.equal(urgentAuthorization.identity.whatsappPhone, "51922223333");
   assert.equal(socket.calls.sent.length, 3);
-  assert.match(socket.calls.sent[0].content.text, /Soy el bot de Jadrix Servis/);
-  assert.match(socket.calls.sent[0].content.text, /correo de la cuenta/);
+  assert.equal(socket.calls.sent[0].content.text, "👋 ¡Hola!\n\n🔐 Si necesitas el código con urgencia, envíame el correo de la cuenta y te ayudaré a obtenerlo de inmediato. ⚡");
   assert.match(socket.calls.sent[1].content.text, /¡Cuenta registrada!/);
   assert.match(
     socket.calls.sent[1].content.text,
