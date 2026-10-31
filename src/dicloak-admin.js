@@ -79,8 +79,10 @@ class DicloakAdminService {
   authorizedSender(message) {
     if (message?.key?.fromMe) return false;
     const allowed = new Set(String(process.env.WHATSAPP_ADMIN_NUMBERS || "").split(/[\s,;]+/).map((value) => value.replace(/\D/g, "")).filter(Boolean));
-    const sender = [message?.key?.participant, message?.key?.participantAlt, message?.key?.remoteJidAlt].map((value) => String(value || "").replace(/\D/g, "")).find(Boolean);
-    return Boolean(sender && allowed.has(sender));
+    const senders = [message?.key?.participant, message?.key?.participantAlt, message?.key?.remoteJidAlt]
+      .map((value) => String(value || "").replace(/\D/g, ""))
+      .filter(Boolean);
+    return senders.some((sender) => allowed.has(sender));
   }
 
   async resolveMemberGroup() {
