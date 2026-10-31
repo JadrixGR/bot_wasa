@@ -1126,7 +1126,8 @@ class WhatsAppService {
       this.store.save();
       return;
     }
-    if (event?.type !== "notify" || !Array.isArray(event.messages)) return;
+    const eventType = String(event?.type || "");
+    if (!new Set(["notify", "append"]).has(eventType) || !Array.isArray(event.messages)) return;
 
     for (const message of event.messages) {
       const chatId = message?.key?.remoteJid;
@@ -1134,7 +1135,11 @@ class WhatsAppService {
         Boolean(message?.key?.fromMe) &&
         extractMessageBody(message.message).startsWith("/");
       const isGroup = chatId?.endsWith("@g.us");
-      if (!chatId || (message.key.fromMe && (!ownerCommand || isGroup)) || chatId === "status@broadcast" || chatId.endsWith("@broadcast") || chatId.endsWith("@newsletter")) {
+      const timestamp = Number(message?.messageTimestamp?.low ?? message?.messageTimestamp ?? 0);
+      const recentAppend =
+        eventType !== "append" ||
+        (isGroup && timestamp > 0 && Math.abs(Date.now() / 1000 - timestamp) <= 180);
+      if (!chatId || !recentAppend || (message.key.fromMe && (!ownerCommand || isGroup)) || chatId === "status@broadcast" || chatId.endsWith("@broadcast") || chatId.endsWith("@newsletter")) {
         continue;
       }
 
@@ -1143,7 +1148,7 @@ class WhatsAppService {
         const groupQueue = this.queues.get(chatId) || Promise.resolve();
         const groupNext = groupQueue
           .catch(() => undefined)
-          .then(() => this.#handleDicloakAdminMessage(socket, message))
+          .then(() => this.#handleDicloakAdminMessage(socket, message, eventType))
           .catch((error) => {
             this.store.addLog("error", `Error en comando administrativo de DICloak: ${error.message}`, { chatId });
             this.store.save();
@@ -1297,14 +1302,21 @@ class WhatsAppService {
     }
   }
 
-  async #handleDicloakAdminMessage(socket, message) {
+  async #handleDicloakAdminMessage(socket, message, eventType = "notify") {
     const body = extractMessageBody(message.message);
     if (!body) return;
+    this.store.addLog("dicloak-admin", "Mensaje de grupo recibido por el Bot Dicloak", {
+      chatId: message?.key?.remoteJid || null,
+      eventType,
+      fromMe: Boolean(message?.key?.fromMe),
+      body: body.slice(0, 120)
+    });
+    this.store.save();
     await this.dicloakAdminService.handle({
       message,
       body,
       socket,
-      reply: (text) => this.sendText(message.key.remoteJid, text)
+      reply: (text) => this.sendText(message.key.remoteJid, text, { socket })
     });
   }
 
@@ -2136,6 +2148,8 @@ class WhatsAppService {
   }
 
   async #resolveOutgoingTarget(value) {
+    const raw = String(value || "").trim().toLowerCase();
+    if (/^[^@]+@g\.us$/.test(raw)) return raw;
     const direct = normalizeWhatsAppChatId(value);
     if (direct) return direct;
     const phone = normalizeWhatsAppDigits(value);
@@ -2182,12 +2196,13 @@ class WhatsAppService {
   async sendText(
     chatId,
     text,
-    { typingAlreadyStarted = false, sensitive = false } = {}
+    { typingAlreadyStarted = false, sensitive = false, socket: socketOverride = null } = {}
   ) {
-    if (!this.status.ready || !this.socket) {
+    const override = socketOverride && this.socket === socketOverride ? socketOverride : null;
+    const socket = override || this.socket;
+    if ((!this.status.ready && !override) || !socket) {
       throw new Error("WhatsApp todavía no está conectado.");
     }
-    const socket = this.socket;
     const target = await this.#resolveOutgoingTarget(chatId);
     const stopTyping = typingAlreadyStarted
       ? async () => undefined

@@ -226,6 +226,7 @@ function makeService(fake, options = {}) {
     mediaDir: options.mediaDir || path.join(testRuntimeDir, "media"),
     ai: options.ai || null,
     authenticator: options.authenticator || null,
+    adminOnly: options.adminOnly || false,
     baileysLoader: async () => fake.module,
     qrEncoder: async (value) => `data:image/png;base64,${value}`,
     sleepFn: async () => undefined,
@@ -660,6 +661,44 @@ test("descarta sincronizaciones solicitadas y no las trata como mensajes nuevos"
   assert.equal(socket.calls.read.length, 0);
   assert.equal(socket.calls.sent.length, 0);
   assert.ok(service.store.logs.some((item) => item.type === "security"));
+});
+
+test("el Bot Dicloak responde grupos recientes entregados como append", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake, {
+    adminOnly: true,
+    sessionDir: path.join(testRuntimeDir, "dicloak-append-session"),
+    mediaDir: path.join(testRuntimeDir, "dicloak-append-media")
+  });
+  service.setDicloakAdminService({
+    handle: async ({ body, reply }) => {
+      if (body === "ID DICLOAK") await reply("ID de este grupo: 120363000000000000@g.us");
+    }
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+
+  socket.ev.emit("messages.upsert", {
+    type: "append",
+    messages: [{
+      key: {
+        id: "dicloak-append-id",
+        remoteJid: "120363000000000000@g.us",
+        participant: "51918511721@s.whatsapp.net",
+        fromMe: false
+      },
+      messageTimestamp: Math.floor(Date.now() / 1000),
+      message: { conversation: "ID DICLOAK" }
+    }]
+  });
+  await settleMessageQueue(service);
+
+  assert.deepEqual(socket.calls.sent.map((item) => item.content.text), [
+    "ID de este grupo: 120363000000000000@g.us"
+  ]);
+  assert.ok(service.store.logs.some((item) => item.message.includes("Mensaje de grupo recibido")));
 });
 
 test("un mensaje entrante real envía la bienvenida una sola vez en tres mensajes", async () => {
