@@ -70,17 +70,34 @@ class DicloakAdminService {
     this.memberGroupName = memberGroupName || process.env.DICLOAK_MEMBER_GROUP_NAME || "CHAT GPT";
   }
 
-  authorized(message) {
+  async authorized(message, socket) {
     const groupId = String(process.env.WHATSAPP_ADMIN_GROUP_ID || "").trim();
     if (!groupId || message?.key?.remoteJid !== groupId || message?.key?.fromMe) return false;
-    return this.authorizedSender(message);
+    return this.authorizedSender(message, socket);
   }
 
-  authorizedSender(message) {
+  async authorizedSender(message, socket) {
     if (message?.key?.fromMe) return false;
     const allowed = new Set(String(process.env.WHATSAPP_ADMIN_NUMBERS || "").split(/[\s,;]+/).map((value) => value.replace(/\D/g, "")).filter(Boolean));
-    const senders = [message?.key?.participant, message?.key?.participantAlt, message?.key?.remoteJidAlt]
-      .map((value) => String(value || "").replace(/\D/g, ""))
+    const senderIds = [
+      message?.key?.participant,
+      message?.key?.participantAlt,
+      message?.key?.remoteJidAlt,
+      message?.key?.participantPn,
+      message?.key?.participantLid
+    ].filter(Boolean);
+    const mappedLids = [];
+    for (const value of senderIds) {
+      if (!/@(?:lid|hosted\.lid)$/i.test(String(value))) continue;
+      try {
+        const mapped = await socket?.signalRepository?.lidMapping?.getPNForLID?.(value);
+        if (mapped) mappedLids.push(mapped);
+      } catch {
+        // Algunos mensajes de grupo no incluyen el mapeo LID disponible.
+      }
+    }
+    const senders = [...senderIds, ...mappedLids]
+      .map((value) => String(value || "").split("@")[0].split(":")[0].replace(/\D/g, ""))
       .filter(Boolean);
     return senders.some((sender) => allowed.has(sender));
   }
@@ -152,12 +169,12 @@ class DicloakAdminService {
     return `✅ CLIENTE RENOVADO\n\nNombre: ${parsed.name}\nDuración añadida: ${parsed.months} ${parsed.months === 1 ? "mes" : "meses"}\nNueva renovación: ${next}\nEstado DICloak: Activo`;
   }
 
-  async handle({ message, body, reply }) {
-    if (message?.key?.remoteJid?.endsWith("@g.us") && this.authorizedSender(message) && normalizeGroupName(body) === "ID DICLOAK") {
+  async handle({ message, body, reply, socket }) {
+    if (message?.key?.remoteJid?.endsWith("@g.us") && await this.authorizedSender(message, socket) && normalizeGroupName(body) === "ID DICLOAK") {
       await reply(`ID de este grupo: ${message.key.remoteJid}`);
       return true;
     }
-    if (!this.authorized(message)) return false;
+    if (!await this.authorized(message, socket)) return false;
     const parsed = parseAdminCommand(body, this.aliases());
     if (!parsed.isCommand) return false;
     const messageId = String(message?.key?.id || "");

@@ -1297,12 +1297,13 @@ class WhatsAppService {
     }
   }
 
-  async #handleDicloakAdminMessage(_socket, message) {
+  async #handleDicloakAdminMessage(socket, message) {
     const body = extractMessageBody(message.message);
     if (!body) return;
     await this.dicloakAdminService.handle({
       message,
       body,
+      socket,
       reply: (text) => this.sendText(message.key.remoteJid, text)
     });
   }
