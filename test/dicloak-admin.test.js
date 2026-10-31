@@ -96,3 +96,16 @@ test("ignora grupo o remitente no autorizados", async () => {
   assert.equal(handled, false);
   assert.equal(replied, false);
 });
+
+test("autoriza el número alternativo cuando WhatsApp entrega el remitente como LID", async () => {
+  process.env.WHATSAPP_ADMIN_GROUP_ID = "120363000000000000@g.us";
+  process.env.WHATSAPP_ADMIN_NUMBERS = "51911111111";
+  const service = new DicloakAdminService({ store: storeFixture(), client: {} });
+  const incoming = message("id-dicloak", "123456789");
+  incoming.key.participant = "123456789@lid";
+  incoming.key.participantAlt = "51911111111@s.whatsapp.net";
+  const replies = [];
+  const handled = await service.handle({ message: incoming, body: "ID DICLOAK", reply: async (text) => replies.push(text) });
+  assert.equal(handled, true);
+  assert.deepEqual(replies, ["ID de este grupo: 120363000000000000@g.us"]);
+});
