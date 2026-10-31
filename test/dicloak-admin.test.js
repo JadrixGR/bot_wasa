@@ -126,3 +126,17 @@ test("resuelve el número del administrador desde el mapeo LID de WhatsApp", asy
   assert.equal(handled, true);
   assert.deepEqual(replies, ["ID de este grupo: 120363000000000000@g.us"]);
 });
+
+test("permite obtener el ID del grupo durante la configuración", async () => {
+  delete process.env.WHATSAPP_ADMIN_GROUP_ID;
+  delete process.env.WHATSAPP_ADMIN_NUMBERS;
+  const service = new DicloakAdminService({ store: storeFixture(), client: {} });
+  const replies = [];
+  const handled = await service.handle({
+    message: message("id-dicloak-setup", "51999999999"),
+    body: "ID DICLOAK",
+    reply: async (text) => replies.push(text)
+  });
+  assert.equal(handled, true);
+  assert.deepEqual(replies, ["ID de este grupo: 120363000000000000@g.us"]);
+});
