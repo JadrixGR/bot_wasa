@@ -321,6 +321,28 @@
           <div id="storageNotice" class="notice">
             Verificando que la sesión y la base de clientes estén protegidas por el disco persistente de Render…
           </div>
+          <div class="section-intro dicloak-bot-intro">
+            <div>
+              <p class="eyebrow">BOT SEPARADO</p>
+              <h2>Bot Dicloak</h2>
+              <p class="muted">Conecta un segundo número de WhatsApp para usarlo únicamente en tu grupo administrativo. Así las respuestas de DICloak no salen desde tu número personal.</p>
+            </div>
+            <div class="button-row">
+              <button id="restartDicloakBotButton" class="button secondary" type="button">Reiniciar Bot Dicloak</button>
+              <button id="resetDicloakBotButton" class="button danger-ghost" type="button">Generar QR nuevo</button>
+            </div>
+          </div>
+          <article class="panel wa-panel dicloak-bot-panel">
+            <div id="dicloakBotVisual" class="qr-side"><div class="loader-ring"></div><p>Iniciando Bot Dicloak…</p></div>
+            <div class="wa-copy">
+              <div class="wa-brand"><span class="wa-logo-ring">S/</span><span class="wa-brand-copy"><strong>Bot Dicloak</strong><small>Sesión independiente para comandos administrativos</small></span></div>
+              <span id="dicloakBotPill" class="pill neutral">Iniciando</span>
+              <h3 id="dicloakBotTitle">Preparando Bot Dicloak</h3>
+              <p id="dicloakBotDescription" class="muted">El QR de este número aparecerá aquí.</p>
+              <ol class="steps"><li>Abre WhatsApp del número que usarás como Bot Dicloak.</li><li>Ve a Dispositivos vinculados.</li><li>Escanea este QR y agrega ese número a tu grupo administrativo.</li></ol>
+              <p id="dicloakBotUpdated" class="microcopy"></p>
+            </div>
+          </article>
         </section>
 
         <section id="section-dicloak" class="page-section">

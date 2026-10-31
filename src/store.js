@@ -939,6 +939,28 @@ class JsonStore {
       processedCommandIds: Array.isArray(parsed.processedCommandIds)
         ? parsed.processedCommandIds.slice(0, 500).map(String)
         : [],
+      dicloakMembers: Array.isArray(parsed.dicloakMembers)
+        ? parsed.dicloakMembers.filter((item) => item && typeof item === "object").map((item) => ({
+            dicloakMemberId: String(item.dicloakMemberId || ""),
+            dicloakMemberName: String(item.dicloakMemberName || "").trim(),
+            plan: String(item.plan || "").trim(),
+            commercialStartDate: String(item.commercialStartDate || "").trim(),
+            commercialNextRenewalDate: String(item.commercialNextRenewalDate || "").trim(),
+            monthsPurchased: Math.max(0, Number(item.monthsPurchased) || 0),
+            profileGroupId: String(item.profileGroupId || ""),
+            memberGroupId: String(item.memberGroupId || ""),
+            updatedAt: item.updatedAt || migratedAt
+          }))
+        : [],
+      dicloakAdminOperations: Array.isArray(parsed.dicloakAdminOperations)
+        ? parsed.dicloakAdminOperations.slice(0, 500).map((item) => ({
+            messageId: String(item?.messageId || ""), status: String(item?.status || "PENDING"),
+            command: String(item?.command || ""), memberName: String(item?.memberName || ""),
+            plan: item?.plan ? String(item.plan) : null, months: Number(item?.months) || 0,
+            error: item?.error ? String(item.error).slice(0, 300) : null,
+            createdAt: item?.createdAt || migratedAt, updatedAt: item?.updatedAt || migratedAt
+          })).filter((item) => item.messageId)
+        : [],
       logs: Array.isArray(parsed.logs) ? parsed.logs : [],
       conversations: Object.fromEntries(
         Object.entries(previousConversations).map(([chatId, value]) => {
@@ -1123,6 +1145,55 @@ class JsonStore {
       }
     }
     return clients;
+  }
+
+  getDicloakMemberRecord(name) {
+    const target = String(name || "");
+    return structuredClone((this.data.dicloakMembers || []).find((item) => item.dicloakMemberName === target) || null);
+  }
+
+  saveDicloakMemberRecord(record) {
+    this.data.dicloakMembers ||= [];
+    const normalized = {
+      ...record,
+      dicloakMemberId: String(record.dicloakMemberId || ""),
+      dicloakMemberName: String(record.dicloakMemberName || "").trim(),
+      plan: String(record.plan || "").trim(),
+      commercialStartDate: String(record.commercialStartDate || "").trim(),
+      commercialNextRenewalDate: String(record.commercialNextRenewalDate || "").trim(),
+      monthsPurchased: Math.max(0, Number(record.monthsPurchased) || 0),
+      profileGroupId: String(record.profileGroupId || ""),
+      memberGroupId: String(record.memberGroupId || ""),
+      updatedAt: new Date().toISOString()
+    };
+    const index = this.data.dicloakMembers.findIndex((item) => item.dicloakMemberName === normalized.dicloakMemberName);
+    if (index === -1) this.data.dicloakMembers.push(normalized);
+    else this.data.dicloakMembers[index] = normalized;
+    this.save();
+    return structuredClone(normalized);
+  }
+
+  getDicloakAdminOperation(messageId) {
+    return structuredClone((this.data.dicloakAdminOperations || []).find((item) => item.messageId === String(messageId)) || null);
+  }
+
+  beginDicloakAdminOperation(input) {
+    this.data.dicloakAdminOperations ||= [];
+    const existing = this.data.dicloakAdminOperations.find((item) => item.messageId === String(input.messageId));
+    if (existing) return structuredClone(existing);
+    const operation = { ...input, messageId: String(input.messageId), status: "PENDING", error: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    this.data.dicloakAdminOperations.unshift(operation);
+    this.data.dicloakAdminOperations = this.data.dicloakAdminOperations.slice(0, 500);
+    this.save();
+    return structuredClone(operation);
+  }
+
+  finishDicloakAdminOperation(messageId, patch) {
+    const operation = (this.data.dicloakAdminOperations || []).find((item) => item.messageId === String(messageId));
+    if (!operation) return null;
+    Object.assign(operation, patch, { updatedAt: new Date().toISOString() });
+    this.save();
+    return structuredClone(operation);
   }
 
   saveFinancialEntry(input, id = null) {

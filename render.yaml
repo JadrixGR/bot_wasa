@@ -30,6 +30,26 @@ services:
         value: "45000"
       - key: WHATSAPP_RECONNECT_DELAY_MS
         value: "3000"
+      - key: DICLOAK_HTTP_KEY
+        sync: false
+      - key: DICLOAK_BASE_URL
+        value: https://app.dicloak.com/gin
+      - key: DICLOAK_MEMBER_GROUP_NAME
+        value: CHAT GPT
+      - key: DICLOAK_TIMEZONE
+        value: America/Lima
+      - key: WHATSAPP_ADMIN_GROUP_ID
+        sync: false
+      - key: WHATSAPP_ADMIN_NUMBERS
+        sync: false
+      - key: DICLOAK_EXPIRATION_TIME
+        value: "23:59"
+      - key: DICLOAK_TIMEOUT_MS
+        value: "10000"
+      - key: DICLOAK_PROFILE_GROUP_MAP_JSON
+        sync: false
+      - key: DICLOAK_PLAN_ALIASES_JSON
+        sync: false
     disk:
       name: jadrixservs-data
       mountPath: /data

@@ -30,6 +30,7 @@ const state = {
   activeSection: "dashboard",
   loadedSections: new Set(),
   poller: null,
+  dicloakBotPoller: null,
   clientBroadcastJobPoller: null,
   clientBroadcastPreviewToken: 0,
   clientBroadcastPreview: null,
@@ -151,6 +152,7 @@ function showLogin() {
   document.body.classList.remove("app-active", "menu-open");
   setSidebarOpen(false);
   clearInterval(state.poller);
+  clearInterval(state.dicloakBotPoller);
   clearInterval(state.clientBroadcastJobPoller);
   state.clientBroadcastJobPoller = null;
   state.clientBroadcastSubmitting = false;
@@ -178,8 +180,11 @@ async function showApp(user) {
     return;
   }
   await refreshAll();
+  await refreshDicloakBotStatus();
   clearInterval(state.poller);
   state.poller = setInterval(refreshWhatsAppStatus, 4000);
+  clearInterval(state.dicloakBotPoller);
+  state.dicloakBotPoller = setInterval(refreshDicloakBotStatus, 4000);
 }
 
 function setSidebarOpen(open) {
@@ -418,6 +423,26 @@ async function refreshWhatsAppStatus() {
   } catch {
     // api() ya actualiza la interfaz cuando la sesión termina.
   }
+}
+
+function renderDicloakBotStatus(status) {
+  const [label, tone, description] = statusPresentation(status);
+  const pill = $("#dicloakBotPill");
+  if (!pill) return;
+  pill.textContent = label;
+  pill.className = `pill ${tone}`;
+  $("#dicloakBotTitle").textContent = status.ready ? `Conectado${status.name ? ` como ${status.name}` : ""}` : label;
+  $("#dicloakBotDescription").textContent = status.error || description;
+  $("#dicloakBotUpdated").textContent = [status.updatedAt ? `Actualizado ${formatRelative(status.updatedAt)}` : "", status.waState ? `Estado: ${status.waState}` : ""].filter(Boolean).join(" · ");
+  const visual = $("#dicloakBotVisual");
+  if (status.ready) visual.innerHTML = `<div class="success-orb">✓</div><strong>Bot Dicloak en línea</strong><p>${escapeHtml(status.phone || "Sesión activa")}</p>`;
+  else if (status.qrDataUrl) visual.innerHTML = `<img src="${escapeHtml(status.qrDataUrl)}" alt="Código QR del Bot Dicloak"><strong>Escanea este QR con el número del Bot Dicloak</strong>`;
+  else if (["error", "auth_failure", "disconnected"].includes(status.state)) visual.innerHTML = `<div class="error-orb">!</div><strong>${escapeHtml(label)}</strong><p>${escapeHtml(status.error || description)}</p>`;
+  else visual.innerHTML = `<div class="loader-ring"></div><p>${escapeHtml(description)}</p>`;
+}
+
+async function refreshDicloakBotStatus() {
+  try { renderDicloakBotStatus(await api("/api/dicloak-bot/status")); } catch { /* Puede no estar disponible para otros roles. */ }
 }
 
 function renderDashboard(dashboard) {
@@ -3033,6 +3058,17 @@ function bindEvents() {
       button.disabled = false;
       button.textContent = "Cerrar sesión";
     }
+  });
+  $("#restartDicloakBotButton")?.addEventListener("click", async () => {
+    try { await api("/api/dicloak-bot/restart", { method: "POST" }); showToast("El Bot Dicloak se está reiniciando."); setTimeout(refreshDicloakBotStatus, 1500); }
+    catch (error) { showToast(error.message, true); }
+  });
+  $("#resetDicloakBotButton")?.addEventListener("click", async () => {
+    if (!confirm("Se cerrará únicamente la sesión del Bot Dicloak y se generará un QR nuevo. ¿Continuar?")) return;
+    const button = $("#resetDicloakBotButton"); button.disabled = true;
+    try { const result = await api("/api/dicloak-bot/reset", { method: "POST" }); if (result.status) renderDicloakBotStatus(result.status); showToast(result.message || "QR nuevo en preparación."); [500, 1500, 3000, 6000].forEach((delay) => setTimeout(refreshDicloakBotStatus, delay)); }
+    catch (error) { showToast(error.message, true); }
+    finally { button.disabled = false; }
   });
   $("#newClientButton").addEventListener("click", () => openClientDialog());
   $("#openClientBroadcastButton").addEventListener(

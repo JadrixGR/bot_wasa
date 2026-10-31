@@ -1,0 +1,1424 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta id="themeColorMeta" name="theme-color" content="#07080f">
+    <title>JadrixServs · Panel Profesional V4.9.3</title>
+    <link rel="icon" type="image/jpeg" href="/jadrixservs-logo.jpg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+    <script src="/finance.js" defer></script>
+    <script src="/dicloak.js" defer></script>
+    <link rel="stylesheet" href="/finance.css">
+  </head>
+  <body>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+    <section id="loginView" class="login-shell" aria-label="Acceso al panel">
+      <div class="login-ambient" aria-hidden="true">
+        <span class="ambient-orb orb-one"></span>
+        <span class="ambient-orb orb-two"></span>
+        <span class="ambient-grid"></span>
+      </div>
+      <div class="login-layout">
+        <section class="login-showcase" aria-label="Presentación de JadrixServs">
+          <div class="showcase-brand">
+            <span class="brand-logo-shell showcase-logo">
+              <img class="brand-logo-image" src="/jadrixservs-logo.jpg" alt="">
+            </span>
+            <div>
+              <strong>JadrixServs</strong>
+              <span>Digital Solutions</span>
+            </div>
+          </div>
+          <div class="showcase-copy">
+            <span class="live-chip"><i></i> Centro de operaciones</span>
+            <h2>Tu negocio, tus clientes y WhatsApp en un solo lugar.</h2>
+            <p>Controla renovaciones, cobranzas y atención automática desde un panel privado diseñado para trabajar con claridad.</p>
+          </div>
+          <div class="showcase-features">
+            <article>
+              <span class="feature-icon">01</span>
+              <div><strong>Seguimiento inteligente</strong><small>Vencimientos y clientes siempre visibles.</small></div>
+            </article>
+            <article>
+              <span class="feature-icon">02</span>
+              <div><strong>Información protegida</strong><small>Datos y sesión conservados en Render.</small></div>
+            </article>
+            <article>
+              <span class="feature-icon">03</span>
+              <div><strong>Atención automatizada</strong><small>Bienvenidas, AFK y cobranzas programadas.</small></div>
+            </article>
+          </div>
+          <p class="showcase-footnote"><span>●</span> Panel privado · V4.9.3 Profesional</p>
+        </section>
+
+        <section class="login-card">
+          <button class="theme-toggle login-theme-toggle" data-theme-toggle type="button" aria-label="Activar modo noche" aria-pressed="false">
+            <span class="theme-icon" aria-hidden="true">☾</span>
+            <span class="theme-label">Modo noche</span>
+          </button>
+          <div class="login-mobile-brand">
+            <span class="brand-logo-shell mobile-brand-logo">
+              <img class="brand-logo-image" src="/jadrixservs-logo.jpg" alt="">
+            </span>
+            <strong>JadrixServs</strong>
+          </div>
+          <div class="login-heading">
+            <p class="eyebrow">ACCESO SEGURO</p>
+            <h1>Bienvenido de nuevo</h1>
+            <p class="muted">Ingresa a tu centro de control para administrar toda la operación.</p>
+          </div>
+          <div class="login-badges">
+            <span><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16.1 3C9 3 3.2 8.8 3.2 15.9c0 2.3.6 4.5 1.8 6.4L3 29l6.9-1.8c1.9 1 4 1.6 6.2 1.6 7.1 0 12.9-5.8 12.9-12.9S23.2 3 16.1 3Zm0 23.3c-2 0-3.9-.5-5.6-1.5l-.4-.2-4.1 1.1 1.1-4-.3-.4a10.4 10.4 0 1 1 9.3 5Zm5.8-7.8c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2s-.8 1-1 1.2c-.2.2-.4.2-.7.1-1.9-.9-3.1-1.6-4.4-3.7-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.6s-.7-1.7-1-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.4-1.2 1.2-1.2 2.8s1.2 3.3 1.4 3.5c.2.2 2.4 3.7 5.8 5.1 2.2.9 3 1 4.1.8.7-.1 1.9-.8 2.2-1.5.3-.8.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4Z"/></svg> WhatsApp Business API</span>
+            <span>Datos en disco persistente</span>
+            <span>Sesión cifrada</span>
+          </div>
+          <form id="loginForm" class="stack">
+            <label>
+              Usuario
+              <input id="loginUsername" name="username" type="text" autocomplete="username" placeholder="Tu nombre de usuario" maxlength="60" required>
+            </label>
+            <label>
+              Contraseña
+              <span class="field-shell">
+                <span class="field-leading" aria-hidden="true">••</span>
+                <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Ingresa tu contraseña" required>
+                <button id="togglePassword" class="password-toggle" type="button" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button>
+              </span>
+            </label>
+            <button class="button primary wide login-submit" type="submit">
+              Ingresar al panel <span aria-hidden="true">→</span>
+            </button>
+          </form>
+          <p class="login-security"><span aria-hidden="true">◆</span> Conexión privada y sesión protegida</p>
+        </section>
+      </div>
+    </section>
+
+    <div id="appView" class="app-shell hidden">
+      <aside class="sidebar">
+        <div class="sidebar-ambient" aria-hidden="true"></div>
+        <div class="sidebar-brand">
+          <span class="brand-logo-shell sidebar-logo">
+            <img class="brand-logo-image" src="/jadrixservs-logo.jpg" alt="">
+          </span>
+          <div>
+            <strong>JadrixServs</strong>
+            <span>Panel Profesional V4.9.3</span>
+          </div>
+        </div>
+        <nav aria-label="Secciones del panel">
+          <p class="nav-caption">OPERACIÓN</p>
+          <button class="nav-button active" data-section="dashboard" aria-current="page" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>
+            </span><span>Resumen</span>
+          </button>
+          <button class="nav-button" data-section="whatsapp" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-11.8 7l-4.2 1 1.1-4A8 8 0 1 1 20 11.5Z"/><path d="M8.5 9.2c.7 2.2 2.1 3.7 4.4 4.5"/></svg>
+            </span><span>WhatsApp</span>
+          </button>
+          <button class="nav-button" data-section="clients" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M16 20v-1.5c0-2-1.8-3.5-4-3.5H7c-2.2 0-4 1.5-4 3.5V20"/><circle cx="9.5" cy="8" r="3.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 15c1.8.3 3 1.6 3 3.3V20"/></svg>
+            </span><span>Clientes y cobros</span>
+          </button>
+          <button class="nav-button" data-section="finance" type="button">
+            <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h16M6 16V9m6 7V4m6 12v-5"/></svg></span><span>Ventas y finanzas</span>
+          </button>
+          <button class="nav-button" data-section="dicloak" type="button">
+            <span class="nav-icon" aria-hidden="true">S/</span><span>Pago a Dicloak</span>
+          </button>
+          <button class="nav-button" data-section="lookup" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+            </span><span>Buscar celular</span>
+          </button>
+          <button class="nav-button" data-section="catalog" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/><circle cx="19" cy="17" r="2"/></svg>
+            </span><span>Catálogo y comandos</span>
+          </button>
+          <p class="nav-caption nav-caption-secondary">AUTOMATIZACIÓN</p>
+          <button class="nav-button" data-section="messages" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M5 18.5 3.5 21l4.2-.9a9 9 0 1 0-2.7-1.6Z"/><path d="M8 9h8M8 13h5"/></svg>
+            </span><span>Mensajes automáticos</span>
+          </button>
+          <button class="nav-button" data-section="ai-training" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M9 4.5a3 3 0 0 0-3 3v.2A3.5 3.5 0 0 0 4.5 14v.5A3.5 3.5 0 0 0 8 18h1M15 4.5a3 3 0 0 1 3 3v.2a3.5 3.5 0 0 1 1.5 6.3v.5A3.5 3.5 0 0 1 16 18h-1M9 4.5V20M15 4.5V20M9 9h2M13 13h2M9 17h2"/></svg>
+            </span><span>IA y entrenamiento</span>
+          </button>
+          <button class="nav-button" data-section="quick-replies" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="13" rx="2.5"/><path d="m8 17.5-3.5 3v-3M8 9h8M8 13h5"/></svg>
+            </span><span>Respuestas rápidas</span>
+          </button>
+          <button class="nav-button" data-section="afk" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M20 15.5A8.5 8.5 0 0 1 8.5 4 8.5 8.5 0 1 0 20 15.5Z"/></svg>
+            </span><span>Modo AFK</span>
+          </button>
+          <p class="nav-caption nav-caption-secondary">SEGURIDAD</p>
+          <button class="nav-button" data-section="authenticator" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.7 2.8 8.1 7 10 4.2-1.9 7-5.3 7-10V6l-7-3Z"/><path d="M9.5 12.2 11.2 14l3.6-4"/></svg>
+            </span><span>Autenticador</span>
+          </button>
+          <button class="nav-button" data-section="activity" type="button">
+            <span class="nav-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 18V6M9 18v-5m5 5V9m5 9V3"/></svg>
+            </span><span>Actividad</span>
+          </button>
+          <button id="usersNavButton" class="nav-button hidden" data-section="users" type="button">
+            <span class="nav-icon" aria-hidden="true">👥</span><span>Usuarios</span>
+          </button>
+        </nav>
+        <div class="sidebar-footer">
+          <span id="sidebarStatus" class="status-dot offline"></span>
+          <div class="sidebar-status-copy">
+            <small id="sidebarUsername">Mi cuenta</small>
+            <span id="sidebarStatusText">Conectando…</span>
+          </div>
+          <button id="logoutButton" class="logout-button" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg>
+          </button>
+        </div>
+      </aside>
+      <button id="sidebarBackdrop" class="sidebar-backdrop" type="button" aria-label="Cerrar menú"></button>
+
+      <main class="content" aria-label="Panel de administración">
+        <header class="topbar">
+          <div class="topbar-heading">
+            <p class="eyebrow">PANEL DE CONTROL</p>
+            <h1 id="pageTitle">Resumen</h1>
+          </div>
+          <div class="top-actions">
+            <span class="date-chip">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="15" rx="2"/><path d="M8 3v5M16 3v5M3.5 10h17"/></svg>
+              <span id="clockText" class="muted"></span>
+            </span>
+            <button class="theme-toggle" data-theme-toggle type="button" aria-label="Activar modo noche" aria-pressed="false">
+              <span class="theme-icon" aria-hidden="true">☾</span>
+              <span class="theme-label">Modo noche</span>
+            </button>
+            <span class="admin-chip" title="Cuenta actual">
+              <span id="sessionAvatar" class="admin-avatar">J</span>
+              <span><strong id="sessionUsername"></strong><small id="sessionRole"></small></span>
+            </span>
+            <button id="mobileMenu" class="icon-button menu-button" type="button" aria-label="Abrir menú" aria-expanded="false">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+            </button>
+          </div>
+        </header>
+
+        <section id="section-dashboard" class="page-section active">
+          <div class="hero-card">
+            <span class="hero-grid-pattern" aria-hidden="true"></span>
+            <div class="hero-copy">
+              <span id="heroBadge" class="pill neutral">Revisando WhatsApp</span>
+              <h2>Todo tu negocio bajo <span class="gradient-text">control.</span></h2>
+              <p id="heroText">Conecta WhatsApp y administra cada renovación desde este panel.</p>
+              <div class="hero-actions">
+                <button class="button light" data-go="whatsapp" type="button">Ver conexión <span aria-hidden="true">→</span></button>
+                <span class="hero-secure"><i></i> Operación protegida en Render</span>
+              </div>
+            </div>
+            <div class="hero-visual" aria-hidden="true">
+              <span class="orbit orbit-one"></span>
+              <span class="orbit orbit-two"></span>
+              <div class="hero-core">
+                <span class="core-pulse"></span>
+                <svg viewBox="0 0 24 24"><path d="M20 11.5a8 8 0 0 1-11.8 7l-4.2 1 1.1-4A8 8 0 1 1 20 11.5Z"/><path d="M8.5 9.2c.7 2.2 2.1 3.7 4.4 4.5"/></svg>
+              </div>
+              <span class="floating-status status-top"><i></i> Sesión segura</span>
+              <span class="floating-status status-bottom"><i></i> Datos activos</span>
+            </div>
+          </div>
+
+          <div class="stats-grid">
+            <article class="stat-card stat-active">
+              <span class="stat-icon blue"><svg viewBox="0 0 24 24"><path d="M16 20v-1.5c0-2-1.8-3.5-4-3.5H7c-2.2 0-4 1.5-4 3.5V20"/><circle cx="9.5" cy="8" r="3.5"/><path d="M16 6h5M18.5 3.5v5"/></svg></span>
+              <div><span>Clientes activos</span><strong id="statActive">0</strong><small>Servicios en curso</small></div>
+            </article>
+            <article class="stat-card stat-due">
+              <span class="stat-icon amber"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+              <div><span>Próximos a vencer</span><strong id="statDue">0</strong><small>En los siguientes 2 días</small></div>
+            </article>
+            <article class="stat-card stat-today">
+              <span class="stat-icon purple"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM8 3v6M16 3v6M4 11h16"/><path d="m9 16 2 2 4-4"/></svg></span>
+              <div><span>Renuevan hoy</span><strong id="statToday">0</strong><small>Cobranzas del día</small></div>
+            </article>
+            <article class="stat-card stat-expired">
+              <span class="stat-icon red"><svg viewBox="0 0 24 24"><path d="M12 8v5M12 17h.01"/><path d="M10.3 3.8 2.6 18a2 2 0 0 0 1.8 3h15.2a2 2 0 0 0 1.8-3L13.7 3.8a2 2 0 0 0-3.4 0Z"/></svg></span>
+              <div><span>Servicios vencidos</span><strong id="statExpired">0</strong><small>Requieren seguimiento</small></div>
+            </article>
+          </div>
+
+          <div class="two-column">
+            <article class="panel dashboard-panel whatsapp-summary-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ESTADO</p>
+                  <h2>WhatsApp</h2>
+                </div>
+                <span id="dashboardWaPill" class="pill neutral">Cargando</span>
+              </div>
+              <div class="wa-brand"><span class="wa-logo-ring"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16.1 3C9 3 3.2 8.8 3.2 15.9c0 2.3.6 4.5 1.8 6.4L3 29l6.9-1.8c1.9 1 4 1.6 6.2 1.6 7.1 0 12.9-5.8 12.9-12.9S23.2 3 16.1 3Zm0 23.3c-2 0-3.9-.5-5.6-1.5l-.4-.2-4.1 1.1 1.1-4-.3-.4a10.4 10.4 0 1 1 9.3 5Zm5.8-7.8c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2s-.8 1-1 1.2c-.2.2-.4.2-.7.1-1.9-.9-3.1-1.6-4.4-3.7-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.6s-.7-1.7-1-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.4-1.2 1.2-1.2 2.8s1.2 3.3 1.4 3.5c.2.2 2.4 3.7 5.8 5.1 2.2.9 3 1 4.1.8.7-.1 1.9-.8 2.2-1.5.3-.8.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4Z"/></svg></span><span class="wa-brand-copy"><strong>Conectado a WhatsApp</strong><small>Sesión del bot JadrixServs</small></span></div>
+              <div id="dashboardWaBody" class="empty-state compact">Consultando conexión…</div>
+            </article>
+            <article class="panel dashboard-panel activity-summary-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">ÚLTIMOS EVENTOS</p>
+                  <h2>Actividad reciente</h2>
+                </div>
+                <button class="text-button" data-go="activity" type="button">Ver todo</button>
+              </div>
+              <div id="recentLogs" class="timeline"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="section-whatsapp" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">CONEXIÓN</p>
+              <h2>Conexión de WhatsApp</h2>
+              <p class="muted">Escanea el QR una sola vez. El bot conserva la sesión y vuelve a conectarse automáticamente si WhatsApp interrumpe el enlace.</p>
+            </div>
+            <div class="button-row">
+              <button id="recoverWaButton" class="button primary" type="button">Forzar conexión</button>
+              <button id="restartWaButton" class="button secondary" type="button">Reiniciar</button>
+              <button id="resetWaButton" class="button danger-ghost" type="button">Cerrar sesión</button>
+            </div>
+          </div>
+          <article class="panel wa-panel">
+            <div id="waVisual" class="qr-side">
+              <div class="loader-ring"></div>
+              <p>Iniciando conexión segura…</p>
+            </div>
+            <div class="wa-copy">
+              <div class="wa-brand"><span class="wa-logo-ring"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16.1 3C9 3 3.2 8.8 3.2 15.9c0 2.3.6 4.5 1.8 6.4L3 29l6.9-1.8c1.9 1 4 1.6 6.2 1.6 7.1 0 12.9-5.8 12.9-12.9S23.2 3 16.1 3Zm0 23.3c-2 0-3.9-.5-5.6-1.5l-.4-.2-4.1 1.1 1.1-4-.3-.4a10.4 10.4 0 1 1 9.3 5Zm5.8-7.8c-.3-.2-1.9-.9-2.2-1-.3-.1-.5-.2-.7.2s-.8 1-1 1.2c-.2.2-.4.2-.7.1-1.9-.9-3.1-1.6-4.4-3.7-.3-.6.3-.5.9-1.7.1-.2 0-.4 0-.6s-.7-1.7-1-2.3c-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.4-1.2 1.2-1.2 2.8s1.2 3.3 1.4 3.5c.2.2 2.4 3.7 5.8 5.1 2.2.9 3 1 4.1.8.7-.1 1.9-.8 2.2-1.5.3-.8.3-1.4.2-1.5-.1-.2-.3-.3-.6-.4Z"/></svg></span><span class="wa-brand-copy"><strong>Conectado a WhatsApp</strong><small>Vinculación oficial por dispositivo</small></span></div>
+              <span id="waPill" class="pill neutral">Iniciando</span>
+              <h3 id="waTitle">Preparando WhatsApp</h3>
+              <p id="waDescription" class="muted">El código QR aparecerá aquí.</p>
+              <ol class="steps">
+                <li>Abre WhatsApp en tu celular.</li>
+                <li>Ve a Dispositivos vinculados.</li>
+                <li>Toca “Vincular un dispositivo” y escanea el QR.</li>
+              </ol>
+              <p id="waUpdated" class="microcopy"></p>
+            </div>
+          </article>
+          <div id="storageNotice" class="notice">
+            Verificando que la sesión y la base de clientes estén protegidas por el disco persistente de Render…
+          </div>
+          <div class="section-intro dicloak-bot-intro">
+            <div>
+              <p class="eyebrow">BOT SEPARADO</p>
+              <h2>Bot Dicloak</h2>
+              <p class="muted">Conecta un segundo número de WhatsApp para usarlo únicamente en tu grupo administrativo. Así las respuestas de DICloak no salen desde tu número personal.</p>
+            </div>
+            <div class="button-row">
+              <button id="restartDicloakBotButton" class="button secondary" type="button">Reiniciar Bot Dicloak</button>
+              <button id="resetDicloakBotButton" class="button danger-ghost" type="button">Generar QR nuevo</button>
+            </div>
+          </div>
+          <article class="panel wa-panel dicloak-bot-panel">
+            <div id="dicloakBotVisual" class="qr-side"><div class="loader-ring"></div><p>Iniciando Bot Dicloak…</p></div>
+            <div class="wa-copy">
+              <div class="wa-brand"><span class="wa-logo-ring">S/</span><span class="wa-brand-copy"><strong>Bot Dicloak</strong><small>Sesión independiente para comandos administrativos</small></span></div>
+              <span id="dicloakBotPill" class="pill neutral">Iniciando</span>
+              <h3 id="dicloakBotTitle">Preparando Bot Dicloak</h3>
+              <p id="dicloakBotDescription" class="muted">El QR de este número aparecerá aquí.</p>
+              <ol class="steps"><li>Abre WhatsApp del número que usarás como Bot Dicloak.</li><li>Ve a Dispositivos vinculados.</li><li>Escanea este QR y agrega ese número a tu grupo administrativo.</li></ol>
+              <p id="dicloakBotUpdated" class="microcopy"></p>
+            </div>
+          </article>
+        </section>
+
+        <section id="section-dicloak" class="page-section">
+          <div class="section-heading"><div><h2>Ingresos de Dicloak</h2><p id="dicloakScope" class="muted">Aportes por venta de los usuarios vinculados.</p></div></div>
+          <article class="panel">
+            <form id="dicloakFilter" class="finance-filter">
+              <label>Desde<input id="dicloakFrom" type="date" required></label>
+              <label>Hasta<input id="dicloakTo" type="date" required></label>
+              <button class="button primary" type="submit">Consultar</button>
+              <button id="dicloakMonth" class="button secondary" type="button">Este mes</button>
+            </form>
+            <p class="microcopy">Aportes fijos en soles por cada venta o renovación. Se registran como gasto automático del vendedor. Este registro no realiza transferencias de dinero.</p>
+          </article>
+          <p id="dicloakMessage" role="status" aria-live="polite"></p>
+          <div id="dicloakReport" class="hidden">
+            <div class="finance-stats">
+              <article class="panel"><span>Ingresos de Dicloak</span><strong id="dicloakTotal">S/0.00</strong><small id="dicloakPeriod"></small></article>
+              <article class="panel"><span>Ventas con aporte</span><strong id="dicloakCount">0</strong><small>Las ventas anuladas quedan excluidas</small></article>
+            </div>
+            <article class="panel"><h3>Aportes por usuario</h3><div class="table-wrap"><table><thead><tr><th>Usuario</th><th>Ventas</th><th>Ingreso de Dicloak</th></tr></thead><tbody id="dicloakUsers"></tbody></table></div></article>
+            <article class="panel"><h3>Detalle de ingresos</h3><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Usuario</th><th>Cliente</th><th>Producto</th><th>Aporte</th></tr></thead><tbody id="dicloakEntries"></tbody></table></div><p class="microcopy">Solo se incluyen aportes registrados desde la activación de esta función. No se aplican cargos a ventas anteriores.</p></article>
+            <article class="panel"><div class="panel-heading"><h3>Productos y aportes</h3><button id="dicloakAdd" class="button primary hidden" type="button">+ Agregar producto</button></div><p class="microcopy">Los precios y aportes se comparten entre los vendedores. Los cambios se aplican a ventas futuras; cada venta conserva el aporte con el que fue registrada.</p><div class="table-wrap"><table><thead><tr><th>Producto</th><th>Precio</th><th>Para Dicloak</th><th>Ganancia por venta</th><th>Estado / acciones</th></tr></thead><tbody id="dicloakRules"></tbody></table></div></article>
+          </div>
+        </section>
+        <dialog id="dicloakDialog" class="finance-dialog">
+          <form id="dicloakRuleForm" class="stack">
+            <h2 id="dicloakDialogTitle">Producto y aporte</h2>
+            <input id="dicloakRuleId" type="hidden">
+            <label>Nombre del producto<input id="dicloakName" maxlength="100" required></label>
+            <label>Otros nombres del mismo producto (separados por comas)<input id="dicloakAliases" maxlength="1500" placeholder="Ej.: Chat GPT Pro, GPT Pro"></label>
+            <label>Tipo<select id="dicloakItemType"><option value="product">Producto</option><option value="plan">Plan</option></select></label>
+            <div class="finance-form-row"><label>Precio de venta (S/)<input id="dicloakPrice" type="number" min="0.01" max="999999999.99" step="0.01" required></label><label>Pago a Dicloak (S/)<input id="dicloakContribution" type="number" min="0.01" max="999999999.99" step="0.01" required></label></div>
+            <p id="dicloakProfit" aria-live="polite"></p>
+            <label class="check-row"><input id="dicloakEnabled" type="checkbox" checked> Aplicar aporte a las nuevas ventas</label>
+            <p id="dicloakError" role="alert"></p>
+            <div class="finance-actions"><button id="dicloakSave" class="button primary" type="submit">Guardar</button><button id="dicloakCancel" class="button secondary" type="button">Cancelar</button></div>
+          </form>
+        </dialog>
+
+        <section id="section-finance" class="page-section">
+          <div class="section-intro"><div><p class="eyebrow">CONTROL DEL NEGOCIO</p><h2>Ventas y finanzas</h2><p class="muted">Consulta tus ventas, registra gastos y obtén el resultado del periodo.</p></div></div>
+          <article class="panel finance-controls">
+            <form id="financeFilter" class="finance-filter">
+              <label>Desde<input id="financeFrom" type="date" required></label>
+              <label>Hasta<input id="financeTo" type="date" required></label>
+              <button class="button primary" type="submit">Consultar periodo</button>
+              <button id="financeMonth" class="button secondary" type="button">Este mes</button>
+            </form>
+            <p class="microcopy">Ambas fechas están incluidas. <span id="financeTimezone"></span></p>
+            <div class="finance-actions"><a id="financeExport" class="button secondary hidden">Descargar estado CSV</a><button id="financePrint" class="button secondary" type="button" disabled>Imprimir / Guardar PDF</button></div>
+          </article>
+          <p id="financeMessage" role="status" aria-live="polite"></p>
+          <div id="financeReport" class="hidden">
+            <div class="finance-report-heading"><h3>Estado de ingresos y gastos</h3><p id="financePeriod"></p></div>
+            <div class="finance-stats">
+              <article class="panel"><span>Ventas realizadas</span><strong id="financeSalesCount">0</strong><small>Compras y renovaciones registradas</small></article>
+              <article class="panel"><span>Gastos registrados</span><strong id="financeExpenseCount">0</strong><small>En el periodo seleccionado</small></article>
+            </div>
+            <article class="panel"><h3>Resultado por moneda</h3><div class="table-wrap"><table><thead><tr><th>Moneda</th><th>Cobrado por ventas</th><th>Pago a Dicloak</th><th>Ganancia tras Dicloak</th><th>Gastos totales</th><th>Resultado final</th></tr></thead><tbody id="financeTotals"></tbody></table></div><p class="microcopy">Ganancia tras Dicloak = cobrado menos aportes. Resultado final = cobrado menos todos los gastos, incluyendo Dicloak una sola vez. Cada moneda se calcula por separado.</p></article>
+            <p id="financeWarnings" class="notice"></p>
+            <article class="panel finance-ledger"><div class="panel-heading"><h3>Ventas</h3><button id="financeAddSale" class="button secondary" type="button">+ Registrar venta</button></div><p class="microcopy">Las compras y renovaciones nuevas se registran automáticamente. Los clientes pendientes no cuentan hasta activarlos. Editar o eliminar un cliente no modifica su historial financiero; corrige o anula el movimiento aquí.</p><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Importe</th><th>Origen / estado</th><th class="finance-action-column">Acciones</th></tr></thead><tbody id="financeSales"></tbody></table></div></article>
+            <article class="panel finance-ledger"><div class="panel-heading"><h3>Gastos</h3><button id="financeAddExpense" class="button primary" type="button">+ Registrar gasto</button></div><p id="financeCategories" class="microcopy"></p><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto / categoría</th><th>Importe</th><th>Estado</th><th class="finance-action-column">Acciones</th></tr></thead><tbody id="financeExpenses"></tbody></table></div></article>
+            <article id="financeUndatedPanel" class="panel finance-ledger hidden"><h3>Registros sin fecha · fuera del reporte</h3><p class="microcopy">Completa estos movimientos para incluirlos en el periodo correspondiente.</p><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Importe</th><th>Estado</th><th class="finance-action-column">Acciones</th></tr></thead><tbody id="financeUndated"></tbody></table></div></article>
+            <p class="microcopy">El historial anterior contiene solo la última compra disponible de cada registro; no reconstruye renovaciones que el sistema ya había reemplazado. Los movimientos anulados se conservan y no se suman.</p>
+          </div>
+        </section>
+
+        <dialog id="financeDialog" class="finance-dialog">
+          <form id="financeEntryForm" class="stack">
+            <h2 id="financeDialogTitle">Registrar gasto</h2>
+            <input id="financeEntryId" type="hidden"><input id="financeEntryType" type="hidden">
+            <label>Fecha<input id="financeEntryDate" type="date" required></label>
+            <datalist id="financeProducts"></datalist><label>Concepto / producto<input id="financeEntryDescription" maxlength="200" placeholder="Ej.: publicidad en Meta" required></label>
+            <div class="finance-form-row"><label>Importe<input id="financeEntryAmount" type="number" min="0.01" max="999999999.99" step="0.01" required></label><label>Moneda<select id="financeEntryCurrency" required><option value="">Seleccionar</option><option>PEN</option><option>USD</option><option>MXN</option><option>ARS</option><option>EUR</option><option>COP</option><option>CLP</option><option>BOB</option><option>BRL</option></select></label></div>
+            <label id="financeCategoryLabel">Categoría<select id="financeEntryCategory"><option>Publicidad</option><option>Costo de productos</option><option>Comisiones</option><option>Envíos</option><option>Servicios</option><option>Otros</option></select></label>
+            <label>Notas (opcional)<textarea id="financeEntryNotes" maxlength="1000" rows="3"></textarea></label>
+            <p id="financeEntryError" role="alert"></p>
+            <div class="finance-actions"><button id="financeSave" class="button primary" type="submit">Guardar movimiento</button><button id="financeCancel" class="button secondary" type="button">Cancelar</button></div>
+          </form>
+        </dialog>
+
+        <section id="section-clients" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">CONTROL MANUAL</p>
+              <h2>Clientes y cobros</h2>
+              <p class="muted">Registra quién compró, qué servicio o plan usa, su cuenta asociada y cuándo debe renovar.</p>
+            </div>
+            <div class="button-row">
+              <a class="button secondary" href="/api/export/clients.csv">Exportar CSV</a>
+              <a class="button secondary" href="/api/backup/data.json">Descargar respaldo JSON</a>
+              <button id="restoreBackupButton" class="button secondary" type="button">Restaurar respaldo JSON</button>
+              <input id="restoreBackupInput" class="hidden" type="file" accept="application/json,.json">
+              <button id="openClientBroadcastButton" class="button primary" type="button">Enviar aviso por servicio</button>
+              <button id="chargeTodayButton" class="button charge" type="button">Cobrar a los que vencen hoy</button>
+              <button id="runSchedulerButton" class="button secondary" type="button">Procesar vencimientos</button>
+              <button id="newClientButton" class="button primary" type="button">+ Nuevo cliente</button>
+            </div>
+          </div>
+          <article class="panel command-guide">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">REGISTRO RÁPIDO</p>
+                <h3>Comandos desde WhatsApp</h3>
+              </div>
+              <span class="pill blue">Solo tú</span>
+            </div>
+            <p class="muted">
+              Escribe el comando desde tu propio WhatsApp dentro del chat del cliente. El bot identifica automáticamente el número o <strong>@usuario</strong>, crea al cliente como <strong>estimad@</strong> y calcula el vencimiento usando los días indicados.
+            </p>
+            <div class="command-examples">
+              <code>/planpro 30</code>
+              <code>/gptpro 30</code>
+              <code>/geminipro 365</code>
+            </div>
+            <p class="microcopy">
+              Cada comando nuevo crea una compra independiente, incluso si repites el mismo servicio. Así, cada registro conserva su propia activación y vencimiento. Un mismo contacto puede tener varias compras o servicios registrados, sin un límite fijo. Los clientes no pueden ejecutar estos comandos.
+            </p>
+            <a class="button secondary" href="/COMANDOS-WHATSAPP-V4.8.txt" download>Descargar todos los comandos</a>
+          </article>
+          <article class="panel table-panel">
+            <div class="table-tools">
+              <input id="clientSearch" type="search" placeholder="Buscar cliente, WhatsApp, servicio o cuenta…">
+              <select id="clientStatusFilter" aria-label="Filtrar por estado">
+                <option value="">Todos los estados</option>
+                <option value="activo">Activos</option>
+                <option value="pendiente">Pendientes</option>
+                <option value="vencido">Vencidos</option>
+                <option value="pausado">Pausados</option>
+              </select>
+            </div>
+            <div class="client-color-legend" role="group" aria-label="Colores de vencimiento">
+              <span><i class="legend-dot green"></i> De 3 a 30 días</span>
+              <span><i class="legend-dot yellow"></i> De 0 a 2 días</span>
+              <span><i class="legend-dot red"></i> Vencido</span>
+              <span><i class="legend-dot neutral"></i> Más de 30 días</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>WhatsApp</th>
+                    <th>Servicio o plan</th>
+                    <th>Cuenta asociada</th>
+                    <th>Vencimiento</th>
+                    <th>Días restantes</th>
+                    <th>Automatización</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="clientsTable"></tbody>
+              </table>
+            </div>
+            <div id="clientsEmpty" class="empty-state hidden">
+              <strong>Aún no hay clientes registrados.</strong>
+              <span>Agrega el primero para controlar su próximo cobro.</span>
+            </div>
+          </article>
+        </section>
+
+        <section id="section-lookup" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">CONSULTA RÁPIDA</p>
+              <h2>Buscar cliente por WhatsApp</h2>
+              <p class="muted">Escribe el número o @usuario para ver todos los servicios registrados y sus fechas de vencimiento.</p>
+            </div>
+          </div>
+          <article class="panel lookup-panel">
+            <form id="lookupForm" class="lookup-form">
+              <label>
+                Número o @usuario de WhatsApp
+                <input id="lookupPhone" type="search" autocomplete="off" placeholder="Ejemplo: 921444991 o @josrn_69" required>
+              </label>
+              <button id="lookupButton" class="button primary" type="submit">Buscar cliente</button>
+            </form>
+            <p class="microcopy">Puedes escribir los 9 dígitos de Perú, el número completo con código de país o el @usuario exactamente como aparece en WhatsApp.</p>
+          </article>
+          <div id="lookupResults" class="lookup-results">
+            <div class="empty-state compact">
+              <strong>La información aparecerá aquí.</strong>
+              <span>Podrás ver servicio, precio, estado y vencimiento.</span>
+            </div>
+          </div>
+        </section>
+
+        <section id="section-messages" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">CONTENIDO DEL BOT</p>
+              <h2>Mensajes automáticos</h2>
+              <p class="muted">Personaliza la bienvenida por país, el recordatorio de renovación y la cobranza.</p>
+            </div>
+            <button id="saveSettingsButton" class="button primary" type="button">Guardar cambios</button>
+          </div>
+
+          <div class="notice mode-notice">
+            <strong>Detección automática:</strong> el bot puede reconocer primero el anuncio de Meta o Instagram y, si no coincide, usar el país del número. Cada bienvenida puede tener entre 1 y 20 mensajes; las respuestas por anuncio también admiten audio.
+          </div>
+
+          <article id="adGreetingsPanel" class="panel ad-greetings-panel">
+            <div class="ad-greetings-heading">
+              <div>
+                <span class="pill cyan">Meta · Instagram · WhatsApp</span>
+                <h3>Bienvenidas por anuncio</h3>
+                <p>Cada anuncio puede responder con una secuencia propia de textos, imágenes y audios opcionales. El bot compara el título, texto, ID y enlace que WhatsApp adjunta al primer mensaje del cliente.</p>
+              </div>
+              <button id="newAdGreetingButton" class="button primary" type="button">+ Agregar anuncio</button>
+            </div>
+            <label class="toggle-row ad-routing-toggle">
+              <input id="adGreetingRoutingEnabled" type="checkbox" checked>
+              <span>
+                <strong>Detectar anuncio y usar su bienvenida</strong>
+                <small>Si lo desactivas y guardas, todos los contactos nuevos recibirán únicamente la bienvenida general.</small>
+              </span>
+              <span id="welcomeRoutingStatus" class="pill green">Detección activa</span>
+            </label>
+            <div class="ad-greeting-flow" aria-label="Prioridad de las bienvenidas">
+              <span><b>1</b> Anuncio reconocido</span>
+              <i aria-hidden="true">→</i>
+              <span><b>2</b> País del número</span>
+              <i aria-hidden="true">→</i>
+              <span><b>3</b> Bienvenida general</span>
+            </div>
+            <div class="notice ad-greeting-notice">
+              <strong>Consejo:</strong> agrega frases únicas que aparezcan en la publicación, como <code>POTENCIA TU PRODUCTIVIDAD CON CHATGPT</code>. Si Meta entrega el ID del anuncio, también puedes pegarlo como identificador.
+            </div>
+            <div id="adGreetingGrid" class="ad-greeting-grid"></div>
+            <div id="adGreetingEmpty" class="country-greeting-empty hidden">
+              <strong>No hay anuncios configurados.</strong>
+              <span>Los clientes recibirán la bienvenida por país o la general.</span>
+              <button class="button secondary" data-ad-greeting-new type="button">Configurar primer anuncio</button>
+            </div>
+          </article>
+
+          <article class="panel country-greetings-panel">
+            <div class="country-greetings-heading">
+              <div>
+                <span class="pill violet">Por prefijo internacional</span>
+                <h3>Bienvenidas y precios por país</h3>
+                <p>Agrega o quita mensajes para cada moneda y adjunta imágenes cuando las necesites. Los precios se escriben directamente y no se convierten automáticamente.</p>
+              </div>
+              <button id="newCountryGreetingButton" class="button primary" type="button">+ Agregar país</button>
+            </div>
+            <div class="country-greeting-flow" aria-label="Funcionamiento de las bienvenidas por país">
+              <span><b>1</b> Llega un número</span>
+              <i aria-hidden="true">→</i>
+              <span><b>2</b> Se detecta el prefijo</span>
+              <i aria-hidden="true">→</i>
+              <span><b>3</b> Se envía su secuencia</span>
+            </div>
+            <div id="countryGreetingGrid" class="country-greeting-grid"></div>
+            <div id="countryGreetingEmpty" class="country-greeting-empty hidden">
+              <strong>No hay países configurados.</strong>
+              <span>Se usará la bienvenida predeterminada hasta que agregues uno.</span>
+              <button class="button secondary" data-country-greeting-new type="button">Configurar primer país</button>
+            </div>
+          </article>
+
+          <div class="two-column settings-grid">
+            <article class="panel">
+              <div class="panel-heading"><h3>Bienvenida predeterminada</h3><span class="pill blue">Respaldo</span></div>
+              <div class="notice country-fallback-notice">Se usa cuando el número no coincide con ningún país activo. Así ningún contacto nuevo queda sin respuesta.</div>
+              <div class="welcome-sequence-heading">
+                <div><strong>Secuencia general</strong><small>Ordena los mensajes y agrega una imagen solo cuando quieras.</small></div>
+                <button id="addGeneralGreetingMessage" class="button secondary compact-button" type="button">+ Agregar mensaje</button>
+              </div>
+              <div id="generalGreetingMessages" class="welcome-message-list" data-welcome-editor="general"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-heading"><h3>Renovaciones</h3><span class="pill green">Programadas</span></div>
+              <label>
+                Recordatorio · 2 días antes
+                <textarea id="reminderTemplate" rows="7"></textarea>
+                <small>Variables: {nombre}, {producto}, {cuenta}, {precio}, {fecha}</small>
+              </label>
+              <label>
+                Cobranza · día del vencimiento
+                <textarea id="chargeTemplate" rows="7"></textarea>
+                <small>Variables: {nombre}, {producto}, {cuenta}, {precio}, {fecha}</small>
+              </label>
+              <label>
+                Hora mínima para iniciar cobranzas
+                <input id="chargeStartTime" type="time" value="09:00" required>
+                <small>Las cobranzas automáticas y el botón “Cobrar a los que vencen hoy” respetan esta hora de Perú.</small>
+              </label>
+              <label>
+                Hora mínima para enviar recordatorios
+                <input id="reminderStartTime" type="time" value="09:00" required>
+                <small>Los recordatorios de vencimiento nunca se envían antes de esta hora (zona horaria de Perú).</small>
+              </label>
+              <div class="notice">
+                El recordatorio queda activado al registrar un cliente. La cobranza automática permanece apagada hasta que la marques manualmente en su ficha.
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section id="section-ai-training" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">IA PARA WHATSAPP</p>
+              <h2>IA y entrenamiento</h2>
+              <p class="muted">Configura respuestas inteligentes con tus productos, precios, formas de pago y reglas del negocio.</p>
+            </div>
+            <div class="button-row">
+              <button id="testAiButton" class="button secondary" type="button">Probar conexión</button>
+              <button id="saveAiButton" class="button primary" type="button">Guardar configuración</button>
+            </div>
+          </div>
+
+          <article class="ai-hero panel">
+            <div class="ai-hero-copy">
+              <div class="ai-orb" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 2.8c.5 4.7 4.1 8.4 8.8 8.9-4.7.5-8.3 4.2-8.8 8.9-.5-4.7-4.1-8.4-8.8-8.9 4.7-.5 8.3-4.2 8.8-8.9Z"/><path d="M19 3.5c.2 1.6 1.4 2.8 3 3-1.6.2-2.8 1.4-3 3-.2-1.6-1.4-2.8-3-3 1.6-.2 2.8-1.4 3-3Z"/></svg>
+              </div>
+              <div>
+                <span id="aiStatusPill" class="pill violet">Cargando estado</span>
+                <h3 id="aiHeroTitle">La IA responde con el contexto de JadrixServs</h3>
+                <p>La secuencia de bienvenida configurada se conserva y la IA puede responder desde el primer mensaje usando solamente la información que configures aquí.</p>
+              </div>
+            </div>
+            <div class="ai-status-grid">
+              <div><small>Proveedor</small><strong id="aiProviderText">Gemini</strong></div>
+              <div><small>Modelo</small><strong id="aiModelText">gemini-3.6-flash</strong></div>
+              <div><small>API key</small><strong id="aiKeyText">Sin configurar</strong></div>
+            </div>
+          </article>
+
+          <div class="ai-layout">
+            <article class="panel ai-config-panel">
+              <div class="panel-heading">
+                <div><span class="eyebrow">CONEXIÓN SEGURA</span><h3 id="aiConnectionTitle">Proveedor de IA</h3></div>
+                <span class="pill green">Solo backend</span>
+              </div>
+              <label>
+                Proveedor
+                <select id="aiProviderSelect">
+                  <option value="gemini">Google Gemini</option>
+                  <option value="claude">Claude API (MWAPI)</option>
+                </select>
+                <small>Claude API usa el saldo adquirido y Gemini conserva su integración actual.</small>
+              </label>
+              <label>
+                <span id="aiApiKeyLabel">API key</span>
+                <div class="secret-input-row">
+                  <input id="aiApiKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="Pega una nueva clave para guardarla">
+                  <button id="toggleAiKeyButton" class="button secondary compact-button" type="button" aria-pressed="false">Mostrar</button>
+                </div>
+                <small id="aiKeyHelp">La clave se cifra antes de guardarse y nunca vuelve al navegador.</small>
+              </label>
+              <label>
+                Modelo
+                <input id="aiModel" type="text" list="aiModelOptions" value="gemini-3.6-flash" autocomplete="off" spellcheck="false">
+                <datalist id="aiModelOptions">
+                  <option value="gemini-3.6-flash">Estable recomendado</option>
+                  <option value="gemini-3.5-flash">Alternativa estable</option>
+                  <option value="gemini-3.5-flash-lite">Menor costo</option>
+                  <option value="claude-sonnet-4-6">Claude Sonnet recomendado</option>
+                  <option value="claude-haiku-4-5-20251001">Claude Haiku rápido</option>
+                  <option value="claude-opus-4-6">Claude Opus 4.6</option>
+                  <option value="claude-opus-4-7">Claude Opus 4.7</option>
+                  <option value="claude-opus-4-8">Claude Opus 4.8</option>
+                  <option value="claude-opus-5">Claude Opus 5</option>
+                  <option value="claude-sonnet-5">Claude Sonnet 5</option>
+                </datalist>
+                <small id="aiModelHelp">Usa un nombre de modelo disponible para el proveedor elegido.</small>
+              </label>
+              <label id="claudeBaseUrlRow" class="hidden">
+                Dirección de Claude API
+                <input id="claudeBaseUrl" type="url" value="https://api.mwapi.dev/v1" autocomplete="off" spellcheck="false">
+                <small>Esta es la dirección indicada en la guía de MWAPI. Solo cámbiala si el proveedor entrega una nueva.</small>
+              </label>
+              <label class="toggle-row ai-toggle-row">
+                <input id="aiReplyEnabled" type="checkbox">
+                <span><strong>Activar respuestas con IA</strong><small id="aiToggleHelp">La IA responderá desde el primer mensaje. El modo AFK mantiene prioridad.</small></span>
+              </label>
+              <label id="aiPaymentRecognitionRow" class="toggle-row ai-toggle-row">
+                <input id="aiPaymentRecognitionEnabled" type="checkbox" checked>
+                <span><strong>Reconocer pagos y registrar clientes</strong><small>La captura se enviará a MWAPI para analizarla. Solo registrará cuando el estado, destinatario, importe, moneda y referencia sean claros y coincidan con el servicio.</small></span>
+              </label>
+              <div id="aiConfigurationNotice" class="notice">Guarda una API key para habilitar las respuestas.</div>
+              <button id="deleteAiKeyButton" class="button danger-ghost hidden" type="button">Eliminar API key guardada</button>
+            </article>
+
+            <article class="panel ai-flow-panel">
+              <div class="panel-heading"><div><span class="eyebrow">ORDEN DE RESPUESTA</span><h3>Flujo del bot</h3></div></div>
+              <ol class="ai-flow-list">
+                <li><span>1</span><div><strong>Bienvenida por país</strong><small>Un contacto nuevo recibe la secuencia configurada, incluidas sus imágenes opcionales.</small></div></li>
+                <li><span>2</span><div><strong>Respuesta inmediata</strong><small>La consulta del primer contacto también se envía al proveedor elegido.</small></div></li>
+                <li><span>3</span><div><strong>Pagos y registro</strong><small>Una captura clara puede validarse contra el servicio y registrar al cliente automáticamente.</small></div></li>
+              </ol>
+              <div class="notice ai-safety-notice"><strong>Control humano:</strong> si la IA no está disponible, el bot no inventa una respuesta ni marca el mensaje como atendido.</div>
+            </article>
+          </div>
+
+          <article class="panel ai-pricing-panel">
+            <div class="ai-pricing-heading">
+              <div>
+                <span class="eyebrow">MONEDA SEGÚN WHATSAPP</span>
+                <h3>Precios locales por país</h3>
+                <p class="muted">La IA selecciona esta tabla mediante el prefijo real del cliente. Edita aquí el precio final que deseas ofrecer en cada moneda.</p>
+              </div>
+              <span id="countryPriceBookCount" class="pill violet">3 países</span>
+            </div>
+            <div class="notice ai-pricing-notice">
+              <strong>Precios controlados:</strong> los importes quedan guardados en <code>data</code> y no cambian con el tipo de cambio. La IA no convertirá ni mezclará monedas automáticamente.
+            </div>
+            <div class="ai-prefix-flow" aria-label="Selección de precios por prefijo">
+              <span><b>+51</b> Soles peruanos</span>
+              <span><b>+52</b> Pesos mexicanos</span>
+              <span><b>+54</b> Pesos argentinos</span>
+            </div>
+            <div id="countryPriceBookList" class="country-price-book-list"></div>
+          </article>
+
+          <div class="two-column ai-business-grid">
+            <article class="panel">
+              <div class="panel-heading"><div><span class="eyebrow">VENTAS</span><h3>Métodos de pago</h3></div><span class="pill blue">Contexto IA</span></div>
+              <label>Pagos en Perú<textarea id="aiPeruPayment" rows="7" placeholder="Yape, Plin, transferencia y datos confirmados..."></textarea><small>La IA usará esta información para clientes con prefijo +51.</small></label>
+              <label>Pagos internacionales<textarea id="aiInternationalPayment" rows="7" placeholder="PayPal, Binance, transferencia internacional..."></textarea><small>Indica moneda, plataforma y condiciones sin guardar datos sensibles.</small></label>
+            </article>
+            <article class="panel">
+              <div class="panel-heading"><div><span class="eyebrow">PERSONALIDAD</span><h3>Instrucciones para responder</h3></div><span class="pill violet">Sistema</span></div>
+              <label>Estilo y reglas de atención<textarea id="aiInstructions" rows="12" placeholder="Ejemplo: responde de forma breve, amable y directa..."></textarea><small>No escribas contraseñas, tokens ni secretos. Esta instrucción acompaña cada consulta.</small></label>
+            </article>
+          </div>
+
+          <article class="panel training-panel ai-training-panel">
+            <div class="ai-training-heading">
+              <div>
+                <span class="eyebrow">MEMORIA PERMANENTE EN DATA</span>
+                <h3>Enseñar cómo debe responder</h3>
+                <p class="training-copy muted">Escribe una pregunta o tema, sus frases relacionadas y una respuesta modelo completa. Se guardará en la memoria del bot y la IA la priorizará cuando un cliente consulte algo relacionado.</p>
+              </div>
+              <div class="button-row">
+                <span id="knowledgeCount" class="pill blue">0 recuerdos</span>
+                <button id="addKnowledgeButton" class="button secondary" type="button">+ Enseñar respuesta</button>
+              </div>
+            </div>
+            <div class="notice ai-memory-notice"><strong>Memoria activa:</strong> guardar aquí no entrena un modelo externo; conserva tus respuestas en el disco persistente y las entrega como contexto prioritario en cada consulta relacionada.</div>
+            <div id="knowledgeList" class="knowledge-list"></div>
+            <div id="knowledgeEmpty" class="empty-state compact hidden">
+              <strong>La memoria todavía está vacía.</strong>
+              <span>Enseña la primera respuesta para que la IA conozca tu forma de atender.</span>
+            </div>
+          </article>
+        </section>
+
+        <section id="section-quick-replies" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">ATAJOS DE WHATSAPP</p>
+              <h2>Respuestas rápidas</h2>
+              <p class="muted">Crea comandos privados que envían una o varias imágenes y después uno o más textos.</p>
+            </div>
+            <div class="button-row">
+              <button id="refreshQuickRepliesButton" class="button secondary" type="button">Actualizar</button>
+              <button id="newQuickReplyButton" class="button primary" type="button">+ Nueva respuesta</button>
+            </div>
+          </div>
+
+          <article class="quick-reply-guide" aria-label="Cómo usar respuestas rápidas">
+            <div class="quick-reply-guide-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M5 18.5 3.5 21l4.2-.9a9 9 0 1 0-2.7-1.6Z"/><path d="M8 9h8M8 13h5"/></svg>
+            </div>
+            <div>
+              <span class="pill violet">Solo administrador</span>
+              <h3>Escribe el comando dentro del chat del cliente.</h3>
+              <p>Por ejemplo, al escribir <code>/diferencia</code> desde tu propio WhatsApp, el bot enviará las imágenes en el orden guardado y la última llevará el primer texto como pie de foto. Los textos siguientes llegarán separados. Los clientes no pueden ejecutar estos comandos.</p>
+            </div>
+          </article>
+
+          <article class="panel authenticator-toolbar quick-reply-toolbar">
+            <div>
+              <label for="quickReplySearch">Buscar respuesta</label>
+              <input id="quickReplySearch" type="search" autocomplete="off" placeholder="Nombre, comando o texto…">
+            </div>
+            <span id="quickReplyCount" class="pill blue">0 respuestas</span>
+          </article>
+
+          <div id="quickReplyGrid" class="quick-reply-grid"></div>
+          <article id="quickReplyEmpty" class="panel empty-state hidden">
+            <span class="quick-reply-empty-icon" aria-hidden="true">/</span>
+            <strong>Aún no hay respuestas rápidas.</strong>
+            <span>Crea la primera, carga sus imágenes y escribe los mensajes que irán después.</span>
+            <button class="button primary" data-quick-reply-new type="button">Crear primera respuesta</button>
+          </article>
+        </section>
+
+        <section id="section-afk" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">FUERA DE HORARIO</p>
+              <h2>Modo AFK</h2>
+              <p class="muted">Activa una respuesta temporal cuando no estés disponible para atender.</p>
+            </div>
+            <button id="saveAfkButton" class="button primary" type="button">Guardar modo AFK</button>
+          </div>
+          <div id="afkStatusNotice" class="notice">Cargando estado del modo AFK…</div>
+          <article class="panel afk-panel">
+            <label class="toggle-row afk-toggle">
+              <input id="afkEnabled" type="checkbox">
+              <span>
+                <strong>Activar modo AFK</strong>
+                <small>Al activarlo, cada contacto recibe una sola respuesta AFK durante esta ausencia.</small>
+              </span>
+            </label>
+            <label>
+              Mensaje fuera del horario de atención
+              <textarea id="afkMessage" rows="8" placeholder="Escribe el mensaje que recibirán tus clientes"></textarea>
+              <small>El modo AFK tiene prioridad: mientras esté activo, un contacto nuevo recibe este mensaje en lugar de la bienvenida de 3 partes. Al desactivarlo, la bienvenida vuelve a funcionar normalmente.</small>
+            </label>
+          </article>
+        </section>
+
+        <section id="section-authenticator" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">SEGURIDAD 2FA</p>
+              <h2>Autenticador</h2>
+              <p class="muted">Guarda tus cuentas, genera sus códigos temporales y envíalos con un comando privado desde WhatsApp.</p>
+            </div>
+            <div class="button-row">
+              <button id="authenticatorUsageButton" class="button secondary" type="button">Control de uso</button>
+              <button id="refreshAuthenticatorButton" class="button secondary" type="button">Actualizar códigos</button>
+              <button id="newAuthenticatorButton" class="button primary" type="button">+ Nueva cuenta</button>
+            </div>
+          </div>
+
+          <article class="authenticator-hero">
+            <span class="authenticator-hero-glow" aria-hidden="true"></span>
+            <div class="authenticator-shield" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.7 2.8 8.1 7 10 4.2-1.9 7-5.3 7-10V6l-7-3Z"/><path d="M9.5 12.2 11.2 14l3.6-4"/></svg>
+            </div>
+            <div class="authenticator-hero-copy">
+              <span id="authenticatorSecurityPill" class="pill green">Cifrado activo</span>
+              <h3>Claves protegidas y códigos listos para WhatsApp.</h3>
+              <p>Las claves secretas se cifran antes de guardarse en <code>/data</code>. Cada cuenta tiene un comando único; si el código tiene menos de 20 segundos, el bot espera el siguiente y lo envía con una vigencia segura.</p>
+            </div>
+            <div class="authenticator-security-points">
+              <span><i></i>Cifrado AES-256-GCM</span>
+              <span><i></i>Códigos TOTP locales</span>
+              <span><i></i>Ventana segura de 20–30 s</span>
+            </div>
+          </article>
+
+          <div class="notice authenticator-warning">
+            <strong>Comandos protegidos:</strong> siempre funcionan cuando tú los escribes desde el WhatsApp propietario. Autoriza un número o <strong>@usuario</strong> con el botón <strong>Accesos</strong>, o escribe <code>/codigo gpt04</code> dentro del chat del cliente para permitirle solicitar la cuenta <code>/gpt04</code>. En una urgencia, validar el correo concede una excepción automática para entregar un solo código.
+          </div>
+          <div id="authenticatorKeyNotice" class="notice hidden"></div>
+
+          <article class="panel authenticator-toolbar">
+            <div>
+              <label for="authenticatorSearch">Buscar cuenta</label>
+              <input id="authenticatorSearch" type="search" autocomplete="off" placeholder="Nombre, servicio, correo o comando…">
+            </div>
+            <span id="authenticatorCount" class="pill blue">0 cuentas</span>
+          </article>
+
+          <div id="authenticatorGrid" class="authenticator-grid"></div>
+          <article id="authenticatorEmpty" class="panel empty-state authenticator-empty">
+            <span class="authenticator-empty-icon" aria-hidden="true">•••</span>
+            <strong>Aún no hay cuentas en el Autenticador.</strong>
+            <span>Agrega una con su nombre, servicio, correo y clave secreta 2FA.</span>
+            <button class="button primary" data-authenticator-new type="button">Agregar primera cuenta</button>
+          </article>
+        </section>
+
+        <section id="section-catalog" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">CATÁLOGO</p>
+              <h2>Catálogo y comandos</h2>
+              <p class="muted">Agrega productos o planes nuevos, edita precios y define el comando con el que registras clientes desde WhatsApp.</p>
+            </div>
+            <div class="button-row">
+              <button id="refreshCatalogButton" class="button secondary" type="button">Actualizar</button>
+              <button id="newCatalogButton" class="button primary" type="button">+ Nuevo producto</button>
+            </div>
+          </div>
+
+          <div class="notice">
+            <strong>Cómo funciona:</strong> escribe el comando y los días en el chat del cliente, por ejemplo <code>/claudepro 30</code>, y el bot lo registra con el precio del catálogo.
+          </div>
+
+          <article class="panel authenticator-toolbar">
+            <div>
+              <label for="catalogSearch">Buscar en el catálogo</label>
+              <input id="catalogSearch" type="search" autocomplete="off" placeholder="Nombre, comando o precio…">
+            </div>
+            <span id="catalogCount" class="pill blue">0 productos</span>
+          </article>
+
+          <div id="catalogGrid" class="catalog-grid"></div>
+          <article id="catalogEmpty" class="panel empty-state hidden">
+            <strong>Todavía no hay productos en el catálogo.</strong>
+            <span>Agrega el primero con su precio y su comando.</span>
+            <button class="button primary" data-catalog-new type="button">Agregar producto</button>
+          </article>
+        </section>
+
+        <section id="section-users" class="page-section">
+          <div class="section-intro">
+            <div><p class="eyebrow">ADMINISTRACIÓN</p><h2>Usuarios y espacios independientes</h2>
+              <p class="muted">Cada usuario conecta su propio WhatsApp y administra sus clientes, servicios y mensajes.</p>
+            </div>
+          </div>
+          <article class="panel">
+            <h3>Crear usuario</h3>
+            <form id="createUserForm" class="form-grid">
+              <label>Nombre de usuario<input id="newUsername" autocomplete="off" maxlength="60" placeholder="Ejemplo: Login Serv" required></label>
+              <label>Contraseña<input id="newUserPassword" type="password" autocomplete="new-password" minlength="4" maxlength="128" required></label>
+              <div class="span-2"><button id="createUserButton" class="button primary" type="submit">Crear usuario</button></div>
+            </form>
+            <p class="microcopy">La nueva cuenta empieza sin clientes ni WhatsApp conectado. Comparte sus datos de acceso con quien la usará.</p>
+          </article>
+          <article class="panel">
+            <h3>Cuentas registradas</h3>
+            <div id="usersList" class="users-list" aria-live="polite"></div>
+          </article>
+        </section>
+
+        <section id="section-activity" class="page-section">
+          <div class="section-intro">
+            <div>
+              <p class="eyebrow">REGISTRO</p>
+              <h2>Actividad</h2>
+              <p class="muted">Bienvenidas, conexión, clientes, recordatorios y cobranzas recientes.</p>
+            </div>
+            <button id="refreshLogsButton" class="button secondary" type="button">Actualizar</button>
+          </div>
+          <article class="panel">
+            <div id="allLogs" class="timeline large"></div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="clientDialog">
+      <form id="clientForm" method="dialog">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">CLIENTE</p><h2 id="clientDialogTitle">Nuevo registro</h2></div>
+          <button class="icon-button dialog-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="clientId" type="hidden">
+        <div class="form-grid">
+          <label>Nombre<input id="clientName" type="text" required></label>
+          <label>WhatsApp: número o @usuario<input id="clientWhatsapp" type="text" autocomplete="off" placeholder="921444991 o @josrn_69" required></label>
+          <label>Servicio o plan<input id="clientProduct" type="text" list="productOptions" required></label>
+          <label>
+            Cuenta asociada
+            <input id="clientAccountReference" type="text" placeholder="Correo, perfil o código interno">
+            <small>No guardes contraseñas aquí.</small>
+          </label>
+          <label>Precio<input id="clientPrice" type="text" placeholder="S/25"></label>
+          <label>Método de pago<input id="clientPaymentMethod" type="text" placeholder="Yape, Binance…"></label>
+          <label>Estado
+            <select id="clientStatus">
+              <option value="activo">Activo</option>
+              <option value="pendiente">Pendiente</option>
+              <option value="vencido">Vencido</option>
+              <option value="pausado">Pausado</option>
+            </select>
+          </label>
+          <label>Fecha de activación<input id="clientStartDate" type="date" required></label>
+          <label>Fecha de vencimiento<input id="clientExpiryDate" type="date" required></label>
+          <label>Duración
+            <select id="clientTermMonths">
+              <option value="1">1 mes</option>
+              <option value="12">12 meses</option>
+              <option value="18">18 meses</option>
+            </select>
+          </label>
+          <label class="toggle-row"><input id="clientAutoReminder" type="checkbox"><span>Recordatorio automático 2 días antes</span></label>
+          <label class="toggle-row"><input id="clientAutoCharge" type="checkbox"><span>Activar cobranza automática el día de vencimiento</span></label>
+          <label class="span-2">Notas<textarea id="clientNotes" rows="3"></textarea></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary dialog-close" type="button">Cancelar</button>
+          <button class="button primary" type="submit">Guardar cliente</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="copyWhatsappDialog" class="whatsapp-copy-dialog">
+      <form method="dialog">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">CONTACTO DE WHATSAPP</p>
+            <h2>¿Qué deseas copiar?</h2>
+            <p id="copyWhatsappClientLabel" class="muted"></p>
+          </div>
+          <button class="icon-button whatsapp-copy-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="whatsapp-copy-options">
+          <button id="copyWhatsappPhoneButton" class="whatsapp-copy-option" type="button">
+            <span class="whatsapp-copy-icon" aria-hidden="true">☎</span>
+            <span>
+              <small>Número de WhatsApp</small>
+              <strong id="copyWhatsappPhoneValue">No disponible</strong>
+            </span>
+            <b>Copiar</b>
+          </button>
+          <button id="copyWhatsappUsernameButton" class="whatsapp-copy-option" type="button">
+            <span class="whatsapp-copy-icon username" aria-hidden="true">@</span>
+            <span>
+              <small>Nombre de usuario</small>
+              <strong id="copyWhatsappUsernameValue">Buscando…</strong>
+            </span>
+            <b>Copiar</b>
+          </button>
+        </div>
+        <div id="copyWhatsappIdentityNotice" class="notice" aria-live="polite"></div>
+        <div class="dialog-actions">
+          <button id="refreshWhatsappUsernameButton" class="button secondary" type="button">Actualizar @usuario</button>
+          <button class="button primary whatsapp-copy-close" type="button">Listo</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="clientBroadcastDialog" class="client-broadcast-dialog">
+      <form id="clientBroadcastForm">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">MENSAJE A CLIENTES</p>
+            <h2>Enviar aviso por servicio</h2>
+          </div>
+          <button class="icon-button client-broadcast-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="notice">
+          El mensaje se enviará una sola vez por WhatsApp y únicamente a clientes activos del servicio elegido. Puedes incluir todos los precios o filtrar uno específico.
+        </div>
+        <div class="form-grid">
+          <label>
+            Servicio o plan
+            <select id="clientBroadcastProduct" required></select>
+          </label>
+          <label>
+            Precio (opcional)
+            <select id="clientBroadcastPrice"></select>
+          </label>
+          <label class="span-2">
+            Mensaje o nueva cuenta
+            <textarea id="clientBroadcastMessage" rows="8" maxlength="4096" placeholder="Escribe aquí el aviso que recibirán los clientes…" required></textarea>
+            <small>Puedes personalizarlo con: <code>{nombre}</code>, <code>{producto}</code>, <code>{precio}</code>, <code>{cuenta}</code> y <code>{fecha}</code>.</small>
+          </label>
+          <div id="clientBroadcastPreview" class="notice client-broadcast-preview span-2">
+            Selecciona un servicio para ver cuántos clientes recibirán el mensaje.
+          </div>
+          <div id="clientBroadcastProgress" class="client-broadcast-progress span-2 hidden" aria-live="polite">
+            <div><strong id="clientBroadcastProgressTitle">Preparando envío…</strong><span id="clientBroadcastProgressCount">0 de 0</span></div>
+            <progress id="clientBroadcastProgressBar" max="1" value="0"></progress>
+            <p id="clientBroadcastProgressDetail" class="microcopy"></p>
+          </div>
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary client-broadcast-close" type="button">Cancelar</button>
+          <button id="sendClientBroadcastButton" class="button primary" type="submit">Revisar y enviar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="renewDialog">
+      <form id="renewForm" method="dialog">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">RENOVACIÓN</p><h2 id="renewDialogTitle">Renovar servicio</h2></div>
+          <button class="icon-button renew-close" type="button">×</button>
+        </div>
+        <input id="renewClientId" type="hidden">
+        <div class="notice">
+          Si el cliente paga antes de vencer, el nuevo periodo empieza desde su vencimiento actual y no pierde días.
+        </div>
+        <div class="form-grid">
+          <label>Fecha de pago<input id="renewPaymentDate" type="date" required></label>
+          <label>Duración
+            <select id="renewTermMonths">
+              <option value="1">1 mes</option>
+              <option value="12">12 meses</option>
+              <option value="18">18 meses</option>
+            </select>
+          </label>
+          <label>Precio<input id="renewPrice" type="text"></label>
+          <label>Método de pago<input id="renewPaymentMethod" type="text"></label>
+          <label class="span-2">
+            Cuenta asociada
+            <input id="renewAccountReference" type="text" placeholder="Correo, perfil o código interno">
+          </label>
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary renew-close" type="button">Cancelar</button>
+          <button class="button primary" type="submit">Registrar renovación</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="authenticatorDialog">
+      <form id="authenticatorForm">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">AUTENTICADOR</p>
+            <h2 id="authenticatorDialogTitle">Nueva cuenta 2FA</h2>
+          </div>
+          <button class="icon-button authenticator-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="authenticatorId" type="hidden">
+        <div class="form-grid">
+          <label>
+            Nombre
+            <input id="authenticatorName" type="text" maxlength="120" autocomplete="off" placeholder="Ejemplo: Cuenta principal" required>
+          </label>
+          <label>
+            Servicio
+            <input id="authenticatorService" type="text" maxlength="120" autocomplete="off" placeholder="Google, ChatGPT, Binance…" required>
+          </label>
+          <label class="span-2">
+            Correo o usuario
+            <input id="authenticatorEmail" type="text" maxlength="240" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="cuenta@correo.com" required>
+          </label>
+          <label class="span-2">
+            Comando privado de WhatsApp
+            <input id="authenticatorCommand" class="authenticator-command-input" type="text" maxlength="33" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="/gpt01" pattern="/[A-Za-z0-9][A-Za-z0-9_\-]{1,31}" required>
+            <small>Ejemplo: escribe <code>/gpt01</code> desde tu propio WhatsApp en el chat del cliente. Cada cuenta debe usar un comando diferente.</small>
+          </label>
+          <label class="span-2">
+            Clave secreta 2FA
+            <span class="secret-input-shell">
+              <input id="authenticatorSecret" type="password" maxlength="4096" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="Pega la clave Base32 o el enlace otpauth://">
+              <button id="toggleAuthenticatorSecret" class="secret-toggle" type="button" aria-label="Mostrar clave secreta">Mostrar</button>
+            </span>
+            <small id="authenticatorSecretHelp">Usa la clave de configuración que entrega el servicio, no el código temporal de 6 dígitos.</small>
+          </label>
+        </div>
+        <div class="notice authenticator-dialog-notice">
+          La clave se cifra al guardar y no podrá consultarse nuevamente. El bot nunca guarda el código temporal en los registros y solo lo envía si quedan entre 20 y 30 segundos.
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary authenticator-close" type="button">Cancelar</button>
+          <button id="saveAuthenticatorButton" class="button primary" type="submit">Guardar cuenta</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="countryGreetingDialog" class="country-greeting-dialog">
+      <form id="countryGreetingForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">BIENVENIDA LOCAL</p><h2 id="countryGreetingDialogTitle">Agregar país</h2></div>
+          <button class="icon-button country-greeting-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="countryGreetingId" type="hidden">
+        <div class="form-grid">
+          <label>
+            País
+            <input id="countryGreetingCountry" type="text" maxlength="80" list="countryGreetingOptions" placeholder="Argentina" autocomplete="off" required>
+          </label>
+          <label>
+            Prefijo internacional
+            <input id="countryGreetingCallingCode" type="text" maxlength="7" inputmode="tel" placeholder="+54" required>
+            <small>Puede ser específico, por ejemplo +1809. Gana el prefijo más largo.</small>
+          </label>
+          <label class="span-2">
+            Moneda y símbolo
+            <input id="countryGreetingCurrency" type="text" maxlength="40" placeholder="ARS ($)" required>
+            <small>Es una referencia visual; escribe los precios locales dentro de cada mensaje.</small>
+          </label>
+        </div>
+        <section class="country-greeting-editor" aria-labelledby="countryGreetingMessagesTitle">
+          <div class="country-greeting-editor-heading">
+            <div><span class="editor-step">3</span><div><h3 id="countryGreetingMessagesTitle">Mensajes para este país</h3><p>Puedes usar entre 1 y 20. La imagen de cada mensaje es opcional.</p></div></div>
+            <button id="addCountryGreetingMessage" class="button secondary compact-button" type="button">+ Agregar mensaje</button>
+          </div>
+          <div id="countryGreetingMessages" class="welcome-message-list" data-welcome-editor="country"></div>
+        </section>
+        <label class="toggle-row country-greeting-enable-row">
+          <input id="countryGreetingEnabled" type="checkbox" checked>
+          <span><strong>Bienvenida activa para este prefijo</strong><small>Si la desactivas, el bot usará la bienvenida predeterminada.</small></span>
+        </label>
+        <div class="notice country-greeting-dialog-notice">
+          El prefijo solo selecciona el contenido. No se consulta ninguna API de divisas ni se cambia la lógica de cobros.
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary country-greeting-close" type="button">Cancelar</button>
+          <button id="saveCountryGreetingButton" class="button primary" type="submit">Guardar país</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="adGreetingDialog" class="country-greeting-dialog ad-greeting-dialog">
+      <form id="adGreetingForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">BIENVENIDA DE CAMPAÑA</p><h2 id="adGreetingDialogTitle">Agregar anuncio</h2></div>
+          <button class="icon-button ad-greeting-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="adGreetingId" type="hidden">
+        <div class="form-grid">
+          <label class="span-2">
+            Nombre interno del anuncio
+            <input id="adGreetingName" type="text" maxlength="120" placeholder="ChatGPT Personal y Plan Pro" autocomplete="off" required>
+            <small>Solo se usa en el panel para que puedas reconocer la campaña.</small>
+          </label>
+          <label class="span-2">
+            Frases o identificadores para reconocerlo
+            <textarea id="adGreetingMatchTerms" rows="6" maxlength="8000" placeholder="POTENCIA TU PRODUCTIVIDAD CON CHATGPT&#10;CHAT GPT PERSONAL&#10;ID del anuncio" required></textarea>
+            <small>Escribe una frase o ID por línea. Basta una coincidencia; usa textos específicos para no confundir dos anuncios.</small>
+          </label>
+        </div>
+        <section class="country-greeting-editor" aria-labelledby="adGreetingMessagesTitle">
+          <div class="country-greeting-editor-heading">
+            <div><span class="editor-step">3</span><div><h3 id="adGreetingMessagesTitle">Mensajes para este anuncio</h3><p>Puedes usar entre 1 y 20. Cada mensaje admite una imagen y un audio opcionales.</p></div></div>
+            <button id="addAdGreetingMessage" class="button secondary compact-button" type="button">+ Agregar mensaje</button>
+          </div>
+          <div id="adGreetingMessages" class="welcome-message-list" data-welcome-editor="ad"></div>
+        </section>
+        <label class="toggle-row country-greeting-enable-row">
+          <input id="adGreetingEnabled" type="checkbox" checked>
+          <span><strong>Respuesta activa para este anuncio</strong><small>Al desactivarla, los contactos de esta campaña pasarán a la bienvenida por país o a la general.</small></span>
+        </label>
+        <div class="notice country-greeting-dialog-notice">
+          WhatsApp no comparte la imagen completa con el panel; la coincidencia se realiza con los metadatos adjuntos al mensaje: título, texto, ID y enlace del anuncio.
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary ad-greeting-close" type="button">Cancelar</button>
+          <button id="saveAdGreetingButton" class="button primary" type="submit">Guardar anuncio</button>
+        </div>
+      </form>
+    </dialog>
+
+    <datalist id="countryGreetingOptions">
+      <option value="Perú"></option><option value="Argentina"></option><option value="México"></option>
+      <option value="Colombia"></option><option value="Chile"></option><option value="Ecuador"></option>
+      <option value="Bolivia"></option><option value="Brasil"></option><option value="Uruguay"></option>
+      <option value="Paraguay"></option><option value="Venezuela"></option><option value="Guatemala"></option>
+      <option value="El Salvador"></option><option value="Honduras"></option><option value="Nicaragua"></option>
+      <option value="Costa Rica"></option><option value="Panamá"></option><option value="República Dominicana"></option>
+      <option value="Estados Unidos"></option><option value="España"></option>
+    </datalist>
+
+    <dialog id="quickReplyDialog" class="quick-reply-dialog">
+      <form id="quickReplyForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">RESPUESTA RÁPIDA</p><h2 id="quickReplyDialogTitle">Nueva respuesta</h2></div>
+          <button class="icon-button quick-reply-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="quickReplyId" type="hidden">
+        <div class="form-grid quick-reply-form-grid">
+          <label>
+            Nombre interno
+            <input id="quickReplyName" type="text" maxlength="120" placeholder="Diferencia entre planes" required>
+          </label>
+          <label>
+            Comando privado
+            <input id="quickReplyCommand" class="authenticator-command-input" type="text" maxlength="33" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="/diferencia" required>
+            <small>Escríbelo tú desde el WhatsApp conectado.</small>
+          </label>
+        </div>
+
+        <section class="quick-reply-editor-block" aria-labelledby="quickReplyImagesTitle">
+          <div class="quick-reply-editor-heading">
+            <div><span class="editor-step">1</span><div><h3 id="quickReplyImagesTitle">Imágenes</h3><p>Se enviarán primero, en este orden.</p></div></div>
+            <span id="quickReplyImageCounter" class="pill blue">0 / 6</span>
+          </div>
+          <div id="quickReplyExistingImages" class="quick-reply-image-list"></div>
+          <label class="quick-reply-dropzone" for="quickReplyImages">
+            <input id="quickReplyImages" type="file" accept="image/png,image/jpeg,image/webp" multiple>
+            <span class="quick-reply-dropzone-icon" aria-hidden="true">＋</span>
+            <strong>Agregar imagen o captura</strong>
+            <small>PNG, JPG o WEBP · máximo 8 MB por imagen · hasta 6</small>
+          </label>
+          <div id="quickReplyPendingImages" class="quick-reply-pending-list"></div>
+        </section>
+
+        <section class="quick-reply-editor-block" aria-labelledby="quickReplyTextsTitle">
+          <div class="quick-reply-editor-heading">
+            <div><span class="editor-step">2</span><div><h3 id="quickReplyTextsTitle">Textos de respuesta</h3><p>El primero irá dentro de la última imagen; los demás se enviarán separados.</p></div></div>
+            <button id="addQuickReplyTextButton" class="button secondary compact-button" type="button">+ Agregar texto</button>
+          </div>
+          <div id="quickReplyTexts" class="quick-reply-text-list"></div>
+        </section>
+
+        <label class="toggle-row quick-reply-enable-row">
+          <input id="quickReplyEnabled" type="checkbox" checked>
+          <span><strong>Comando activo en WhatsApp</strong><small>Al desactivarlo seguirá guardado, pero no enviará contenido.</small></span>
+        </label>
+        <div class="dialog-actions">
+          <button class="button secondary quick-reply-close" type="button">Cancelar</button>
+          <button id="saveQuickReplyButton" class="button primary" type="submit">Guardar respuesta</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="catalogDialog">
+      <form id="catalogForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">CATÁLOGO</p><h2 id="catalogDialogTitle">Nuevo producto</h2></div>
+          <button class="icon-button catalog-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="catalogItemId" type="hidden">
+        <div class="form-grid">
+          <label>Nombre<input id="catalogName" type="text" maxlength="120" placeholder="Claude Pro" required></label>
+          <label>Tipo
+            <select id="catalogType">
+              <option value="product">Producto</option>
+              <option value="plan">Plan / combo</option>
+            </select>
+          </label>
+          <label>Precio<input id="catalogPrice" type="text" maxlength="120" placeholder="S/25"></label>
+          <label>Vigencia<input id="catalogPeriod" type="text" maxlength="120" placeholder="1 mes"></label>
+          <label class="span-2">
+            Comando de registro
+            <input id="catalogCommand" class="authenticator-command-input" type="text" maxlength="33" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="/claudepro" required>
+            <small>Se usa así: <code>/claudepro 30</code> en el chat del cliente.</small>
+          </label>
+          <label class="span-2">Palabras clave para la IA<input id="catalogAliases" type="text" placeholder="claude, claude pro"></label>
+          <label class="span-2">Descripción<textarea id="catalogDetails" rows="3" placeholder="Qué incluye, garantía, soporte…"></textarea></label>
+          <label class="span-2">Incluye (solo planes)<textarea id="catalogIncludes" rows="2" placeholder="ChatGPT Pro, Perplexity Pro, CapCut Pro"></textarea></label>
+          <label class="toggle-row span-2"><input id="catalogEnabled" type="checkbox" checked><span>Comando activo en WhatsApp</span></label>
+        </div>
+        <div class="dialog-actions">
+          <button class="button secondary catalog-close" type="button">Cancelar</button>
+          <button id="saveCatalogButton" class="button primary" type="submit">Guardar producto</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="accessDialog">
+      <form id="accessForm">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">ACCESOS 2FA</p><h2 id="accessDialogTitle">Clientes autorizados</h2></div>
+          <button class="icon-button access-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <input id="accessAccountId" type="hidden">
+        <input id="accessId" type="hidden">
+        <div class="notice">
+          Los números o <strong>@usuarios</strong> autorizados podrán escribir <code id="accessCommandHint">/comando</code> desde su propio WhatsApp y recibir el código 2FA de esta cuenta.
+        </div>
+        <div id="accessList" class="access-list"></div>
+        <div class="form-grid">
+          <label>Nombre del cliente<input id="accessName" type="text" maxlength="120" placeholder="Kevin"></label>
+          <label>WhatsApp<input id="accessWhatsapp" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="921444991 o @usuario" required><small>Acepta número, @usuario o una identidad ya registrada.</small></label>
+          <label>Vence el (opcional)<input id="accessExpiresAt" type="date"></label>
+          <label>Límite de códigos por día<input id="accessDailyLimit" type="number" min="0" max="100" step="1" placeholder="0 = sin límite"></label>
+          <label class="toggle-row span-2"><input id="accessActive" type="checkbox" checked><span>Acceso activo</span></label>
+          <label class="span-2">Nota interna<input id="accessNotes" type="text" maxlength="300" placeholder="Cuenta compartida con 2 personas"></label>
+        </div>
+        <div class="dialog-actions">
+          <button id="accessCancelEditButton" class="button secondary hidden" type="button">Cancelar edición</button>
+          <button class="button secondary access-close" type="button">Cerrar</button>
+          <button id="saveAccessButton" class="button primary" type="submit">Autorizar cliente</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="authenticatorUsageDialog">
+      <div class="usage-dialog-shell">
+        <div class="dialog-heading">
+          <div><p class="eyebrow">CONTROL 2FA</p><h2 id="authenticatorUsageTitle">Uso de códigos por cliente</h2></div>
+          <button class="icon-button authenticator-usage-close" type="button" aria-label="Cerrar">×</button>
+        </div>
+        <div class="notice">
+          Consulta qué cuentas puede solicitar cada cliente, cuántos códigos recibió y la fecha y hora exactas de cada envío. Los códigos numéricos nunca se guardan aquí.
+        </div>
+        <section aria-labelledby="usageSummaryTitle">
+          <div class="usage-section-heading"><h3 id="usageSummaryTitle">Resumen por cliente</h3><span id="usageClientCount" class="pill blue">0 clientes</span></div>
+          <div id="authenticatorUsageSummary" class="usage-summary-grid"></div>
+        </section>
+        <section aria-labelledby="usageHistoryTitle">
+          <div class="usage-section-heading"><h3 id="usageHistoryTitle">Historial de envíos</h3><span id="usageEventCount" class="pill violet">0 envíos</span></div>
+          <div id="authenticatorUsageHistory" class="usage-history-list"></div>
+        </section>
+        <div class="dialog-actions">
+          <button class="button secondary authenticator-usage-close" type="button">Cerrar</button>
+        </div>
+      </div>
+    </dialog>
+
+    <datalist id="productOptions"></datalist>
+  </body>
+</html>

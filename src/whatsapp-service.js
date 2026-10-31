@@ -388,7 +388,8 @@ class WhatsAppService {
     sleepFn = sleep,
     readyTimeoutMs,
     logoutTimeoutMs,
-    qrWaitTimeoutMs
+    qrWaitTimeoutMs,
+    adminOnly = false
   }) {
     installSignalSessionLogFilter();
     this.store = store;
@@ -396,6 +397,8 @@ class WhatsAppService {
     this.mediaDir = path.resolve(mediaDir);
     this.ai = ai;
     this.authenticator = authenticator;
+    this.adminOnly = Boolean(adminOnly);
+    this.dicloakAdminService = null;
     this.baileysLoader = baileysLoader;
     this.qrEncoder = qrEncoder;
     this.sleepFn = sleepFn;
@@ -470,6 +473,10 @@ class WhatsAppService {
 
   getAiStatus() {
     return this.ai?.getStatus() || { enabled: false, model: null };
+  }
+
+  setDicloakAdminService(service) {
+    this.dicloakAdminService = service || null;
   }
 
   #setStatus(patch) {
@@ -1126,14 +1133,23 @@ class WhatsAppService {
       const ownerCommand =
         Boolean(message?.key?.fromMe) &&
         extractMessageBody(message.message).startsWith("/");
-      if (
-        !chatId ||
-        (message.key.fromMe && !ownerCommand) ||
-        chatId === "status@broadcast" ||
-        chatId.endsWith("@g.us") ||
-        chatId.endsWith("@broadcast") ||
-        chatId.endsWith("@newsletter")
-      ) {
+      const isGroup = chatId?.endsWith("@g.us");
+      if (!chatId || (message.key.fromMe && (!ownerCommand || isGroup)) || chatId === "status@broadcast" || chatId.endsWith("@broadcast") || chatId.endsWith("@newsletter")) {
+        continue;
+      }
+
+      if (isGroup) {
+        if (!this.dicloakAdminService) continue;
+        const groupQueue = this.queues.get(chatId) || Promise.resolve();
+        const groupNext = groupQueue
+          .catch(() => undefined)
+          .then(() => this.#handleDicloakAdminMessage(socket, message))
+          .catch((error) => {
+            this.store.addLog("error", `Error en comando administrativo de DICloak: ${error.message}`, { chatId });
+            this.store.save();
+          })
+          .finally(() => { if (this.queues.get(chatId) === groupNext) this.queues.delete(chatId); });
+        this.queues.set(chatId, groupNext);
         continue;
       }
 
@@ -1206,6 +1222,7 @@ class WhatsAppService {
   }
 
   async #handleMessage(socket, message) {
+    if (this.adminOnly) return;
     if (message.key.fromMe) {
       await this.#handleOwnerCommand(socket, message);
       return;
@@ -1278,6 +1295,16 @@ class WhatsAppService {
     ) {
       await socket.readMessages([message.key]).catch(() => undefined);
     }
+  }
+
+  async #handleDicloakAdminMessage(_socket, message) {
+    const body = extractMessageBody(message.message);
+    if (!body) return;
+    await this.dicloakAdminService.handle({
+      message,
+      body,
+      reply: (text) => this.sendText(message.key.remoteJid, text)
+    });
   }
 
   #findCachedContact(...values) {
