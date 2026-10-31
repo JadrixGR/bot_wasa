@@ -21,6 +21,25 @@ function temporaryDataDir() {
   return directory;
 }
 
+test("conserva el historial de altas DICloak por miembro después de reiniciar", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    store.beginDicloakAdminOperation({ messageId: "alta-1", command: "NUEVO", memberName: "Cliente123", plan: "PLAN PLUS", months: 1, commercialStartDate: "2026-10-15" });
+    store.finishDicloakAdminOperation("alta-1", { status: "FAILED", error: "This member has already been activated, days can no longer be changed: submit expires_at to renew" });
+    store.beginDicloakAdminOperation({ messageId: "alta-2", command: "NUEVO", memberName: "OtroCliente123" });
+    const reloaded = new JsonStore(directory);
+    const operations = reloaded.getDicloakAdminOperationsForMember("Cliente123");
+    assert.equal(operations.length, 1);
+    assert.equal(operations[0].status, "FAILED");
+    assert.equal(operations[0].commercialStartDate, "2026-10-15");
+    operations[0].status = "SUCCESS";
+    assert.equal(reloaded.getDicloakAdminOperation("alta-1").status, "FAILED");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("selecciona clientes activos por servicio y precio opcional sin repetir WhatsApp", () => {
   const clients = [
     {

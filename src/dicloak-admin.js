@@ -152,17 +152,56 @@ class DicloakAdminService {
     this.validateCredentials(parsed.name);
     const existingByName = await this.findExactMember(parsed.name);
     const existingByAccount = await this.client.listMembers({ account: parsed.name });
+    if (existingByName) {
+      const recovered = await this.recoverFailedCreation(parsed, existingByName);
+      if (recovered) return recovered;
+    }
     if (existingByName || listFromData(existingByAccount).some((item) => String(item?.account || "") === parsed.name)) throw new Error(`⚠️ ${parsed.name} ya existe en DICloak.\nNo se creó un segundo miembro.`);
     const memberGroupId = await this.resolveMemberGroup();
     const profileGroupId = await this.resolveProfileGroup(parsed.plan);
     const start = dateFromMessage(message, this.timeZone);
     const next = addMonthsClamped(start, parsed.months);
-    const member = await this.client.createMember({ name: parsed.name, account: parsed.name, password: parsed.name, type: "INTERNAL", authority: "MEMBER", status: "ENABLED", all_profile_groups: false, profile_group_ids: [profileGroupId], member_group_id: memberGroupId });
+    const member = await this.client.createMember({
+      name: parsed.name, account: parsed.name, password: parsed.name,
+      type: "INTERNAL", authority: "MEMBER", status: "ENABLED",
+      all_profile_groups: false, profile_group_ids: [profileGroupId], member_group_id: memberGroupId,
+      expiration: { enabled: true, time_zone: this.timeZone, mode: "LOGIN_START", days: daysBetween(start, next) }
+    });
     const memberId = String(member?.id ?? member?.member_id ?? member?.memberId ?? "");
     if (!memberId) throw new Error("DICloak creó una respuesta sin identificador de miembro.");
-    await this.client.updateExpiration(memberId, { enabled: true, time_zone: this.timeZone, mode: "LOGIN_START", days: daysBetween(start, next) });
     this.store.saveDicloakMemberRecord({ dicloakMemberId: memberId, dicloakMemberName: parsed.name, plan: parsed.plan, commercialStartDate: start, commercialNextRenewalDate: next, monthsPurchased: parsed.months, profileGroupId, memberGroupId });
     return `✅ CLIENTE CREADO\n\nNombre: ${parsed.name}\nPlan: ${parsed.plan}\nGrupo de miembros: ${this.memberGroupName}\nDuración comercial: ${parsed.months} ${parsed.months === 1 ? "mes" : "meses"}\nPróxima renovación: ${next}\nEstado DICloak: Activo`;
+  }
+
+  async recoverFailedCreation(parsed, member) {
+    if (this.store.getDicloakMemberRecord(parsed.name)) return null;
+    const operations = this.store.getDicloakAdminOperationsForMember?.(parsed.name) || [];
+    // Only reconcile the old two-request creation failure, never an arbitrary existing member.
+    const failed = operations.find((operation) => operation.command === "NUEVO" && operation.status === "FAILED"
+      && /This member has already been activated, days can no longer be changed/i.test(operation.error || ""));
+    if (!failed || normalizeGroupName(failed.plan) !== normalizeGroupName(parsed.plan)
+      || Number(failed.months) !== parsed.months || member.account !== parsed.name
+      || member.type !== "INTERNAL" || member.authority !== "MEMBER") return null;
+    const memberId = String(member.id ?? member.member_id ?? member.memberId ?? "");
+    if (!memberId) return null;
+    const memberGroupId = await this.resolveMemberGroup();
+    const profileGroupId = await this.resolveProfileGroup(parsed.plan);
+    if (String(member.member_group_id) !== memberGroupId || member.all_profile_groups !== false
+      || member.profile_group_list?.length !== 1 || String(member.profile_group_list[0].id) !== profileGroupId) return null;
+    // Older operations stored their receipt time; new ones preserve the WhatsApp purchase date.
+    if (!failed.commercialStartDate && !Number.isFinite(Date.parse(failed.createdAt))) return null;
+    const start = failed.commercialStartDate || todayInTimeZone(this.timeZone, new Date(failed.createdAt));
+    const next = addMonthsClamped(start, parsed.months);
+    const expiration = { enabled: true, time_zone: this.timeZone, mode: "INSTANT", expires_at: `${next} ${this.expirationTime}` };
+    const current = await this.client.getExpiration(memberId);
+    if (current?.enabled === false) {
+      await this.client.updateExpiration(memberId, expiration);
+    } else if (!current || !Object.entries(expiration).every(([key, value]) => current[key] === value)) {
+      throw new Error(`⚠️ ${parsed.name} ya tiene otro vencimiento en DICloak. Revisa ese vencimiento antes de recuperar el alta fallida.`);
+    }
+    if (String(member.status || "").toUpperCase() === "DISABLED") await this.client.updateMember(memberId, { status: "ENABLED" });
+    this.store.saveDicloakMemberRecord({ dicloakMemberId: memberId, dicloakMemberName: parsed.name, plan: parsed.plan, commercialStartDate: start, commercialNextRenewalDate: next, monthsPurchased: parsed.months, profileGroupId, memberGroupId });
+    return `✅ ALTA RECUPERADA\n\nNombre: ${parsed.name}\nPlan: ${parsed.plan}\nPróxima renovación: ${next}\nEstado DICloak: Activo\nSe completó el intento anterior sin crear otro miembro.`;
   }
 
   async renew(parsed) {
@@ -189,7 +228,7 @@ class DicloakAdminService {
     const messageId = String(message?.key?.id || "");
     if (messageId && this.store.getDicloakAdminOperation?.(messageId)) { await reply("⚠️ Comando ya procesado anteriormente."); return true; }
     if (!parsed.ok) { await reply(parsed.error); return true; }
-    if (messageId) this.store.beginDicloakAdminOperation?.({ messageId, command: parsed.command, memberName: parsed.name, plan: parsed.plan, months: parsed.months });
+    if (messageId) this.store.beginDicloakAdminOperation?.({ messageId, command: parsed.command, memberName: parsed.name, plan: parsed.plan, months: parsed.months, ...(parsed.command === "NUEVO" ? { commercialStartDate: dateFromMessage(message, this.timeZone) } : {}) });
     try {
       const response = parsed.command === "NUEVO" ? await this.create(parsed, message) : await this.renew(parsed);
       if (messageId) this.store.finishDicloakAdminOperation?.(messageId, { status: "SUCCESS" });

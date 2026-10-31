@@ -957,8 +957,9 @@ class JsonStore {
             messageId: String(item?.messageId || ""), status: String(item?.status || "PENDING"),
             command: String(item?.command || ""), memberName: String(item?.memberName || ""),
             plan: item?.plan ? String(item.plan) : null, months: Number(item?.months) || 0,
+            commercialStartDate: String(item?.commercialStartDate || "").trim(),
             error: item?.error ? String(item.error).slice(0, 300) : null,
-            createdAt: item?.createdAt || migratedAt, updatedAt: item?.updatedAt || migratedAt
+            createdAt: item?.createdAt || null, updatedAt: item?.updatedAt || migratedAt
           })).filter((item) => item.messageId)
         : [],
       logs: Array.isArray(parsed.logs) ? parsed.logs : [],
@@ -1175,6 +1176,10 @@ class JsonStore {
 
   getDicloakAdminOperation(messageId) {
     return structuredClone((this.data.dicloakAdminOperations || []).find((item) => item.messageId === String(messageId)) || null);
+  }
+
+  getDicloakAdminOperationsForMember(name) {
+    return structuredClone((this.data.dicloakAdminOperations || []).filter((item) => item.memberName === String(name)));
   }
 
   beginDicloakAdminOperation(input) {
