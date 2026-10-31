@@ -58,6 +58,7 @@ test("crea miembro con credenciales iguales, grupos resueltos y fecha comercial 
   assert.equal(calls[0][1].name, "Jeremias4587");
   assert.equal(calls[0][1].account, "Jeremias4587");
   assert.equal(calls[0][1].password, "Jeremias4587");
+  assert.equal("group_id" in calls[0][1], false);
   assert.deepEqual(calls[0][1].profile_group_ids, ["profiles-1"]);
   assert.equal(calls[1][2].mode, "LOGIN_START");
   assert.equal(calls[1][2].days, 31);

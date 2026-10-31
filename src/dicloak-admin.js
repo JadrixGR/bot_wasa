@@ -157,7 +157,7 @@ class DicloakAdminService {
     const profileGroupId = await this.resolveProfileGroup(parsed.plan);
     const start = dateFromMessage(message, this.timeZone);
     const next = addMonthsClamped(start, parsed.months);
-    const member = await this.client.createMember({ name: parsed.name, account: parsed.name, password: parsed.name, type: "INTERNAL", authority: "MEMBER", status: "ENABLED", all_profile_groups: false, profile_group_ids: [profileGroupId], member_group_id: memberGroupId, group_id: memberGroupId });
+    const member = await this.client.createMember({ name: parsed.name, account: parsed.name, password: parsed.name, type: "INTERNAL", authority: "MEMBER", status: "ENABLED", all_profile_groups: false, profile_group_ids: [profileGroupId], member_group_id: memberGroupId });
     const memberId = String(member?.id ?? member?.member_id ?? member?.memberId ?? "");
     if (!memberId) throw new Error("DICloak creó una respuesta sin identificador de miembro.");
     await this.client.updateExpiration(memberId, { enabled: true, time_zone: this.timeZone, mode: "LOGIN_START", days: daysBetween(start, next) });
