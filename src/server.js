@@ -10,6 +10,8 @@ const { Accounts } = require("./accounts");
 const { version: appVersion } = require("../package.json");
 const { reportCsv } = require("./finance");
 const { Dicloak } = require("./dicloak");
+const { DicloakHttpClient } = require("./dicloak-http");
+const { DicloakAdminService } = require("./dicloak-admin");
 const {
   JsonStore,
   clientWhatsAppTarget,
@@ -47,6 +49,7 @@ const persistentDiskConfigured =
 const accounts = new Accounts(rootDataDir);
 if (process.env.DICLOAK_PASSWORD_HASH) accounts.ensureDicloak(process.env.DICLOAK_PASSWORD_HASH);
 const dicloak = new Dicloak(rootDataDir);
+const dicloakHttp = new DicloakHttpClient();
 const stores = new Map();
 const tenants = new Map();
 
@@ -92,6 +95,18 @@ const whatsapp = new WhatsAppService({
   ai,
   authenticator
 });
+let dicloakWhatsapp = null;
+if (user.id === "owner") {
+  dicloakWhatsapp = new WhatsAppService({
+    store,
+    sessionDir: path.join(dataDir, "dicloak-whatsapp-session"),
+    mediaDir,
+    ai: null,
+    authenticator: null,
+    adminOnly: true
+  });
+  dicloakWhatsapp.setDicloakAdminService(new DicloakAdminService({ store, client: dicloakHttp }));
+}
 const scheduler = new ReminderScheduler({
   store,
   whatsapp,
@@ -585,6 +600,23 @@ app.get("/api/dashboard", requireAuth, (req, res) => {
 app.get("/api/whatsapp/status", requireAuth, (_req, res) => {
   res.json(whatsapp.getStatus());
 });
+
+app.get("/api/dicloak-bot/status", requireAuth, (_req, res) => {
+  if (!dicloakWhatsapp) return res.status(403).json({ error: "El Bot Dicloak solo está disponible en el espacio principal." });
+  res.json(dicloakWhatsapp.getStatus());
+});
+
+app.post("/api/dicloak-bot/restart", requireAuth, asyncRoute(async (_req, res) => {
+  if (!dicloakWhatsapp) return res.status(403).json({ error: "El Bot Dicloak solo está disponible en el espacio principal." });
+  res.json({ ok: true, message: "El Bot Dicloak se está reiniciando." });
+  dicloakWhatsapp.restart().catch((error) => { store.addLog("error", `El Bot Dicloak no pudo reiniciar: ${error.message}`); store.save(); });
+}));
+
+app.post("/api/dicloak-bot/reset", requireAuth, asyncRoute(async (_req, res) => {
+  if (!dicloakWhatsapp) return res.status(403).json({ error: "El Bot Dicloak solo está disponible en el espacio principal." });
+  const result = await dicloakWhatsapp.resetSession();
+  res.json({ ok: true, message: "Sesión del Bot Dicloak cerrada. Estamos generando un QR nuevo.", ...result });
+}));
 
 app.post(
   "/api/whatsapp/restart",
@@ -1423,7 +1455,7 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-return { router: app, store, whatsapp, scheduler, authenticator, ai };
+return { router: app, store, whatsapp, dicloakWhatsapp, scheduler, authenticator, ai };
 }
 
 function getTenant(user) {
@@ -1434,6 +1466,10 @@ function getTenant(user) {
     tenant.scheduler.start();
     tenant.whatsapp.initialize().catch(error => {
       tenant.store.addLog("error", `WhatsApp no pudo iniciar: ${error.message}`);
+      tenant.store.save();
+    });
+    tenant.dicloakWhatsapp?.initialize().catch(error => {
+      tenant.store.addLog("error", `El Bot Dicloak no pudo iniciar: ${error.message}`);
       tenant.store.save();
     });
   }
@@ -1528,6 +1564,7 @@ async function shutdownTenants() {
   await Promise.all([...tenants.values()].map(async tenant => {
     tenant.scheduler.stop();
     await tenant.whatsapp.shutdown();
+    await tenant.dicloakWhatsapp?.shutdown();
   }));
 }
 
