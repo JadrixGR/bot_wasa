@@ -170,7 +170,7 @@ class DicloakAdminService {
   }
 
   async handle({ message, body, reply, socket }) {
-    if (message?.key?.remoteJid?.endsWith("@g.us") && await this.authorizedSender(message, socket) && normalizeGroupName(body) === "ID DICLOAK") {
+    if (message?.key?.remoteJid?.endsWith("@g.us") && normalizeGroupName(body) === "ID DICLOAK") {
       await reply(`ID de este grupo: ${message.key.remoteJid}`);
       return true;
     }
