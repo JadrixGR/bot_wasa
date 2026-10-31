@@ -47,7 +47,11 @@ function listFromData(data) {
 
 function collectProfileGroups(value, result = []) {
   if (!value || typeof value !== "object") return result;
-  if (value.group_id !== undefined && value.group_name !== undefined) result.push({ id: String(value.group_id), name: String(value.group_name) });
+  const id = value.id ?? value.group_id ?? value.groupId;
+  const name = value.name ?? value.group_name ?? value.groupName ?? value.env_group_name;
+  if (id !== undefined && id !== null && name !== undefined && name !== null && String(name).trim()) {
+    result.push({ id: String(id), name: String(name) });
+  }
   for (const child of Object.values(value)) if (child && typeof child === "object") collectProfileGroups(child, result);
   return result;
 }
@@ -112,12 +116,17 @@ class DicloakAdminService {
   async resolveProfileGroup(plan) {
     const manual = parseManualMap();
     const discovered = [];
-    for (let page = 1; page <= 100; page += 1) {
-      const data = await this.client.listProfiles(page === 1 ? undefined : { page, page_size: 100 });
-      const items = collectProfileGroups(data);
-      if (!items.length) break;
-      discovered.push(...items);
-      if (items.length < 100) break;
+    if (typeof this.client.listProfileGroups === "function") {
+      const data = await this.client.listProfileGroups({ all: true });
+      discovered.push(...collectProfileGroups(data));
+    } else {
+      for (let page = 1; page <= 100; page += 1) {
+        const data = await this.client.listProfiles(page === 1 ? undefined : { page_no: page, page_size: 100 });
+        const items = collectProfileGroups(data);
+        if (!items.length) break;
+        discovered.push(...items);
+        if (items.length < 100) break;
+      }
     }
     const unique = new Map(discovered.filter((item) => item.id && item.name).map((item) => [item.name + "\u0000" + item.id, item]));
     const matches = [...unique.values()].filter((item) => normalizeGroupName(item.name) === normalizeGroupName(plan));

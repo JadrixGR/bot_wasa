@@ -47,7 +47,7 @@ test("crea miembro con credenciales iguales, grupos resueltos y fecha comercial 
   const calls = [];
   const client = {
     listMemberGroups: async () => [{ id: "members-1", name: "CHAT GPT" }],
-    listProfiles: async () => ({ data: [{ group_id: "profiles-1", group_name: "PLAN PLUS" }] }),
+    listProfileGroups: async () => ({ data: { list: [{ id: "profiles-1", name: "PLAN PLUS" }] } }),
     listMembers: async () => [],
     createMember: async (body) => { calls.push(["create", body]); return { id: "member-1" }; },
     updateExpiration: async (id, body) => { calls.push(["expiration", id, body]); return {}; }

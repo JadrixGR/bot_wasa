@@ -74,6 +74,7 @@ class DicloakHttpClient {
   getExpiration(id) { return this.request("GET", `/v1/api/request/member/${encodeURIComponent(id)}/expiration`); }
   updateExpiration(id, body) { return this.request("PATCH", `/v1/api/request/member/${encodeURIComponent(id)}/expiration`, body); }
   listProfiles(query) { return this.request("GET", "/v1/api/request/env", undefined, query); }
+  listProfileGroups(query) { return this.request("GET", "/v1/api/request/env/group", undefined, query); }
 }
 
 module.exports = { DicloakHttpClient, DicloakHttpError, unwrapApiData };
