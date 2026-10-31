@@ -518,3 +518,17 @@ npm start
 Abre `http://localhost:3000`.
 
 La carpeta de autenticación de WhatsApp equivale a una credencial privada. No la subas a GitHub ni la compartas. Este proyecto usa Baileys y no la API oficial de Meta; evita envíos masivos o no solicitados.
+## Bot Dicloak independiente
+
+El proyecto puede levantar una segunda sesión de WhatsApp, separada de la sesión principal, para los comandos administrativos de DICloak. La sesión se guarda en `DATA_DIR/dicloak-whatsapp-session` y se vincula desde el panel en **WhatsApp → Bot Dicloak**. El Bot Dicloak solo atiende mensajes del grupo exacto de `WHATSAPP_ADMIN_GROUP_ID` enviados por números incluidos en `WHATSAPP_ADMIN_NUMBERS`; no responde chats privados ni otros grupos.
+
+Comandos disponibles en ese grupo:
+
+```text
+NUEVO | Jeremias4587 | PLAN PLUS | 1 MES
+RENOVAR | Jeremias4587 | 2 MESES
+```
+
+Para obtener el identificador del grupo sin adivinarlo, agrega el número del Bot Dicloak y tu número al grupo, escribe `ID DICLOAK` y copia el identificador que responderá. Configura ese valor completo (termina en `@g.us`) en `WHATSAPP_ADMIN_GROUP_ID`; después reinicia el Bot Dicloak. El comando de identificación solo responde a números de `WHATSAPP_ADMIN_NUMBERS`.
+
+La integración usa únicamente la HTTP API de DICloak. La clave no se guarda en Git ni en los datos del bot. Las fechas comerciales se guardan en la base JSON persistente del propietario y las operaciones se protegen con el ID único del mensaje de WhatsApp.
