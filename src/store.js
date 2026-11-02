@@ -946,7 +946,10 @@ class JsonStore {
             plan: String(item.plan || "").trim(),
             commercialStartDate: String(item.commercialStartDate || "").trim(),
             commercialNextRenewalDate: String(item.commercialNextRenewalDate || "").trim(),
+            commercialAnchorDay: Number.isInteger(item.commercialAnchorDay) && item.commercialAnchorDay >= 1 && item.commercialAnchorDay <= 31 ? item.commercialAnchorDay : null,
+            commercialDateSource: String(item.commercialDateSource || ""),
             monthsPurchased: Math.max(0, Number(item.monthsPurchased) || 0),
+            daysAdded: Math.max(0, Number(item.daysAdded) || 0),
             profileGroupId: String(item.profileGroupId || ""),
             memberGroupId: String(item.memberGroupId || ""),
             updatedAt: item.updatedAt || migratedAt
@@ -957,6 +960,8 @@ class JsonStore {
             messageId: String(item?.messageId || ""), status: String(item?.status || "PENDING"),
             command: String(item?.command || ""), memberName: String(item?.memberName || ""),
             plan: item?.plan ? String(item.plan) : null, months: Number(item?.months) || 0,
+            days: Math.max(0, Number(item?.days) || 0),
+            baseDate: String(item?.baseDate || ""), targetDate: String(item?.targetDate || ""),
             commercialStartDate: String(item?.commercialStartDate || "").trim(),
             error: item?.error ? String(item.error).slice(0, 300) : null,
             createdAt: item?.createdAt || null, updatedAt: item?.updatedAt || migratedAt
@@ -1153,6 +1158,14 @@ class JsonStore {
     return structuredClone((this.data.dicloakMembers || []).find((item) => item.dicloakMemberName === target) || null);
   }
 
+  getDicloakCommercialCandidates(account) {
+    const target = String(account || "").trim();
+    if (!target) return [];
+    return structuredClone((this.data.clients || []).filter((client) => !client.archived
+      && !["pendiente", "archivado"].includes(client.status)
+      && String(client.accountReference || "").trim() === target));
+  }
+
   saveDicloakMemberRecord(record) {
     this.data.dicloakMembers ||= [];
     const normalized = {
@@ -1162,7 +1175,10 @@ class JsonStore {
       plan: String(record.plan || "").trim(),
       commercialStartDate: String(record.commercialStartDate || "").trim(),
       commercialNextRenewalDate: String(record.commercialNextRenewalDate || "").trim(),
+      commercialAnchorDay: Number.isInteger(record.commercialAnchorDay) && record.commercialAnchorDay >= 1 && record.commercialAnchorDay <= 31 ? record.commercialAnchorDay : null,
+      commercialDateSource: String(record.commercialDateSource || ""),
       monthsPurchased: Math.max(0, Number(record.monthsPurchased) || 0),
+      daysAdded: Math.max(0, Number(record.daysAdded) || 0),
       profileGroupId: String(record.profileGroupId || ""),
       memberGroupId: String(record.memberGroupId || ""),
       updatedAt: new Date().toISOString()

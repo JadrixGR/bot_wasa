@@ -527,7 +527,13 @@ Comandos disponibles en ese grupo:
 ```text
 NUEVO | Jeremias4587 | PLAN PLUS | 1 MES
 RENOVAR | Jeremias4587 | 2 MESES
+RENOVAR | Jeremias4587 | 1 DIA
+RENOVAR | Jeremias4587 | 3 DIAS
 ```
+
+Las renovaciones y compensaciones parten del vencimiento comercial guardado, incluso si se pagan antes o después. Por ejemplo, vencer el 3 y pagar el 1 conserva el día 3 al sumar un mes. El primer ingreso tardío de un miembro creado por el bot no cambia esa fecha. Se conserva el día original al atravesar meses cortos (31 de enero → 28 de febrero → 31 de marzo). Los días adicionales desplazan el vencimiento y ese nuevo día se conserva en las próximas renovaciones. `NUEVO` también admite una duración en días.
+
+Para un miembro antiguo sin registro comercial, el bot busca una compra no pendiente ni archivada cuya cuenta/referencia coincida exactamente con la cuenta de DICloak. Si no existe, incorpora automáticamente el vencimiento fijo `INSTANT` configurado en DICloak, conservando su fecha calendario y registrando el origen. Guarda esta base antes de renovar; las siguientes operaciones usan la fecha local. No deriva una fecha de `LOGIN_START`, del primer login, de días restantes ni de un `create_time` sin zona horaria. Si ninguna fuente proporciona una fecha fija o hay varias compras coincidentes, informa el problema sin modificar al miembro. Las horas de los nuevos vencimientos se fijan con `DICLOAK_TIMEZONE` y `DICLOAK_EXPIRATION_TIME`.
 
 Para obtener el identificador del grupo sin adivinarlo, agrega el número del Bot Dicloak y tu número al grupo, escribe `ID DICLOAK` y copia el identificador que responderá. Configura ese valor completo (termina en `@g.us`) en `WHATSAPP_ADMIN_GROUP_ID`; después reinicia el Bot Dicloak. El comando de identificación solo responde a números de `WHATSAPP_ADMIN_NUMBERS`.
 

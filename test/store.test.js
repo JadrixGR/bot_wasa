@@ -40,6 +40,32 @@ test("conserva el historial de altas DICloak por miembro después de reiniciar",
   }
 });
 
+test("persiste la fecha ancla, los días adicionales y las fechas objetivo de DICloak", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    store.saveDicloakMemberRecord({ dicloakMemberId: "member-1", dicloakMemberName: "Cliente123", commercialStartDate: "2027-01-31", commercialNextRenewalDate: "2027-02-28", commercialAnchorDay: 31, commercialDateSource: "bot-creation", monthsPurchased: 1, daysAdded: 3 });
+    store.beginDicloakAdminOperation({ messageId: "extra-days", command: "RENOVAR", memberName: "Cliente123", months: 0, days: 3 });
+    store.finishDicloakAdminOperation("extra-days", { baseDate: "2027-02-28", targetDate: "2027-03-03" });
+    const reloaded = new JsonStore(directory);
+    const record = reloaded.getDicloakMemberRecord("Cliente123");
+    assert.equal(record.commercialAnchorDay, 31);
+    assert.equal(record.daysAdded, 3);
+    assert.equal(record.commercialDateSource, "bot-creation");
+    const operation = reloaded.getDicloakAdminOperation("extra-days");
+    assert.equal(operation.days, 3);
+    assert.equal(operation.baseDate, "2027-02-28");
+    assert.equal(operation.targetDate, "2027-03-03");
+    reloaded.data.clients = [
+      { accountReference: "Cliente123", startDate: "2027-01-31", expiryDate: "2027-02-28", status: "activo" },
+      { accountReference: "Cliente123", archived: true },
+      { accountReference: "Cliente123", status: "pendiente" },
+      { accountReference: "Cliente1234", status: "activo" }
+    ];
+    assert.equal(reloaded.getDicloakCommercialCandidates("Cliente123").length, 1);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("selecciona clientes activos por servicio y precio opcional sin repetir WhatsApp", () => {
   const clients = [
     {

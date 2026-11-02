@@ -1,6 +1,6 @@
 "use strict";
 
-const { addMonthsClamped, daysBetween, todayInTimeZone } = require("./date-utils");
+const { addMonthsClamped, addDays, parseDateOnly, daysBetween, todayInTimeZone } = require("./date-utils");
 const { DicloakHttpError } = require("./dicloak-http");
 
 function normalizeCommandText(value) {
@@ -16,6 +16,22 @@ function parseMonths(value) {
   return months;
 }
 
+function parseDuration(value) {
+  const months = parseMonths(value);
+  if (months) return { months };
+  const match = /^(\d{1,5})\s+DIAS?$/i.exec(normalizeCommandText(value));
+  const days = Number(match?.[1]);
+  return match && Number.isSafeInteger(days) && days >= 1 && days <= 36500 ? { months: 0, days } : null;
+}
+
+function durationLabel(parsed) {
+  return parsed.days ? `${parsed.days} ${parsed.days === 1 ? "día" : "días"}` : `${parsed.months} ${parsed.months === 1 ? "mes" : "meses"}`;
+}
+
+function advanceCommercialDate(base, parsed, anchorDay) {
+  return parsed.days ? addDays(base, parsed.days) : addMonthsClamped(base, parsed.months, anchorDay);
+}
+
 function parseAdminCommand(value, aliases = {}) {
   const text = normalizeCommandText(value);
   const parts = text.split("|").map((part) => part.trim());
@@ -26,9 +42,9 @@ function parseAdminCommand(value, aliases = {}) {
   const name = parts[1];
   const requestedPlan = command === "NUEVO" ? parts[2] : null;
   const plan = requestedPlan && aliases[normalizedName(requestedPlan)] ? aliases[normalizedName(requestedPlan)] : requestedPlan;
-  const months = parseMonths(parts[command === "NUEVO" ? 3 : 2]);
-  if (!months) return { isCommand: true, ok: false, error: "La duración debe ser 1 MES, 2 MESES o una cantidad de meses válida." };
-  return { isCommand: true, ok: true, command, name, plan, months };
+  const duration = parseDuration(parts[command === "NUEVO" ? 3 : 2]);
+  if (!duration) return { isCommand: true, ok: false, error: "La duración debe ser 1 MES, 2 MESES, 1 DIA o una cantidad válida de días (hasta 36500) o meses (hasta 120)." };
+  return { isCommand: true, ok: true, command, name, plan, ...duration };
 }
 
 function dateFromMessage(message, timeZone) {
@@ -160,7 +176,7 @@ class DicloakAdminService {
     const memberGroupId = await this.resolveMemberGroup();
     const profileGroupId = await this.resolveProfileGroup(parsed.plan);
     const start = dateFromMessage(message, this.timeZone);
-    const next = addMonthsClamped(start, parsed.months);
+    const next = advanceCommercialDate(start, parsed);
     const member = await this.client.createMember({
       name: parsed.name, account: parsed.name, password: parsed.name,
       type: "INTERNAL", authority: "MEMBER", status: "ENABLED",
@@ -169,8 +185,8 @@ class DicloakAdminService {
     });
     const memberId = String(member?.id ?? member?.member_id ?? member?.memberId ?? "");
     if (!memberId) throw new Error("DICloak creó una respuesta sin identificador de miembro.");
-    this.store.saveDicloakMemberRecord({ dicloakMemberId: memberId, dicloakMemberName: parsed.name, plan: parsed.plan, commercialStartDate: start, commercialNextRenewalDate: next, monthsPurchased: parsed.months, profileGroupId, memberGroupId });
-    return `✅ CLIENTE CREADO\n\nNombre: ${parsed.name}\nPlan: ${parsed.plan}\nGrupo de miembros: ${this.memberGroupName}\nDuración comercial: ${parsed.months} ${parsed.months === 1 ? "mes" : "meses"}\nPróxima renovación: ${next}\nEstado DICloak: Activo`;
+    this.store.saveDicloakMemberRecord({ dicloakMemberId: memberId, dicloakMemberName: parsed.name, plan: parsed.plan, commercialStartDate: start, commercialNextRenewalDate: next, commercialAnchorDay: parseDateOnly(parsed.days ? next : start).getUTCDate(), commercialDateSource: "bot-creation", monthsPurchased: parsed.months, daysAdded: parsed.days || 0, profileGroupId, memberGroupId });
+    return `✅ CLIENTE CREADO\n\nNombre: ${parsed.name}\nPlan: ${parsed.plan}\nGrupo de miembros: ${this.memberGroupName}\nDuración comercial: ${durationLabel(parsed)}\nPróxima renovación: ${next}\nEstado DICloak: Activo`;
   }
 
   async recoverFailedCreation(parsed, member) {
@@ -180,7 +196,7 @@ class DicloakAdminService {
     const failed = operations.find((operation) => operation.command === "NUEVO" && operation.status === "FAILED"
       && /This member has already been activated, days can no longer be changed/i.test(operation.error || ""));
     if (!failed || normalizeGroupName(failed.plan) !== normalizeGroupName(parsed.plan)
-      || Number(failed.months) !== parsed.months || member.account !== parsed.name
+      || Number(failed.months) !== parsed.months || Number(failed.days || 0) !== Number(parsed.days || 0) || member.account !== parsed.name
       || member.type !== "INTERNAL" || member.authority !== "MEMBER") return null;
     const memberId = String(member.id ?? member.member_id ?? member.memberId ?? "");
     if (!memberId) return null;
@@ -191,7 +207,7 @@ class DicloakAdminService {
     // Older operations stored their receipt time; new ones preserve the WhatsApp purchase date.
     if (!failed.commercialStartDate && !Number.isFinite(Date.parse(failed.createdAt))) return null;
     const start = failed.commercialStartDate || todayInTimeZone(this.timeZone, new Date(failed.createdAt));
-    const next = addMonthsClamped(start, parsed.months);
+    const next = advanceCommercialDate(start, parsed);
     const expiration = { enabled: true, time_zone: this.timeZone, mode: "INSTANT", expires_at: `${next} ${this.expirationTime}` };
     const current = await this.client.getExpiration(memberId);
     if (current?.enabled === false) {
@@ -200,21 +216,71 @@ class DicloakAdminService {
       throw new Error(`⚠️ ${parsed.name} ya tiene otro vencimiento en DICloak. Revisa ese vencimiento antes de recuperar el alta fallida.`);
     }
     if (String(member.status || "").toUpperCase() === "DISABLED") await this.client.updateMember(memberId, { status: "ENABLED" });
-    this.store.saveDicloakMemberRecord({ dicloakMemberId: memberId, dicloakMemberName: parsed.name, plan: parsed.plan, commercialStartDate: start, commercialNextRenewalDate: next, monthsPurchased: parsed.months, profileGroupId, memberGroupId });
+    this.store.saveDicloakMemberRecord({ dicloakMemberId: memberId, dicloakMemberName: parsed.name, plan: parsed.plan, commercialStartDate: start, commercialNextRenewalDate: next, commercialAnchorDay: parseDateOnly(parsed.days ? next : start).getUTCDate(), commercialDateSource: "recovered-creation", monthsPurchased: parsed.months, daysAdded: parsed.days || 0, profileGroupId, memberGroupId });
     return `✅ ALTA RECUPERADA\n\nNombre: ${parsed.name}\nPlan: ${parsed.plan}\nPróxima renovación: ${next}\nEstado DICloak: Activo\nSe completó el intento anterior sin crear otro miembro.`;
   }
 
-  async renew(parsed) {
+  async resolveCommercialRecord(member) {
+    const memberId = String(member.id ?? member.member_id ?? member.memberId ?? "");
+    if (!memberId) throw new Error("DICloak devolvió un miembro sin identificador.");
+    const record = this.store.getDicloakMemberRecord(member.name);
+    if (record) {
+      if (record.dicloakMemberId && String(record.dicloakMemberId) !== memberId) throw new Error("❌ REGISTRO INCONSISTENTE\nEl nombre corresponde a otro identificador de DICloak. No se modificó el miembro.");
+      parseDateOnly(record.commercialNextRenewalDate);
+      return record;
+    }
+    const candidates = this.store.getDicloakCommercialCandidates?.(member.account || member.name) || [];
+    if (candidates.length > 1) throw new Error("❌ FECHA COMERCIAL AMBIGUA\nHay varias compras asociadas a esta cuenta. No se modificó su vencimiento.");
+    let start = "", next, source, anchorDay;
+    if (candidates.length === 1) {
+      start = candidates[0].startDate;
+      next = candidates[0].expiryDate;
+      parseDateOnly(start);
+      parseDateOnly(next);
+      anchorDay = !candidates[0].durationDays && addMonthsClamped(start, candidates[0].termMonths || 1) === next
+        ? parseDateOnly(start).getUTCDate() : parseDateOnly(next).getUTCDate();
+      source = "client-record";
+    } else {
+      const expiration = await this.client.getExpiration(memberId);
+      // Import only an explicit fixed deadline. LOGIN_START, login dates and remaining days
+      // cannot establish an old customer's commercial date. A saved record always wins.
+      if (expiration?.enabled !== true || expiration.mode !== "INSTANT"
+        || !/^\d{4}-\d{2}-\d{2} (?:[01]\d|2[0-3]):[0-5]\d$/.test(expiration.expires_at || "")) {
+        throw new Error("❌ FECHA COMERCIAL NO DISPONIBLE\nEste cliente antiguo no tiene una fecha comercial registrada ni un vencimiento fijo en DICloak. No se usó la fecha del primer ingreso para calcularla.");
+      }
+      // Preserve the configured calendar deadline, including when the legacy account used
+      // another time zone. New expiration times are explicitly written in this.timeZone.
+      next = expiration.expires_at.slice(0, 10);
+      parseDateOnly(next);
+      source = "dicloak-fixed-expiration";
+    }
+    return {
+      dicloakMemberId: memberId, dicloakMemberName: member.name,
+      plan: (member.profile_group_list || []).map((group) => group.name).filter(Boolean).join(" / "),
+      commercialStartDate: start, commercialNextRenewalDate: next,
+      commercialAnchorDay: anchorDay || parseDateOnly(next).getUTCDate(), commercialDateSource: source,
+      monthsPurchased: 0, daysAdded: 0,
+      profileGroupId: member.profile_group_list?.length === 1 ? String(member.profile_group_list[0].id) : "",
+      memberGroupId: String(member.member_group_id || "")
+    };
+  }
+
+  async renew(parsed, message) {
     const member = await this.findExactMember(parsed.name);
     if (!member) throw new Error(`❌ CLIENTE NO ENCONTRADO\nNo existe un miembro llamado “${parsed.name}”.`);
-    const record = this.store.getDicloakMemberRecord(parsed.name);
-    if (!record?.commercialNextRenewalDate) throw new Error("❌ FECHA COMERCIAL NO DISPONIBLE\nEl miembro existe, pero no hay una fecha comercial confiable para calcular la renovación.");
-    const next = addMonthsClamped(record.commercialNextRenewalDate, parsed.months);
-    const memberId = String(member.id ?? member.member_id ?? record.dicloakMemberId);
+    const record = await this.resolveCommercialRecord(member);
+    const anchorDay = record.commercialAnchorDay || parseDateOnly(record.commercialStartDate || record.commercialNextRenewalDate).getUTCDate();
+    const next = advanceCommercialDate(record.commercialNextRenewalDate, parsed, anchorDay);
+    const nextAnchorDay = parsed.days ? parseDateOnly(next).getUTCDate() : anchorDay;
+    const memberId = String(member.id ?? member.member_id ?? member.memberId);
+    // Persist the imported baseline before changing the API so a partial failure cannot
+    // import the already-extended API deadline and charge the same period again.
+    this.store.saveDicloakMemberRecord({ ...record, dicloakMemberId: memberId, commercialAnchorDay: anchorDay });
+    if (message?.key?.id) this.store.finishDicloakAdminOperation?.(message.key.id, { baseDate: record.commercialNextRenewalDate, targetDate: next });
     await this.client.updateExpiration(memberId, { enabled: true, time_zone: this.timeZone, mode: "INSTANT", expires_at: `${next} ${this.expirationTime}` });
     if (String(member.status || "").toUpperCase() === "DISABLED") await this.client.updateMember(memberId, { status: "ENABLED" });
-    this.store.saveDicloakMemberRecord({ ...record, dicloakMemberId: memberId, monthsPurchased: Number(record.monthsPurchased || 0) + parsed.months, commercialNextRenewalDate: next });
-    return `✅ CLIENTE RENOVADO\n\nNombre: ${parsed.name}\nDuración añadida: ${parsed.months} ${parsed.months === 1 ? "mes" : "meses"}\nNueva renovación: ${next}\nEstado DICloak: Activo`;
+    this.store.saveDicloakMemberRecord({ ...record, dicloakMemberId: memberId, monthsPurchased: Number(record.monthsPurchased || 0) + parsed.months, daysAdded: Number(record.daysAdded || 0) + Number(parsed.days || 0), commercialNextRenewalDate: next, commercialAnchorDay: nextAnchorDay });
+    return `✅ CLIENTE RENOVADO\n\nNombre: ${parsed.name}\nVencimiento anterior: ${record.commercialNextRenewalDate}\nDuración añadida: ${durationLabel(parsed)}\nNueva renovación: ${next}\nEstado DICloak: Activo`;
   }
 
   async handle({ message, body, reply, socket }) {
@@ -228,9 +294,9 @@ class DicloakAdminService {
     const messageId = String(message?.key?.id || "");
     if (messageId && this.store.getDicloakAdminOperation?.(messageId)) { await reply("⚠️ Comando ya procesado anteriormente."); return true; }
     if (!parsed.ok) { await reply(parsed.error); return true; }
-    if (messageId) this.store.beginDicloakAdminOperation?.({ messageId, command: parsed.command, memberName: parsed.name, plan: parsed.plan, months: parsed.months, ...(parsed.command === "NUEVO" ? { commercialStartDate: dateFromMessage(message, this.timeZone) } : {}) });
+    if (messageId) this.store.beginDicloakAdminOperation?.({ messageId, command: parsed.command, memberName: parsed.name, plan: parsed.plan, months: parsed.months, days: parsed.days || 0, ...(parsed.command === "NUEVO" ? { commercialStartDate: dateFromMessage(message, this.timeZone) } : {}) });
     try {
-      const response = parsed.command === "NUEVO" ? await this.create(parsed, message) : await this.renew(parsed);
+      const response = parsed.command === "NUEVO" ? await this.create(parsed, message) : await this.renew(parsed, message);
       if (messageId) this.store.finishDicloakAdminOperation?.(messageId, { status: "SUCCESS" });
       this.store.addLog("dicloak-admin", `Comando ${parsed.command} completado para ${parsed.name}`, { command_type: parsed.command, whatsapp_message_id: messageId, member_name: parsed.name, target_plan: parsed.plan || null, target_date: null, resultado: "SUCCESS" });
       this.store.save();
@@ -248,4 +314,4 @@ class DicloakAdminService {
   aliases() { try { const parsed = JSON.parse(process.env.DICLOAK_PLAN_ALIASES_JSON || "{}"); return Object.fromEntries(Object.entries(parsed).map(([key, value]) => [normalizedName(key), String(value).trim()])); } catch { return {}; } }
 }
 
-module.exports = { DicloakAdminService, parseAdminCommand, parseMonths, dateFromMessage, normalizeGroupName, listFromData, collectProfileGroups };
+module.exports = { DicloakAdminService, parseAdminCommand, parseMonths, parseDuration, advanceCommercialDate, dateFromMessage, normalizeGroupName, listFromData, collectProfileGroups };

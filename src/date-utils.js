@@ -24,9 +24,10 @@ function formatDateOnly(date) {
   ].join("-");
 }
 
-function addMonthsClamped(value, months) {
+function addMonthsClamped(value, months, anchorDay) {
   const date = typeof value === "string" ? parseDateOnly(value) : new Date(value);
-  const wantedDay = date.getUTCDate();
+  const wantedDay = anchorDay === undefined ? date.getUTCDate() : Number(anchorDay);
+  if (!Number.isInteger(wantedDay) || wantedDay < 1 || wantedDay > 31) throw new Error("El día de renovación debe estar entre 1 y 31.");
   const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + Number(months), 1));
   const lastDay = new Date(
     Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)
