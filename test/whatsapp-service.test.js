@@ -232,7 +232,8 @@ function makeService(fake, options = {}) {
     sleepFn: async () => undefined,
     readyTimeoutMs: options.readyTimeoutMs,
     logoutTimeoutMs: options.logoutTimeoutMs,
-    qrWaitTimeoutMs: options.qrWaitTimeoutMs
+    qrWaitTimeoutMs: options.qrWaitTimeoutMs,
+    contactCacheMaxKeys: options.contactCacheMaxKeys
   });
 }
 
@@ -528,6 +529,66 @@ test("el error 405 aplica el perfil compatible y conserva la sesión", async () 
     fake.sockets[1].config.browser,
     ["Windows", "Chrome", "10.0.22631"]
   );
+  await service.shutdown();
+});
+
+test("el error 500 prueba otro perfil antes de pedir borrar la sesión", async () => {
+  const fake = makeFakeBaileys({
+    registered: true,
+    latestWaVersion: [2, 3000, 1044006379]
+  });
+  const service = makeService(fake, {
+    sessionDir: path.join(testRuntimeDir, "error-500-session"),
+    mediaDir: path.join(testRuntimeDir, "error-500-media")
+  });
+  await service.initialize();
+  const firstSocket = fake.sockets[0];
+
+  firstSocket.ev.emit("connection.update", {
+    connection: "close",
+    lastDisconnect: {
+      error: {
+        message: "Bad session",
+        output: { statusCode: 500 }
+      }
+    }
+  });
+  await flush();
+
+  assert.equal(service.getStatus().state, "reconnecting");
+  assert.equal(service.getStatus().waState, "500");
+  assert.match(service.getStatus().error, /sin borrar tus credenciales/i);
+  assert.equal(fake.state.creds.registered, true);
+
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  assert.equal(firstSocket.calls.loggedOut, 0);
+  assert.equal(firstSocket.calls.ended, 1);
+  assert.equal(fake.sockets.length, 2);
+  assert.deepEqual(fake.sockets[1].config.browser, ["Windows", "Chrome", "10.0.22631"]);
+  await service.shutdown();
+});
+
+test("limita la caché de contactos y conserva el último identificador", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake, {
+    contactCacheMaxKeys: 3,
+    sessionDir: path.join(testRuntimeDir, "contact-cache-session"),
+    mediaDir: path.join(testRuntimeDir, "contact-cache-media")
+  });
+  await service.initialize();
+  const socket = fake.sockets[0];
+
+  socket.ev.emit("contacts.upsert", [
+    { id: "51911110001@s.whatsapp.net", notify: "Uno" },
+    { id: "51911110002@s.whatsapp.net", notify: "Dos" },
+    { id: "51911110003@s.whatsapp.net", notify: "Tres" },
+    { id: "51911110004@s.whatsapp.net", notify: "Cuatro" },
+    { id: "51911110005@s.whatsapp.net", notify: "Cinco" }
+  ]);
+  await flush();
+
+  assert.ok(service.contactsByIdentity.size <= 3);
+  assert.equal(service.contactsByIdentity.get("phone:51911110005")?.notify, "Cinco");
   await service.shutdown();
 });
 

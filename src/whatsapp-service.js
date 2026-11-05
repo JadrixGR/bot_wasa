@@ -389,7 +389,8 @@ class WhatsAppService {
     readyTimeoutMs,
     logoutTimeoutMs,
     qrWaitTimeoutMs,
-    adminOnly = false
+    adminOnly = false,
+    contactCacheMaxKeys
   }) {
     installSignalSessionLogFilter();
     this.store = store;
@@ -429,6 +430,12 @@ class WhatsAppService {
     this.engine = null;
     this.queues = new Map();
     this.contactsByIdentity = new Map();
+    this.contactCacheKeys = new WeakMap();
+    this.contactCacheMaxKeys = Math.max(
+      1,
+      Number(contactCacheMaxKeys || process.env.WHATSAPP_CONTACT_CACHE_MAX_KEYS) ||
+        5000
+    );
     this.generation = 0;
     this.initializePromise = null;
     this.restartPromise = null;
@@ -993,6 +1000,43 @@ class WhatsAppService {
       DisconnectReason.forbidden
     ]);
 
+    // WhatsApp también usa 500 (badSession) cuando el protocolo o el perfil del
+    // cliente ya no coincide con el Web activo. Antes de pedir al usuario que
+    // borre la sesión, prueba los perfiles candidatos restantes. Se conserva el
+    // auth state y, si todos fallan, se muestra el error fatal como antes.
+    const canTryCompatibilityProfile =
+      statusCode === DisconnectReason.badSession &&
+      this.authState?.creds?.registered &&
+      this.connectionCandidates?.length > 1;
+    if (canTryCompatibilityProfile) {
+      const rejectedCandidate = this.activeConnectionCandidate;
+      const nextCandidate = this.#advanceConnectionCandidate();
+      if (nextCandidate) {
+        const rejectedLabel = rejectedCandidate
+          ? `WA ${formatWhatsAppWebVersion(rejectedCandidate.version)} · ${rejectedCandidate.browserLabel}`
+          : "el perfil actual";
+        const nextLabel = `WA ${formatWhatsAppWebVersion(nextCandidate.version)} · ${nextCandidate.browserLabel}`;
+        this.#setStatus({
+          state: "reconnecting",
+          ready: false,
+          qrDataUrl: null,
+          loadingPercent: 35,
+          loadingMessage: `500 detectado; probando ${nextLabel}`,
+          waState: "500",
+          phone: null,
+          name: null,
+          error: `WhatsApp rechazó la sesión con ${rejectedLabel}. Probando otro perfil sin borrar tus credenciales ni tus clientes.`
+        });
+        this.store.addLog(
+          "whatsapp",
+          `500 de sesión; probando ${nextLabel} sin borrar credenciales`
+        );
+        this.store.save();
+        this.#scheduleReconnect(1000, { compatibilityRetry: true });
+        return;
+      }
+    }
+
     if (fatalCodes.has(statusCode)) {
       this.#setStatus({
         state: "auth_failure",
@@ -1088,7 +1132,9 @@ class WhatsAppService {
       ? Math.max(250, Number(delayMs) || 1000)
       : Math.max(100, Number(delayMs) || 0, exponentialDelay);
     const preservingConnectionGuidance =
-      this.status.loadingPercent === 85 || this.status.waState === "405";
+      this.status.loadingPercent === 85 ||
+      this.status.waState === "405" ||
+      this.status.waState === "500";
     this.#setStatus({
       state: "reconnecting",
       ready: false,
@@ -1365,15 +1411,40 @@ class WhatsAppService {
       whatsappChatId
     });
     if (!identity.whatsapp) return null;
+    // Contact updates can contain a large amount of WhatsApp metadata. Keep only
+    // the fields used by identity resolution and enrichment so history syncs do
+    // not retain every raw contact object in memory.
     const normalized = {
-      ...(existing || {}),
-      ...contact,
-      ...identity,
-      username: whatsappUsername ? whatsappUsername.slice(1) : ""
+      id: String(contact.id || existing?.id || ""),
+      lid: String(contact.lid || existing?.lid || ""),
+      phoneNumber: String(contact.phoneNumber || existing?.phoneNumber || ""),
+      username: whatsappUsername ? whatsappUsername.slice(1) : "",
+      notify: String(contact.notify || existing?.notify || ""),
+      name: String(contact.name || existing?.name || ""),
+      verifiedName: String(contact.verifiedName || existing?.verifiedName || ""),
+      ...identity
     };
-    for (const key of whatsappIdentityKeys(normalized)) {
+    const previousKeys = existing && this.contactCacheKeys.get(existing);
+    if (previousKeys) {
+      for (const key of previousKeys) {
+        if (this.contactsByIdentity.get(key) === existing) {
+          this.contactsByIdentity.delete(key);
+        }
+      }
+      previousKeys.clear();
+    }
+    const cacheKeys = whatsappIdentityKeys(normalized);
+    for (const key of cacheKeys) {
+      if (!this.contactsByIdentity.has(key)) {
+        while (this.contactsByIdentity.size >= this.contactCacheMaxKeys) {
+          const oldest = this.contactsByIdentity.keys().next().value;
+          if (oldest === undefined) break;
+          this.contactsByIdentity.delete(oldest);
+        }
+      }
       this.contactsByIdentity.set(key, normalized);
     }
+    this.contactCacheKeys.set(normalized, cacheKeys);
     this.store.enrichClientsWithWhatsAppIdentity?.(normalized);
     this.store.enrichAuthenticatorAccessWithWhatsAppIdentity?.(normalized);
     return normalized;
@@ -2276,6 +2347,11 @@ class WhatsAppService {
     const socket = this.socket;
     this.socket = null;
     this.authState = null;
+    // The persistent client/finance data lives in the store. Clear only this
+    // in-memory lookup cache when replacing a socket so old history cannot grow
+    // across reconnects or keep stale contact metadata alive.
+    this.contactsByIdentity.clear();
+    this.contactCacheKeys = new WeakMap();
     this.generation += 1;
     if (!socket) {
       return { hadSocket: false, remoteLogoutCompleted: false };
