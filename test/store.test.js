@@ -159,7 +159,7 @@ test("migra datos anteriores sin perder clientes y activa el modo V4.7", () => {
     assert.equal(store.data.clients[0].accountReference, "");
     assert.equal(store.data.clients[0].reminderDays, 2);
     assert.equal(store.data.clients[0].autoReminder, true);
-    assert.equal(store.data.clients[0].autoCharge, false);
+    assert.equal(store.data.clients[0].autoCharge, true);
     assert.deepEqual(store.data.authenticatorAccounts, []);
     assert.deepEqual(store.data.processedCommandIds, []);
     assert.equal(store.getSettings().inboundMode, "welcome_once");
@@ -682,7 +682,75 @@ test("guarda, reemplaza y elimina una imagen opcional de bienvenida", () => {
   }
 });
 
-test("un cliente nuevo activa el aviso de 2 días, deja la cobranza apagada y guarda su cuenta", () => {
+test("activa ambos avisos en datos existentes sin cambiar fechas, ventas ni envíos previos", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    for (const status of ["activo", "pendiente", "pausado", "archivado"]) {
+      store.createClient({
+        name: `Cliente ${status}`,
+        whatsapp: "51999888777",
+        product: "ChatGPT Plus",
+        price: "S/30",
+        startDate: "2026-10-01",
+        expiryDate: "2026-11-01",
+        status,
+        archived: status === "archivado",
+        lastReminderKey: "2026-11-01:reminder:2",
+        lastChargeKey: "2026-11-01:charge"
+      });
+    }
+    const previous = store.snapshot();
+    previous.clients.forEach((client, index) => {
+      client.autoReminder = index % 2 ? undefined : false;
+      client.autoCharge = index % 2 ? false : undefined;
+      client.reminderDays = 1;
+    });
+    const filePath = path.join(directory, "jadrixservs-v4.json");
+    fs.writeFileSync(filePath, JSON.stringify(previous), "utf8");
+    const expected = previous.clients.map((client) => ({
+      ...client, reminderDays: 2, autoReminder: true, autoCharge: true
+    }));
+
+    const migrated = new JsonStore(directory);
+    assert.deepEqual(migrated.snapshot().clients, expected);
+    assert.deepEqual(migrated.snapshot().finance, previous.finance);
+    assert.deepEqual(migrated.snapshot().logs, previous.logs);
+    assert.deepEqual(JSON.parse(fs.readFileSync(filePath, "utf8")).clients, expected);
+    assert.deepEqual(new JsonStore(directory).snapshot().clients, expected);
+
+    migrated.restoreSnapshot(previous);
+    assert.deepEqual(migrated.snapshot().clients, expected);
+    assert.deepEqual(migrated.snapshot().finance, previous.finance);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("no permite apagar los avisos al crear o editar un cliente y los conserva al renovar", () => {
+  const directory = temporaryDataDir();
+  try {
+    const store = new JsonStore(directory);
+    const client = store.createClient({
+      name: "Ana", whatsapp: "51999888777", product: "ChatGPT Plus",
+      startDate: "2026-10-01", expiryDate: "2026-11-01",
+      autoReminder: false, autoCharge: false, reminderDays: 7
+    });
+    const edited = store.updateClient(client.id, { autoReminder: false, autoCharge: false, reminderDays: 1 });
+    const renewed = store.renewClient(client.id, { paymentDate: "2026-10-30", termMonths: 1 });
+    for (const result of [client, edited, renewed]) {
+      assert.equal(result.autoReminder, true);
+      assert.equal(result.autoCharge, true);
+      assert.equal(result.reminderDays, 2);
+    }
+    assert.equal(edited.expiryDate, "2026-11-01");
+    assert.equal(renewed.expiryDate, "2026-12-01");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("un cliente nuevo activa ambos avisos y guarda su cuenta", () => {
   const directory = temporaryDataDir();
   try {
     const store = new JsonStore(directory);
@@ -699,7 +767,7 @@ test("un cliente nuevo activa el aviso de 2 días, deja la cobranza apagada y gu
 
     assert.equal(client.reminderDays, 2);
     assert.equal(client.autoReminder, true);
-    assert.equal(client.autoCharge, false);
+    assert.equal(client.autoCharge, true);
     assert.equal(client.accountReference, "equipo-pro-02");
     assert.equal(
       store.findClientByWhatsApp(
@@ -855,7 +923,7 @@ test("un comando crea al cliente estimad@ con días exactos y automatización se
     assert.equal(result.client.startDate, today);
     assert.equal(result.client.expiryDate, addDays(today, 30));
     assert.equal(result.client.autoReminder, true);
-    assert.equal(result.client.autoCharge, false);
+    assert.equal(result.client.autoCharge, true);
     assert.equal(result.client.registrationSource, "whatsapp-command");
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });

@@ -1520,7 +1520,7 @@ function renderClients() {
       <td><strong>${escapeHtml(client.accountReference || "Sin registrar")}</strong></td>
       <td><strong>${escapeHtml(formatDate(client.expiryDate))}</strong><span>Desde ${escapeHtml(formatDate(client.startDate))}</span></td>
       <td><span class="days-badge ${remaining.tone}">${escapeHtml(remaining.label)}</span><span>${escapeHtml(remaining.detail)}</span></td>
-      <td><div class="automation-flags"><span class="mini-flag ${client.autoReminder ? "on" : ""}">Aviso 2d</span><span class="mini-flag ${client.autoCharge ? "on" : ""}">Cobro</span></div></td>
+      <td><div class="automation-flags"><span class="mini-flag on">Aviso 2d</span><span class="mini-flag on">Cobro</span></div></td>
       <td><span class="pill ${clientStatusTone(client.status)}">${escapeHtml(client.status)}</span></td>
       <td><div class="row-actions">
         <button class="action-remind" data-action="remind" data-id="${client.id}" type="button" title="Enviar recordatorio manual">Recordar</button>
@@ -1788,8 +1788,6 @@ function openClientDialog(client = null) {
   $("#clientStartDate").value = client?.startDate || today();
   $("#clientTermMonths").value = String(client?.termMonths || 1);
   $("#clientExpiryDate").value = client?.expiryDate || addMonths(today(), 1);
-  $("#clientAutoReminder").checked = client ? Boolean(client.autoReminder) : true;
-  $("#clientAutoCharge").checked = Boolean(client?.autoCharge);
   $("#clientNotes").value = client?.notes || "";
   $("#clientDialog").showModal();
 }
@@ -1809,8 +1807,6 @@ async function saveClient(event) {
     expiryDate: $("#clientExpiryDate").value,
     termMonths: Number($("#clientTermMonths").value),
     reminderDays: 2,
-    autoReminder: $("#clientAutoReminder").checked,
-    autoCharge: $("#clientAutoCharge").checked,
     notes: $("#clientNotes").value
   };
   try {

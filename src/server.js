@@ -1587,7 +1587,9 @@ const server = app.listen(port, "0.0.0.0", () => {
     );
   }
   for (const user of accounts.list()) {
-    if (user.role !== "dicloak" && (user.id === "owner" || fs.existsSync(path.join(accounts.directory(user), "whatsapp-session", "creds.json")))) getTenant(user);
+    if (user.role === "dicloak") continue;
+    getStore(user);
+    if (user.id === "owner" || fs.existsSync(path.join(accounts.directory(user), "whatsapp-session", "creds.json"))) getTenant(user);
   }
 });
 

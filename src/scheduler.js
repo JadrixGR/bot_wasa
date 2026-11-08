@@ -29,13 +29,13 @@ function fillTemplate(template, client) {
 function reminderActionFor(client, today, { chargeAllowed = true, reminderAllowed = true } = {}) {
   if (client.archived || client.status !== "activo" || !client.expiryDate) return null;
   const remaining = daysBetween(today, client.expiryDate);
-  if (reminderAllowed && client.autoReminder && remaining === 2) {
+  if (reminderAllowed && remaining === 2) {
     const key = `${client.expiryDate}:reminder:2`;
     if (client.lastReminderKey !== key) {
       return { type: "reminder", key, remaining };
     }
   }
-  if (chargeAllowed && client.autoCharge && remaining === 0) {
+  if (chargeAllowed && remaining === 0) {
     const key = `${client.expiryDate}:charge`;
     if (client.lastChargeKey !== key) return { type: "charge", key, remaining };
   }

@@ -770,6 +770,10 @@ class JsonStore {
     const initial = createInitialData();
     const isPreTrainingVersion = Number(parsed.version || 0) < 4.3;
     const isVersionUpgrade = Number(parsed.version || 0) < initial.version;
+    const clientAutomationMigrated = Array.isArray(parsed.clients) &&
+      parsed.clients.some((client) =>
+        client.autoReminder !== true || client.autoCharge !== true || client.reminderDays !== 2
+      );
     const migratedAt = new Date().toISOString();
     const previousConversations =
       parsed.conversations && typeof parsed.conversations === "object"
@@ -916,11 +920,8 @@ class JsonStore {
             ...normalizeWhatsAppIdentity(client),
             accountReference: String(client.accountReference || ""),
             reminderDays: 2,
-            autoReminder:
-              client.autoReminder === undefined
-                ? true
-                : Boolean(client.autoReminder),
-            autoCharge: Boolean(client.autoCharge),
+            autoReminder: true,
+            autoCharge: true,
             durationDays:
               Number.isInteger(Number(client.durationDays)) &&
               Number(client.durationDays) > 0
@@ -1094,6 +1095,7 @@ class JsonStore {
       isUpgrade:
         !parsed.finance ||
         isVersionUpgrade ||
+        clientAutomationMigrated ||
         authenticatorMigration.changed ||
         countryGreetingsMigrated ||
         countryPriceBooksMigrated ||
@@ -2706,8 +2708,6 @@ class JsonStore {
       paymentMethod: String(paymentMethod || "").slice(0, 120),
       startDate: today,
       expiryDate: addDays(today, durationDays),
-      autoReminder: true,
-      autoCharge: false,
       notes:
         String(notes || "").trim() ||
         `Compra independiente registrada con ${command} ${durationDays}.`
@@ -2742,9 +2742,7 @@ class JsonStore {
       archived: false,
       lastReminderKey: null,
       lastChargeKey: null,
-      ...input,
-      autoReminder: input.autoReminder === undefined ? true : input.autoReminder,
-      autoCharge: input.autoCharge === undefined ? false : input.autoCharge
+      ...input
     });
     this.data.clients.push(client);
     if (client.status !== "pendiente") this.recordSale(client);
@@ -2894,8 +2892,8 @@ class JsonStore {
         ? input.status
         : "activo",
       reminderDays: 2,
-      autoReminder: Boolean(input.autoReminder),
-      autoCharge: Boolean(input.autoCharge),
+      autoReminder: true,
+      autoCharge: true,
       notes: String(input.notes || ""),
       archived: Boolean(input.archived),
       lastPaymentDate: input.lastPaymentDate || null,

@@ -42,9 +42,13 @@ test("no repite un recordatorio ya enviado", () => {
   assert.equal(reminderActionFor(client, "2026-07-24"), null);
 });
 
-test("el cobro automático está separado y puede quedar desactivado", () => {
-  assert.equal(reminderActionFor(baseClient, "2026-07-26"), null);
-  assert.equal(reminderActionFor({ ...baseClient, autoCharge: true }, "2026-07-26").type, "charge");
+test("ambos avisos están activos incluso con indicadores antiguos apagados o ausentes", () => {
+  for (const flags of [true, false, undefined]) {
+    const client = { ...baseClient, autoReminder: flags, autoCharge: flags };
+    assert.equal(reminderActionFor(client, "2026-07-24").type, "reminder");
+    assert.equal(reminderActionFor(client, "2026-07-26").type, "charge");
+    assert.equal(reminderActionFor(client, "2026-07-27"), null);
+  }
   assert.equal(
     reminderActionFor(
       {
@@ -56,6 +60,14 @@ test("el cobro automático está separado y puede quedar desactivado", () => {
     ),
     null
   );
+});
+
+test("mantiene excluidos los clientes archivados, pausados, pendientes o sin vencimiento", () => {
+  for (const patch of [{ archived: true }, { status: "pausado" }, { status: "pendiente" }, { status: "vencido" }, { expiryDate: "" }]) {
+    const client = { ...baseClient, ...patch };
+    assert.equal(reminderActionFor(client, "2026-07-24"), null);
+    assert.equal(reminderActionFor(client, "2026-07-26"), null);
+  }
 });
 
 test("reemplaza las variables del mensaje", () => {
@@ -81,7 +93,7 @@ test("el programador envía solo el recordatorio y la cobranza que corresponden"
     },
     {
       ...baseClient,
-      id: "sin-cobranza",
+      id: "cobranza-antes-desactivada",
       whatsapp: "51933333333",
       expiryDate: "2026-07-24",
       autoCharge: false
@@ -115,16 +127,19 @@ test("el programador envía solo el recordatorio y la cobranza que corresponden"
   });
   const result = await scheduler.runOnce();
 
-  assert.equal(result.sent, 2);
+  assert.equal(result.sent, 3);
   assert.deepEqual(
     sent.map((item) => item.number),
-    ["51911111111", "51922222222"]
+    ["51911111111", "51922222222", "51933333333"]
   );
   assert.match(sent[0].message, /26\/07\/2026/);
   assert.match(sent[1].message, /S\/25/);
   assert.equal(clients[0].lastReminderKey, "2026-07-26:reminder:2");
   assert.equal(clients[1].lastChargeKey, "2026-07-24:charge");
-  assert.deepEqual(logs.map((item) => item.type), ["reminder", "charge"]);
+  assert.equal(clients[2].lastChargeKey, "2026-07-24:charge");
+  assert.deepEqual(logs.map((item) => item.type), ["reminder", "charge", "charge"]);
+  assert.equal((await scheduler.runOnce()).sent, 0);
+  assert.equal(sent.length, 3);
 });
 
 test("cobra por separado dos compras del mismo número en sus propias fechas", async () => {
