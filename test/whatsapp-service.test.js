@@ -131,6 +131,7 @@ function makeFakeBaileys({
       sent: [],
       read: [],
       usync: [],
+      queries: [],
       ended: 0,
       loggedOut: 0
     };
@@ -138,6 +139,7 @@ function makeFakeBaileys({
       ev,
       calls,
       config,
+      ws: { isOpen: true },
       user: { id: "51999888777:12@s.whatsapp.net", name: "Jadrix" },
       signalRepository: {
         lidMapping: {
@@ -145,6 +147,10 @@ function makeFakeBaileys({
         }
       },
       presenceSubscribe: async () => undefined,
+      query: async (node) => {
+        calls.queries.push(node);
+        return { tag: "iq", attrs: { type: "result" } };
+      },
       sendPresenceUpdate: async (type, jid) => calls.presence.push({ type, jid }),
       sendMessage: async (jid, content) => {
         calls.sent.push({ jid, content });
@@ -233,6 +239,9 @@ function makeService(fake, options = {}) {
     readyTimeoutMs: options.readyTimeoutMs,
     logoutTimeoutMs: options.logoutTimeoutMs,
     qrWaitTimeoutMs: options.qrWaitTimeoutMs,
+    healthCheckIntervalMs: options.healthCheckIntervalMs,
+    healthCheckTimeoutMs: options.healthCheckTimeoutMs,
+    sendTimeoutMs: options.sendTimeoutMs,
     contactCacheMaxKeys: options.contactCacheMaxKeys
   });
 }
@@ -464,6 +473,222 @@ test("el QR aceptado termina en estado conectado", async () => {
   assert.equal(service.getStatus().phone, "51999888777");
 });
 
+test("restaura sesiones QR con identidad aunque registered permanezca false", async () => {
+  const fake = makeFakeBaileys();
+  fake.state.creds.me = { id: "51999888777:12@s.whatsapp.net" };
+  const service = makeService(fake);
+  await service.initialize();
+  assert.equal(service.getStatus().state, "authenticated");
+  assert.ok(service.readyWatchdog);
+  assert.equal(service.qrWatchdog, null);
+  await service.shutdown();
+});
+
+test("guardar credenciales después de open no desactiva una conexión válida", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake);
+  await service.initialize();
+  const socket = fake.sockets[0];
+  // Baileys emits these together on every successful reconnect.
+  socket.ev.emit("creds.update", { me: socket.user });
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+  socket.ev.emit("creds.update", { nextPreKeyId: 42 });
+  await flush();
+  assert.equal(service.getStatus().ready, true);
+  assert.equal(service.getStatus().state, "ready");
+  assert.equal(service.readyWatchdog, null);
+  await service.sendText("51911112222", "Respuesta de prueba");
+  assert.equal(socket.calls.sent.length, 1);
+  await service.shutdown();
+});
+
+test("recupera Stream Errored (ack) 500 con la misma sesión QR y sin cerrar sesión", async () => {
+  const fake = makeFakeBaileys();
+  fake.state.creds.me = { id: "51999888777:12@s.whatsapp.net" };
+  const service = makeService(fake);
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+  socket.ev.emit("connection.update", { connection: "close", lastDisconnect: {
+    error: { message: "Stream Errored (ack)", output: { statusCode: 500 } }
+  } });
+  socket.ev.emit("creds.update", { me: socket.user });
+  await flush();
+  assert.equal(service.getStatus().state, "reconnecting");
+  assert.equal(service.getStatus().ready, false);
+  assert.equal(service.readyWatchdog, null);
+  await new Promise(resolve => setTimeout(resolve, 3150));
+  assert.equal(fake.sockets.length, 2);
+  assert.equal(socket.calls.loggedOut, 0);
+  assert.deepEqual(fake.sockets[1].config.browser, socket.config.browser);
+  assert.equal(fake.state.creds.registered, false);
+  assert.ok(fake.state.creds.me.id);
+  fake.sockets[1].ev.emit("connection.update", { connection: "open" });
+  await flush();
+  assert.equal(service.getStatus().ready, true);
+  await service.shutdown();
+});
+
+test("solo una revocación explícita detiene la recuperación y una actualización tardía no la oculta", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake);
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+  socket.ev.emit("connection.update", { connection: "close", lastDisconnect: {
+    error: { output: { statusCode: 401 } }
+  } });
+  socket.ev.emit("creds.update", { nextPreKeyId: 50 });
+  await flush();
+  assert.equal(service.getStatus().state, "auth_failure");
+  assert.equal(service.reconnectTimer, null);
+  assert.equal(service.healthTimer, null);
+  assert.equal(service.readyWatchdog, null);
+  assert.equal(socket.calls.loggedOut, 0);
+  await service.shutdown();
+});
+
+test("comprueba conexiones inactivas sin enviar mensajes y detiene las comprobaciones al apagar", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake, { healthCheckIntervalMs: 20 });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await new Promise(resolve => setTimeout(resolve, 65));
+  assert.ok(socket.calls.queries.length > 0);
+  assert.equal(socket.calls.sent.length, 0);
+  assert.equal(service.getStatus().ready, true);
+  assert.ok(service.getStatus().lastHealthCheckAt);
+  assert.equal(fake.sockets.length, 1);
+  await service.shutdown();
+  const count = socket.calls.queries.length;
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.equal(socket.calls.queries.length, count);
+  assert.equal(service.healthTimer, null);
+});
+
+test("detecta el transporte cerrado aunque el panel todavía diga conectado", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake);
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+  socket.ws.isOpen = false;
+  const check = await service.checkConnectionHealth();
+  assert.equal(check.retryScheduled, true);
+  assert.equal(service.getStatus().ready, false);
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  assert.equal(fake.sockets.length, 2);
+  assert.equal(socket.calls.loggedOut, 0);
+  await service.shutdown();
+});
+
+test("tolera un fallo de comprobación aislado y recupera tras dos fallos consecutivos", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake, { healthCheckTimeoutMs: 10 });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+  const workingQuery = socket.query;
+  let calls = 0;
+  socket.query = () => { calls += 1; return new Promise(() => {}); };
+  await Promise.all([service.checkConnectionHealth(), service.checkConnectionHealth()]);
+  assert.equal(calls, 1);
+  assert.equal(service.getStatus().ready, true);
+  socket.query = workingQuery;
+  assert.equal((await service.checkConnectionHealth()).healthy, true);
+  assert.equal(service.getStatus().healthFailures, 0);
+  socket.query = () => new Promise(() => {});
+  await service.checkConnectionHealth();
+  assert.equal((await service.checkConnectionHealth()).retryScheduled, true);
+  assert.equal(service.getStatus().ready, false);
+  assert.ok(service.reconnectTimer);
+  await service.shutdown();
+  assert.equal(service.reconnectTimer, null);
+});
+
+test("una comprobación antigua no altera la conexión nueva", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake);
+  await service.initialize();
+  const first = fake.sockets[0];
+  first.ev.emit("connection.update", { connection: "open" });
+  await flush();
+  let resolveOld;
+  first.query = () => new Promise(resolve => { resolveOld = resolve; });
+  const oldCheck = service.checkConnectionHealth();
+  await service.restart();
+  fake.sockets[1].ev.emit("connection.update", { connection: "open" });
+  await flush();
+  resolveOld({ tag: "iq" });
+  assert.equal((await oldCheck).skipped, true);
+  assert.equal(service.getStatus().ready, true);
+  assert.equal(service.getStatus().lastHealthCheckAt, null);
+  assert.equal(service.reconnectTimer, null);
+  await service.shutdown();
+});
+
+test("un envío bloqueado libera la operación y recupera sin repetir el mensaje", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake, { sendTimeoutMs: 10 });
+  await service.initialize();
+  const socket = fake.sockets[0];
+  socket.ev.emit("connection.update", { connection: "open" });
+  await flush();
+  let attempts = 0;
+  socket.sendMessage = () => { attempts += 1; return new Promise(() => {}); };
+  await assert.rejects(service.sendText("51911112222", "Aviso"), { code: "OPERATION_TIMEOUT" });
+  assert.equal(service.getStatus().ready, false);
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  assert.equal(attempts, 1);
+  assert.equal(socket.calls.loggedOut, 0);
+  fake.sockets[1].ev.emit("connection.update", { connection: "open" });
+  await flush();
+  await service.sendText("51911112222", "Nuevo mensaje");
+  assert.equal(fake.sockets[1].calls.sent.length, 1);
+  await service.shutdown();
+});
+
+test("no pierde una reconexión que falla antes de terminar el reinicio", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const create = fake.module.default;
+  fake.module.default = config => {
+    const socket = create(config);
+    if (fake.sockets.length === 2) queueMicrotask(() => socket.ev.emit("connection.update", {
+      connection: "close", lastDisconnect: { error: { output: { statusCode: 515 } } }
+    }));
+    return socket;
+  };
+  const service = makeService(fake);
+  await service.initialize();
+  await service.restart();
+  await flush();
+  assert.ok(service.reconnectTimer);
+  await new Promise(resolve => setTimeout(resolve, 1100));
+  assert.equal(fake.sockets.length, 3);
+  await service.shutdown();
+});
+
+test("un fallo temporal al iniciar se vuelve a intentar automáticamente", async () => {
+  const fake = makeFakeBaileys({ registered: true });
+  const service = makeService(fake);
+  let loads = 0;
+  service.baileysLoader = async () => {
+    if (++loads === 1) throw new Error("Fallo temporal de carga");
+    return fake.module;
+  };
+  await assert.rejects(service.initialize(), /Fallo temporal/);
+  await new Promise(resolve => setTimeout(resolve, 3150));
+  assert.equal(fake.sockets.length, 1);
+  assert.equal(service.getStatus().state, "authenticated");
+  await service.shutdown();
+});
+
 test("el reinicio requerido después del QR abre un socket nuevo y termina conectado", async () => {
   const fake = makeFakeBaileys({ registered: true });
   const service = makeService(fake);
@@ -532,7 +757,7 @@ test("el error 405 aplica el perfil compatible y conserva la sesión", async () 
   await service.shutdown();
 });
 
-test("el error 500 prueba otro perfil antes de pedir borrar la sesión", async () => {
+test("el error 500 de compatibilidad prueba otro perfil sin borrar la sesión", async () => {
   const fake = makeFakeBaileys({
     registered: true,
     latestWaVersion: [2, 3000, 1044006379]

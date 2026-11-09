@@ -48,6 +48,11 @@ function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function hasLinkedCredentials(state) {
+  // QR linking sets creds.me; creds.registered can remain false in Baileys.
+  return Boolean(state?.creds?.me?.id || state?.creds?.registered);
+}
+
 async function withTimeout(promise, milliseconds, message) {
   let timeout;
   try {
@@ -389,6 +394,9 @@ class WhatsAppService {
     readyTimeoutMs,
     logoutTimeoutMs,
     qrWaitTimeoutMs,
+    healthCheckIntervalMs,
+    healthCheckTimeoutMs,
+    sendTimeoutMs,
     adminOnly = false,
     contactCacheMaxKeys
   }) {
@@ -425,6 +433,20 @@ class WhatsAppService {
           )
         : Math.max(10, Number(qrWaitTimeoutMs) || 10);
     this.baileys = null;
+    this.healthCheckIntervalMs = healthCheckIntervalMs === undefined
+      ? Math.max(10000, Number(process.env.WHATSAPP_HEALTH_INTERVAL_MS) || 60000)
+      : Math.max(10, Number(healthCheckIntervalMs) || 10);
+    this.healthCheckTimeoutMs = healthCheckTimeoutMs === undefined
+      ? Math.max(1000, Number(process.env.WHATSAPP_HEALTH_TIMEOUT_MS) || 15000)
+      : Math.max(10, Number(healthCheckTimeoutMs) || 10);
+    this.sendTimeoutMs = sendTimeoutMs === undefined
+      ? Math.max(1000, Number(process.env.WHATSAPP_SEND_TIMEOUT_MS) || 60000)
+      : Math.max(10, Number(sendTimeoutMs) || 10);
+    this.connectionState = "close";
+    this.shuttingDown = false;
+    this.healthTimer = null;
+    this.healthCheck = null;
+    this.healthFailures = 0;
     this.socket = null;
     this.authState = null;
     this.engine = null;
@@ -467,6 +489,9 @@ class WhatsAppService {
       transport: "websocket",
       recoveryAttempts: 0,
       reconnectAttempts: 0,
+      lastHealthCheckAt: null,
+      lastSuccessfulHealthCheckAt: null,
+      healthFailures: 0,
       error: null,
       updatedAt: new Date().toISOString()
     };
@@ -511,6 +536,74 @@ class WhatsAppService {
   #clearReconnectTimer() {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = null;
+  }
+
+  #clearHealthMonitor() {
+    if (this.healthTimer) clearInterval(this.healthTimer);
+    this.healthTimer = null;
+  }
+
+  #startHealthMonitor() {
+    this.#clearHealthMonitor();
+    this.healthTimer = setInterval(() => {
+      this.checkConnectionHealth().catch(() => undefined);
+    }, this.healthCheckIntervalMs);
+    this.healthTimer.unref();
+  }
+
+  #recoverUnresponsiveSocket(socket, generation, reason) {
+    if (!this.#isCurrent(socket, generation) || this.shuttingDown || this.resetInProgress || this.connectionState !== "open") return;
+    this.#clearHealthMonitor();
+    this.connectionState = "close";
+    this.#setStatus({
+      state: "reconnecting", ready: false, waState: "HEALTH_TIMEOUT",
+      loadingPercent: null, loadingMessage: "Recuperando la conexión con WhatsApp",
+      error: "WhatsApp dejó de responder. Reconectando sin cerrar la sesión…"
+    });
+    this.store.addLog("whatsapp", `Recuperación automática: ${reason}`, {
+      bot: this.adminOnly ? "dicloak" : "principal"
+    });
+    this.store.save();
+    this.#scheduleReconnect(1000);
+  }
+
+  async checkConnectionHealth() {
+    const socket = this.socket;
+    const generation = this.generation;
+    if (!socket || this.connectionState !== "open" || this.resetInProgress || this.shuttingDown) return { skipped: true };
+    if (this.healthCheck) return this.healthCheck;
+    const check = (async () => {
+      try {
+        if (socket.ws?.isOpen === false) throw new Error("El transporte está cerrado");
+        await withTimeout(socket.query({
+          tag: "iq",
+          attrs: { to: "s.whatsapp.net", type: "get", xmlns: "w:p" },
+          content: [{ tag: "ping", attrs: {} }]
+        }, this.healthCheckTimeoutMs), this.healthCheckTimeoutMs, "WhatsApp no respondió a la comprobación de conexión");
+        if (!this.#isCurrent(socket, generation) || this.connectionState !== "open") return { skipped: true };
+        const firstVerification = !this.status.lastSuccessfulHealthCheckAt;
+        const checkedAt = new Date().toISOString();
+        this.healthFailures = 0;
+        this.#setStatus({ lastHealthCheckAt: checkedAt, lastSuccessfulHealthCheckAt: checkedAt, healthFailures: 0 });
+        if (firstVerification) {
+          this.store.addLog("whatsapp", "Conexión de WhatsApp verificada", {
+            bot: this.adminOnly ? "dicloak" : "principal"
+          });
+          this.store.save();
+        }
+        return { healthy: true };
+      } catch (error) {
+        if (!this.#isCurrent(socket, generation) || this.connectionState !== "open" || this.resetInProgress || this.shuttingDown) return { skipped: true };
+        this.healthFailures += 1;
+        this.#setStatus({ lastHealthCheckAt: new Date().toISOString(), healthFailures: this.healthFailures });
+        const retryScheduled = socket.ws?.isOpen === false || this.healthFailures >= 2;
+        if (retryScheduled) this.#recoverUnresponsiveSocket(socket, generation, "la comprobación de conexión no obtuvo respuesta");
+        return { healthy: false, retryScheduled };
+      }
+    })();
+    this.healthCheck = check;
+    try { return await check; }
+    finally { if (this.healthCheck === check) this.healthCheck = null; }
   }
 
   async #resolveConnectionCandidates() {
@@ -571,7 +664,7 @@ class WhatsAppService {
     if (
       !this.#isCurrent(socket, generation) ||
       this.status.ready ||
-      this.authState?.creds?.registered
+      hasLinkedCredentials(this.authState)
     ) {
       return;
     }
@@ -582,7 +675,7 @@ class WhatsAppService {
         !this.#isCurrent(socket, generation) ||
         this.status.ready ||
         this.status.qrDataUrl ||
-        this.authState?.creds?.registered ||
+        hasLinkedCredentials(this.authState) ||
         this.resetInProgress
       ) {
         return;
@@ -674,6 +767,7 @@ class WhatsAppService {
   }
 
   async initialize({ force = false } = {}) {
+    if (this.shuttingDown) return;
     if (process.env.DISABLE_WHATSAPP === "1") {
       this.#setStatus({ state: "disabled", ready: false });
       return;
@@ -694,6 +788,7 @@ class WhatsAppService {
 
   async #initializeSocket({ allowDuringReset = false } = {}) {
     const generation = ++this.generation;
+    this.connectionState = "connecting";
     this.#setStatus({
       state: "initializing",
       ready: false,
@@ -744,7 +839,7 @@ class WhatsAppService {
         protocolVersion,
         browserProfile: connectionCandidate.browserLabel,
         loadingPercent: 20,
-        loadingMessage: state.creds.registered
+        loadingMessage: hasLinkedCredentials(state)
           ? "Validando la sesión con el protocolo actualizado"
           : "Solicitando un código QR nuevo"
       });
@@ -790,7 +885,7 @@ class WhatsAppService {
         saveTask
           .then(() => {
             if (!this.#isCurrent(socket, generation)) return;
-            if (state.creds.registered || update?.registered) {
+            if (hasLinkedCredentials(state) && this.connectionState === "connecting") {
               this.#clearQrWatchdog();
               this.#setStatus({
                 state: "authenticated",
@@ -853,7 +948,7 @@ class WhatsAppService {
         this.#rememberContact({ ...existing, id: lid || pn, lid, phoneNumber: pn });
       });
 
-      if (state.creds.registered) {
+      if (hasLinkedCredentials(state)) {
         this.#clearQrWatchdog();
         this.#setStatus({
           state: "authenticated",
@@ -868,7 +963,7 @@ class WhatsAppService {
       }
     } catch (error) {
       if (this.generation !== generation) return;
-      this.socket = null;
+      await this.#stopSocket();
       this.#setStatus({
         state: "error",
         ready: false,
@@ -879,12 +974,14 @@ class WhatsAppService {
         `No se pudo iniciar WhatsApp: ${String(error?.message || error)}`
       );
       this.store.save();
+      this.#scheduleReconnect(3000);
       throw error;
     }
   }
 
   async #handleConnectionUpdate(socket, generation, update) {
     if (!this.#isCurrent(socket, generation)) return;
+    if (update.connection) this.connectionState = update.connection;
 
     if (update.qr) {
       const qrDataUrl = await this.qrEncoder(update.qr, { width: 420, margin: 2 });
@@ -925,7 +1022,7 @@ class WhatsAppService {
     }
 
     if (update.connection === "connecting" && !update.qr && !this.status.ready) {
-      const registered = Boolean(this.authState?.creds?.registered);
+      const registered = hasLinkedCredentials(this.authState);
       this.#setStatus({
         state: registered ? "authenticated" : "initializing",
         ready: false,
@@ -946,6 +1043,7 @@ class WhatsAppService {
       this.autoRecoveryAttempts = 0;
       this.reconnectAttempts = 0;
       this.connectionCompatibilityCycles = 0;
+      this.healthFailures = 0;
       const normalizedJid = this.baileys.jidNormalizedUser(
         socket.user?.id || ""
       );
@@ -960,9 +1058,14 @@ class WhatsAppService {
         name: socket.user?.name || null,
         recoveryAttempts: 0,
         reconnectAttempts: 0,
+        lastHealthCheckAt: null,
+        lastSuccessfulHealthCheckAt: null,
+        healthFailures: 0,
         error: null
       });
-      await socket.sendPresenceUpdate("unavailable").catch(() => undefined);
+      this.#startHealthMonitor();
+      await withTimeout(socket.sendPresenceUpdate("unavailable"), 5000, "La presencia no respondió").catch(() => undefined);
+      if (!this.#isCurrent(socket, generation) || this.connectionState !== "open") return;
       this.store.addLog(
         "whatsapp",
         `WhatsApp conectado${extractPhone(normalizedJid) ? `: ${extractPhone(normalizedJid)}` : ""}`
@@ -983,6 +1086,7 @@ class WhatsAppService {
     if (!this.#isCurrent(socket, generation)) return;
     this.#clearReadyWatchdog();
     this.#clearQrWatchdog();
+    this.#clearHealthMonitor();
     const statusCode = getDisconnectStatusCode(error);
     const { DisconnectReason } = this.baileys;
     const detail = String(error?.message || "Conexión cerrada");
@@ -995,18 +1099,16 @@ class WhatsAppService {
 
     const fatalCodes = new Set([
       DisconnectReason.loggedOut,
-      DisconnectReason.badSession,
       DisconnectReason.multideviceMismatch,
       DisconnectReason.forbidden
     ]);
 
-    // WhatsApp también usa 500 (badSession) cuando el protocolo o el perfil del
-    // cliente ya no coincide con el Web activo. Antes de pedir al usuario que
-    // borre la sesión, prueba los perfiles candidatos restantes. Se conserva el
-    // auth state y, si todos fallan, se muestra el error fatal como antes.
+    // 500 also covers transient stream failures (e.g. "Stream Errored (ack)").
+    // Retry these with the saved session; only explicit revocation is fatal.
     const canTryCompatibilityProfile =
       statusCode === DisconnectReason.badSession &&
-      this.authState?.creds?.registered &&
+      !/stream errored/i.test(detail) &&
+      hasLinkedCredentials(this.authState) &&
       this.connectionCandidates?.length > 1;
     if (canTryCompatibilityProfile) {
       const rejectedCandidate = this.activeConnectionCandidate;
@@ -1120,7 +1222,7 @@ class WhatsAppService {
   }
 
   #scheduleReconnect(delayMs, { compatibilityRetry = false } = {}) {
-    if (this.resetInProgress || this.reconnectTimer || this.restartPromise) {
+    if (this.resetInProgress || this.shuttingDown || this.reconnectTimer) {
       return;
     }
     this.reconnectAttempts += 1;
@@ -1146,9 +1248,11 @@ class WhatsAppService {
         ? this.status.error
         : `La conexión se interrumpió. Nuevo intento automático en ${Math.ceil(scheduledDelay / 1000)} segundos.`
     });
-    this.reconnectTimer = setTimeout(() => {
+    const generation = this.generation;
+    this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null;
-      if (this.resetInProgress) return;
+      await this.restartPromise?.catch(() => undefined);
+      if (this.resetInProgress || this.shuttingDown || this.generation !== generation || this.status.ready) return;
       this.#restartInternal("reconexión automática").catch((error) => {
         this.#setStatus({
           state: "reconnecting",
@@ -1344,7 +1448,7 @@ class WhatsAppService {
         result?.action
       )
     ) {
-      await socket.readMessages([message.key]).catch(() => undefined);
+      await withTimeout(socket.readMessages([message.key]), 5000, "La confirmación de lectura no respondió").catch(() => undefined);
     }
   }
 
@@ -1578,7 +1682,7 @@ class WhatsAppService {
       );
       if (!fresh) return true;
 
-      await socket.sendMessage(target, {
+      await this.#sendMessage(socket, target, {
         text: formatAuthenticatorCodeMessage(fresh)
       });
       if (commandMessageId) {
@@ -2033,7 +2137,7 @@ class WhatsAppService {
       );
       if (!fresh) return;
 
-      await socket.sendMessage(target, {
+      await this.#sendMessage(socket, target, {
         text: formatAuthenticatorCodeMessage(fresh)
       });
       if (commandMessageId) {
@@ -2253,14 +2357,30 @@ class WhatsAppService {
     const socket = this.socket;
     try {
       const target = await this.#resolveOutgoingTarget(chatId);
-      await socket.presenceSubscribe(target).catch(() => undefined);
-      await socket.sendPresenceUpdate(recording ? "recording" : "composing", target);
+      await withTimeout(socket.presenceSubscribe(target), 5000, "La presencia no respondió").catch(() => undefined);
+      await withTimeout(socket.sendPresenceUpdate(recording ? "recording" : "composing", target), 5000, "El indicador de escritura no respondió");
       return async () => {
         if (this.socket !== socket) return;
-        await socket.sendPresenceUpdate("paused", target).catch(() => undefined);
+        await withTimeout(socket.sendPresenceUpdate("paused", target), 5000, "El indicador de escritura no respondió").catch(() => undefined);
       };
     } catch {
       return async () => undefined;
+    }
+  }
+
+  async #sendMessage(socket, target, content) {
+    const generation = this.generation;
+    if (!this.#isCurrent(socket, generation) || this.shuttingDown) {
+      throw new Error("La conexión cambió antes de enviar el mensaje.");
+    }
+    try {
+      return await withTimeout(socket.sendMessage(target, content), this.sendTimeoutMs, "WhatsApp no confirmó el envío a tiempo");
+    } catch (error) {
+      if (error.code === "OPERATION_TIMEOUT" || socket.ws?.isOpen === false) {
+        this.#recoverUnresponsiveSocket(socket, generation, "un envío quedó sin respuesta");
+      }
+      // Do not resend here: WhatsApp might have delivered the first attempt.
+      throw error;
     }
   }
 
@@ -2280,7 +2400,7 @@ class WhatsAppService {
       : await this.beginTyping(target);
     await this.sleepFn(calculateHumanDelay(text));
     await stopTyping();
-    const result = await socket.sendMessage(target, { text: String(text) });
+    const result = await this.#sendMessage(socket, target, { text: String(text) });
     this.store.addLog("outgoing", `Mensaje enviado a ${target}`, {
       chatId: target,
       preview: sensitive ? "[contenido privado oculto]" : String(text).slice(0, 180)
@@ -2331,7 +2451,7 @@ class WhatsAppService {
       };
     }
 
-    const result = await socket.sendMessage(target, content);
+    const result = await this.#sendMessage(socket, target, content);
     this.store.addLog("outgoing", `Archivo enviado a ${target}`, {
       chatId: target,
       fileName: path.basename(resolved)
@@ -2344,6 +2464,9 @@ class WhatsAppService {
     this.#clearReadyWatchdog();
     this.#clearQrWatchdog();
     this.#clearReconnectTimer();
+    this.#clearHealthMonitor();
+    this.healthCheck = null;
+    this.connectionState = "close";
     const socket = this.socket;
     this.socket = null;
     this.authState = null;
@@ -2391,6 +2514,7 @@ class WhatsAppService {
   }
 
   async #restartInternal(reason) {
+    if (this.shuttingDown) return;
     if (this.resetInProgress) {
       return this.resetPromise;
     }
@@ -2399,6 +2523,7 @@ class WhatsAppService {
       await this.pendingCredsSave.catch(() => undefined);
       await this.#stopSocket();
       await this.sleepFn(800);
+      if (this.shuttingDown) return;
       this.#setStatus({
         state: "restarting",
         ready: false,
@@ -2423,7 +2548,10 @@ class WhatsAppService {
   }
 
   async forceReadyProbe() {
-    if (this.status.ready) return { recovered: true, alreadyReady: true };
+    if (this.status.ready) {
+      const health = await this.checkConnectionHealth();
+      if (health.healthy) return { recovered: true, alreadyReady: true };
+    }
     if (!this.socket) throw new Error("WhatsApp todavía no está iniciado.");
     if (this.status.state === "qr") {
       throw new Error("Primero escanea el código QR con tu celular.");
@@ -2544,6 +2672,9 @@ class WhatsAppService {
   }
 
   async shutdown() {
+    this.shuttingDown = true;
+    this.#clearReconnectTimer();
+    this.#clearHealthMonitor();
     await this.pendingCredsSave.catch(() => undefined);
     await this.#stopSocket();
     this.#clearQrWatchdog();
